@@ -6,7 +6,7 @@ module Development.Wasm.Demo.Console (
 
 import GHC.Wasm.FFI.Compat
 
-foreignImportJS Safe "console.log" "js_console_log" [t|JSString -> IO ()|]
+foreign import javascript safe "console.log" js_console_log :: JSString -> IO ()
 
 consoleLog :: String -> IO ()
 consoleLog = js_console_log . toJSString
