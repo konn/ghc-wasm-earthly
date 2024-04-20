@@ -10,6 +10,5 @@ base-image:
 
 hello:
   COPY --keep-ts ./hello/hello.hs .
-  RUN cat /root/.ghc-wasm/env
   RUN wasm32-wasi-ghc --make hello.hs
   SAVE ARTIFACT hello.wasm AS LOCAL _build/hello.wasm
