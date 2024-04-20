@@ -29,6 +29,9 @@ RUN . ~/.ghc-wasm/env && \
   ghcup install ghc wasm32-wasi-9.10.0.20240412 -- \
   --host=x86_64-linux --with-intree-gmp --with-system-libffi
 
+# Installs corresponding (ordinary GHC 9.10)
+RUN ghcup install ghc 9.10.0.20240413
+
 WORKDIR /home/vscode
 RUN rm -rf /home/vscode/work-wasm
 
