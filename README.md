@@ -4,8 +4,9 @@ A simple earthly-based build system for GHC 9.10 (alpha) WASM backend, mainly de
 
 ## Usage
 
-1. Clone repository
-2. Run `earthly build +build`
+1. Install [Earthly](https://earthly.dev).
+2. Clone repository
+3. Run `earthly build +build`
 4. Take a coffee break (takes ~10mins with MacBook Pro with Apple M3 Pro)
 5. :yum:
 
