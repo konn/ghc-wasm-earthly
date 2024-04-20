@@ -14,6 +14,7 @@ tested-with:
   ghc ==9.8.4
   ghc ==9.10.0.20240413
 
+data-dir: data
 extra-doc-files:
   CHANGELOG.md
   README.md

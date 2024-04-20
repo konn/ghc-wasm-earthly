@@ -15,5 +15,6 @@
   },
   "files.associations": {
     "cabal*.project*": "cabal"
-  }
+  },
+  "deno.enable": true
 }
