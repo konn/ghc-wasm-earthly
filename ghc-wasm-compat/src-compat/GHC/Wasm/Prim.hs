@@ -27,6 +27,7 @@ import Control.Exception (Exception)
 import GHC.Exts
 import GHC.IO
 import GHC.Stable (StablePtr (..), freeStablePtr)
+import GHC.Stack (HasCallStack)
 
 newtype JSVal# = JSVal# (Any :: UnliftedType)
 
@@ -67,4 +68,5 @@ data PromisePendingException
 
 instance Exception PromisePendingException
 
-foreign import ccall unsafe "rts_JSFFI_used" isJSFFIUsed :: Bool
+isJSFFIUsed :: (HasCallStack) => Bool
+isJSFFIUsed = error "isJSFFIUsed: not implemented"
