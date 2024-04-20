@@ -47,7 +47,8 @@
         "Swellaby.workspace-config-plus"
       ],
       "settings": {
-        "terminal.integrated.defaultProfile.linux": "zsh"
+        "terminal.integrated.defaultProfile.linux": "zsh",
+        "extensions.verifySignature": false
       }
     }
   }
