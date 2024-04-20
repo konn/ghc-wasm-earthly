@@ -31,3 +31,6 @@ RUN . ~/.ghc-wasm/env && \
 
 WORKDIR /home/vscode
 RUN rm -rf /home/vscode/work-wasm
+
+RUN echo "source ~/.ghc-wasm/env" >> /home/vscode/.profile
+RUN echo "source ~/.ghc-wasm/env" >> /home/vscode/.zprofile

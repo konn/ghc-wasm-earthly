@@ -47,7 +47,7 @@
         "Swellaby.workspace-config-plus"
       ],
       "settings": {
-        "terminal.integrated.defaultProfile.linux": "/usr/bin/zsh"
+        "terminal.integrated.defaultProfile.linux": "zsh"
       }
     }
   }
