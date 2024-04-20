@@ -1,0 +1,59 @@
+cabal-version: 3.0
+name: wasm-jsffi-ghc-demo
+version: 0.1.0.0
+description: Please see the README on GitHub at <https://github.com/konn/ghc-910-wasm-on-apple-silicon-macos#readme>
+homepage: https://github.com/konn/ghc-910-wasm-on-apple-silicon-macos#readme
+bug-reports: https://github.com/konn/ghc-910-wasm-on-apple-silicon-macos/issues
+author: Hiromi ISHII
+maintainer: konn.jinro_at_gmail.com
+copyright: 2024 (c) Hiromi ISHII
+license: BSD-3-Clause
+license-file: LICENSE
+build-type: Simple
+tested-with:
+  ghc ==9.8.4
+  ghc ==9.10.0.20240413
+
+extra-doc-files:
+  CHANGELOG.md
+  README.md
+
+source-repository head
+  type: git
+  location: https://github.com/konn/ghc-910-wasm-on-apple-silicon-macos
+
+common defaults
+  default-language: GHC2021
+  ghc-options:
+    -Wall
+    -Wcompat
+    -Widentities
+    -Wincomplete-record-updates
+    -Wincomplete-uni-patterns
+    -Wmissing-export-lists
+    -Wmissing-home-modules
+    -Wpartial-fields
+    -Wredundant-constraints
+
+  autogen-modules: Paths_wasm_jsffi_ghc_demo
+  other-modules: Paths_wasm_jsffi_ghc_demo
+  build-depends:
+    base >=4.7 && <5,
+    ghc-wasm-compat,
+
+library
+  import: defaults
+  hs-source-dirs: src
+  -- cabal-gild: discover src
+  exposed-modules: Development.Wasm.Demo.Console
+
+executable console-log
+  import: defaults
+  hs-source-dirs: app
+  main-is: console-log.hs
+  build-depends:
+    base,
+    ghc-wasm-compat,
+    wasm-jsffi-ghc-demo,
+
+  default-language: Haskell2010
