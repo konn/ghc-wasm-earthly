@@ -30,10 +30,10 @@ RUN . ~/.ghc-wasm/env && \
   --host=x86_64-linux --with-intree-gmp --with-system-libffi
 
 # Installs corresponding (ordinary GHC 9.10)
-RUN ghcup install ghc 9.10.0.20240413
 
 WORKDIR /home/vscode
 RUN rm -rf /home/vscode/work-wasm
 
-RUN echo "source ~/.ghc-wasm/env" >> /home/vscode/.profile
+RUN echo ". ~/.ghc-wasm/env" >> /home/vscode/.bashrc
 RUN echo "source ~/.ghc-wasm/env" >> /home/vscode/.zprofile
+RUN echo "source ~/.ghc-wasm/env" >> /home/vscode/.zshrc
