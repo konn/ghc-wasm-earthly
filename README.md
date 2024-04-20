@@ -8,7 +8,7 @@ A simple devcontainer to use GHC 9.10 (alpha) WASM backend, mainly designed to u
 2. Open directory with VSCode
 3. Choose `Reopen in Dev Container`
 4. Take a coffee break (takes ~10mins with MacBook Pro with Apple M3 Pro)
-5. 😋
+5. :yum:
 
     ```bash
     $ wasm32-wasi-ghc --make hello.hs && wasmtime hello.wasm
