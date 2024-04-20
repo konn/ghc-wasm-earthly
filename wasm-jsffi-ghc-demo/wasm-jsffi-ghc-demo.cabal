@@ -57,3 +57,9 @@ executable console-log
     wasm-jsffi-ghc-demo,
 
   default-language: Haskell2010
+
+  if os(wasi)
+    ghc-options:
+      -no-hs-main
+      -optl-mexec-model=reactor
+      "-optl-Wl,--export=hs_start"
