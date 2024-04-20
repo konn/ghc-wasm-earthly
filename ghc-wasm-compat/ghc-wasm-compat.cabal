@@ -21,6 +21,7 @@ library
   exposed-modules: GHC.Wasm.FFI.Compat
 
   if os(wasi)
+    build-depends: ghc-experimental
     reexported-modules: GHC.Wasm.Prim
     hs-source-dirs: src-wasm-internal
     -- cabal-gild: discover src-wasm-internal
