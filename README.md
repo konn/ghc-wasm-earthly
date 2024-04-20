@@ -11,5 +11,6 @@ A simple devcontainer to use GHC 9.10 (alpha) WASM backend, mainly designed to u
 5. :yummy:
 
     ```bash
-    ghc --make hello.hs && wasmtime hello.wasm
+    $ wasm32-wasi-ghc --make hello.hs && wasmtime hello.wasm
+    Hello, WASM World from GHC 9.10!
     ```
