@@ -1,5 +1,3 @@
-{-# OPTIONS_GHC -fobject-code #-}
-
 module Development.Wasm.Demo.Console (
   consoleLog,
 ) where
