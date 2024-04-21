@@ -5,7 +5,70 @@ This repository comes with a container image to use GHC WASM backend in handy:
 
 - [`ghcr.io/konn/ghc-wasm-earthly`](https://github.com/users/konn/packages/container/package/ghc-wasm-earthly)
 
-## Usage
+## `ghc-wasm-compat`: GHC WASM Compatibility Layer
+
+The package `ghc-wasm-compat` provides a glue-code to make wasm-targeted Haskell code to type-check with vanilla (native) GHC.
+Note that the purpose of this package is _NOT_ to run WASM-based code also on native - it just provides a dummy APIs and compiler plugin to replace FFI code with dummy code with the same type but errors at the runtime.
+The main intended usage is to use HLS on WASM-targeted code.
+
+`ghc-wasm-compat` provides two machineries.
+
+### The `GHC.Wasm.Prim` module
+
+In the WASM backend, this just re-exports the same module from `ghc-experimental`.
+In other platforms, it provides a dummy API that errors at runtime.
+
+### `GHC.Wasm.FFI.Plugin`
+
+This module provides a source plugin.
+It does nothing when used with the WASM backend.
+In other backends, on the other hand, it removes all JS FFI exports and replaces JS FFI imports with the function definition with a dummy function definition with the same name and type but just raises an error at runtime.
+  
+Example usage:
+
+```hs
+{-# OPTIONS_GHC -fplugin GHC.Wasm.FFI.Plugin #-}
+module Development.Wasm.Demo.Console (
+  consoleLog,
+) where
+
+import GHC.Wasm.Prim
+
+foreign import javascript unsafe "console.log($1)"
+  js_console_log :: JSString -> IO ()
+
+consoleLog :: String -> IO ()
+consoleLog = js_console_log . toJSString
+
+greet :: JSString -> IO ()
+greet name = consoleLog $ "Hello, " <> fromJSString name
+
+foreign export javascript "greet" greet :: JSString -> IO ()
+```
+
+When compiled with the WASM backend, this works just as expected.
+The code also compiles with other backends without any change, but under the hood, the source plugin silently modifies the module to something like this:
+
+```haskell
+module Development.Wasm.Demo.Console (
+  consoleLog,
+) where
+
+import GHC.Wasm.Prim
+
+js_console_log :: JSString -> IO ()
+js_console_log = error "foreign import javascript unsafe \"console.log($1)\" js_console_log :: JSString -> IO ()"
+
+consoleLog :: String -> IO ()
+consoleLog = js_console_log . toJSString
+
+greet :: JSString -> IO ()
+greet name = consoleLog $ "Hello, " <> fromJSString name
+```
+
+Beware that the `foreign export` of `greet` has gone and the definition of `js_console_log` is replaced with the runtime error.
+
+## Demo 1: simple WASI app
 
 1. Install [Earthly](https://earthly.dev).
 2. Clone repository
@@ -17,10 +80,10 @@ This repository comes with a container image to use GHC WASM backend in handy:
     Hello, WASM World from GHC 9.10!
     ```
 
-## DEMO: Calling JS FFI
+## Demo 2: Calling JS FFI
 
-[`wasm-jsffi-ghc-demo/` ](./wasm-jsffi-ghc-demo) contains a simple example to call JS' `console.log` function from Haskell.
-To run: 
+[`wasm-jsffi-ghc-demo/` ](./wasm-jsffi-ghc-demo) contains a simple example to call the `console.log` JS function from Haskell.
+To run:
 
 ```bash
 $ earthly +hello-js
@@ -38,11 +101,6 @@ As of 2024-04-20, HLS doesn't compile with GHC 9.10 (even if almost all plugins 
 It might not be too hard to fix it, but I would rather use GHC 9.8 on the host.
 The situation should be resolved once HLS supports GHC 9.10.
 
-## TODOs
-
-- Glue code for non-wasm GHC (JSFFI and `GHC.Wasm.Prim` is only available in WASM backend, not native one)
-  + We can't use Template Haskell with WASM backend for the time being - so some kinda external preprocessor would be needed to generate dummy codes for non-WASM compilers.
-
 ## Prior Works
 
 ### GHC WASM Backend + JSFFI
@@ -55,10 +113,10 @@ Indeed, the vast majority of the build script of my repository is stolen from th
 Tweag's code requires Nix on Linux with x86_64 arch, so it cannot be run on Apple Silicon macOS directly.
 
 Tweag's repository also lacks tricks needed to run with CLI JS/TS runtime such as deno, bun, or Node.js.
-My project targets deno.
+My project targets Deno.
 
 ### Earthly
 
-@Lugendre [uses](https://github.com/Lugendre/earthly-haskell) Earthly to build static binary with Earthly (and utilises caching mechanism of Earthly):
+@Lugendre [uses](https://github.com/Lugendre/earthly-haskell) Earthly to build static binaries with Earthly:
 
 https://github.com/Lugendre/earthly-haskell
