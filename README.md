@@ -38,7 +38,6 @@ The situation should be resolved once HLS supports GHC 9.10.
 
 ## TODOs
 
-- Caching in Earthly
 - Glue code for non-wasm GHC (JSFFI and `GHC.Wasm.Prim` is only available in WASM backend, not native one)
   + We can't use Template Haskell with WASM backend for the time being - so some kinda external preprocessor would be needed to generate dummy codes for non-WASM compilers.
 
