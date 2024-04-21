@@ -17,22 +17,32 @@ extra-source-files:
 
 library
   hs-source-dirs: src
+  build-depends: ghc
   -- cabal-gild: discover src
   exposed-modules: GHC.Wasm.FFI.Compat
 
   if os(wasi)
     build-depends: ghc-experimental
     reexported-modules: GHC.Wasm.Prim
-    hs-source-dirs: src-wasm-internal
+    hs-source-dirs:
+      src-wasm-internal
+      src-wasm
+
+    -- cabal-gild: discover src-wasm
+    exposed-modules: GHC.Wasm.FFI.Plugin
     -- cabal-gild: discover src-wasm-internal
     other-modules: GHC.Wasm.Compat.Flags
   else
+    build-depends: syb
     hs-source-dirs:
       src-compat
       src-compat-internal
 
     -- cabal-gild: discover src-compat
-    exposed-modules: GHC.Wasm.Prim
+    exposed-modules:
+      GHC.Wasm.FFI.Plugin
+      GHC.Wasm.Prim
+
     -- cabal-gild: discover src-compat-internal
     other-modules: GHC.Wasm.Compat.Flags
 
