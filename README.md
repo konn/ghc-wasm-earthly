@@ -1,14 +1,14 @@
 # GHC WASM backend building for macOS
 
 A simple earthly-based build system for GHC 9.10 (alpha) WASM backend, mainly designed to use with (Apple Silicon) macOS as a Host OS.
+This repository comes with a container image to ease GHC
 
 ## Usage
 
 1. Install [Earthly](https://earthly.dev).
 2. Clone repository
-3. Run `earthly build +build`
-4. Take a coffee break (takes ~10mins with MacBook Pro with Apple M3 Pro)
-5. :yum:
+3. Run `earthly +hello`
+4. :yum:
 
     ```bash
     $ wasmtime ./_build/hello.wasm
