@@ -16,10 +16,7 @@ extra-source-files:
   README.md
 
 library
-  hs-source-dirs: src
   build-depends: ghc
-  -- cabal-gild: discover src
-  exposed-modules: GHC.Wasm.FFI.Compat
 
   if os(wasi)
     build-depends: ghc-experimental
