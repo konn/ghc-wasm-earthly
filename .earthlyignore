@@ -1,0 +1,6 @@
+_*
+fourmolu.yaml
+cabal.project
+.vscode
+.github
+.git
