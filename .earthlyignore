@@ -4,3 +4,4 @@ cabal.project
 .vscode
 .github
 .git
+Earthfile

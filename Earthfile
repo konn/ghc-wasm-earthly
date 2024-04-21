@@ -1,18 +1,19 @@
 VERSION 0.8
-FROM DOCKERFILE --platform=linux/amd64 -f ./Dockerfile -
+ARG --global GHC_VER=9.10.0.20240412
+FROM ghcr.io/konn/ghc-wasm-earthly:${GHC_VER}
 WORKDIR /workdir
+
 ENV GHC=wasm32-wasi-ghc
 ENV CABAL=wasm32-wasi-cabal --project-file=cabal-wasm.project --with-ghc=wasm32-wasi-ghc --with-ghc-pkg=wasm32-wasi-ghc-pkg --with-hsc2hs=wasm32-wasi-hsc2hs
-ENV GHC_VER=$(${GHC} --numeric-version)
 
 base-image:
-  SAVE IMAGE ghc-wasm-earthly:9.10.0.20240413
+  FROM DOCKERFILE --platform=linux/amd64 --build-arg GHC=${GHC_VER} -f ./Dockerfile -
+  SAVE IMAGE --push ghcr.io/konn/ghc-wasm-earthly:${GHC_VER}
 
 hello:
   COPY --keep-ts ./hello/hello.hs .
   RUN wasm32-wasi-ghc --make hello.hs
   SAVE ARTIFACT hello.wasm AS LOCAL _build/hello.wasm
-
 
 hello-js:
   ARG TARGET=wasm-jsffi-ghc-demo:exe:console-log
