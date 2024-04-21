@@ -37,7 +37,7 @@ rewriteModule flags hsm@HsModule {..} = hsm {hsmodDecls = concatMap go hsmodDecl
   where
     go :: LHsDecl GhcPs -> [LHsDecl GhcPs]
     go (L _ (ForD _ (ForeignExport _ _ _ (CExport _ (L _ (CExportStatic _ _ JavaScriptCallConv)))))) = []
-    go (L loc (ForD _ (ForeignImport _ funName ty ci@(CImport _ (L _ JavaScriptCallConv) _ _ _)))) = generateDummy flags loc ci funName ty
+    go (L loc (ForD _ ci@(ForeignImport _ funName ty (CImport _ (L _ JavaScriptCallConv) _ _ _)))) = generateDummy flags loc ci funName ty
     go x = [x]
 
 parseWith :: P a -> DynFlags -> String -> ParseResult a
@@ -56,7 +56,7 @@ parseExp flags s =
             PFailed _ -> error $ "parse failed: " <> s
     PFailed _ -> error $ "parse failed: " <> s
 
-generateDummy :: DynFlags -> SrcSpanAnn' (EpAnn AnnListItem) -> ForeignImport GhcPs -> GenLocated SrcSpanAnnN RdrName -> GenLocated SrcSpanAnnA (HsSigType GhcPs) -> [GenLocated SrcSpanAnnA (HsDecl GhcPs)]
+generateDummy :: DynFlags -> SrcSpanAnn' (EpAnn AnnListItem) -> ForeignDecl GhcPs -> GenLocated SrcSpanAnnN RdrName -> GenLocated SrcSpanAnnA (HsSigType GhcPs) -> [GenLocated SrcSpanAnnA (HsDecl GhcPs)]
 generateDummy flags loc ffi funName funType =
   let errorBody = parseExp flags $ "error " <> show (showSDoc flags (ppr ffi))
    in map
