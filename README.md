@@ -1,7 +1,9 @@
 # GHC WASM backend building for macOS
 
 A simple earthly-based build system for GHC 9.10 (alpha) WASM backend, mainly designed to use with (Apple Silicon) macOS as a Host OS.
-This repository comes with a container image to ease GHC
+This repository comes with a container image to use GHC WASM backend in handy:
+
+- [`ghcr.io/konn/ghc-wasm-earthly`](https://github.com/users/konn/packages/container/package/ghc-wasm-earthly)
 
 ## Usage
 
