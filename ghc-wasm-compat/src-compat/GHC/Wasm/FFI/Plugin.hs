@@ -3,11 +3,15 @@
 
 module GHC.Wasm.FFI.Plugin (plugin) where
 
+import GHC.Data.StringBuffer (stringToStringBuffer)
+import GHC.Driver.Config.Parser (initParserOpts)
 import GHC.Hs
-import GHC.Plugins
+import GHC.Parser
+import GHC.Parser.Lexer (P, ParseResult (..), initParserState, unP)
+import GHC.Parser.PostProcess (ECP (..), PV, runPV)
+import GHC.Plugins hiding ((<>))
 import qualified GHC.Types.Fixity as LF
 import GHC.Types.ForeignCall (CCallConv (JavaScriptCallConv), CExportSpec (..))
-import GHC.Types.SourceText (SourceText (NoSourceText))
 
 plugin :: Plugin
 plugin =
@@ -36,52 +40,51 @@ rewriteModule flags hsm@HsModule {..} = hsm {hsmodDecls = concatMap go hsmodDecl
     go (L loc (ForD _ (ForeignImport _ funName ty ci@(CImport _ (L _ JavaScriptCallConv) _ _ _)))) = generateDummy flags loc ci funName ty
     go x = [x]
 
+parseWith :: P a -> DynFlags -> String -> ParseResult a
+parseWith p flags inp =
+  unP p $ initParserState (initParserOpts flags) (stringToStringBuffer inp) $ mkRealSrcLoc (mkFastString "<string>") 1 1
+
+parseExp :: DynFlags -> String -> LHsExpr GhcPs
+parseExp flags s =
+  case parseWith parseExpression flags s of
+    POk state e ->
+      let e' = e :: ECP
+          parser_validator = unECP e' :: PV (LHsExpr GhcPs)
+          parser = runPV parser_validator :: P (LHsExpr GhcPs)
+       in case unP parser state :: ParseResult (LHsExpr GhcPs) of
+            POk _ e'' -> e''
+            PFailed _ -> error $ "parse failed: " <> s
+    PFailed _ -> error $ "parse failed: " <> s
+
 generateDummy :: DynFlags -> SrcSpanAnn' (EpAnn AnnListItem) -> ForeignImport GhcPs -> GenLocated SrcSpanAnnN RdrName -> GenLocated SrcSpanAnnA (HsSigType GhcPs) -> [GenLocated SrcSpanAnnA (HsDecl GhcPs)]
 generateDummy flags loc ffi funName funType =
-  map
-    (L loc)
-    [ SigD NoExtField $ TypeSig EpAnnNotUsed [funName] $ HsWC NoExtField funType
-    , ValD NoExtField $
-        FunBind NoExtField funName $
-          MG
-            (Generated DoPmc)
-            ( noSSA
-                [ noSSA
-                    $ Match
-                      EpAnnNotUsed
-                      ( FunRhs
-                          { mc_strictness = NoSrcStrict
-                          , mc_fun = funName
-                          , mc_fixity = LF.Prefix
+  let errorBody = parseExp flags $ "error " <> show (showSDoc flags (ppr ffi))
+   in map
+        (L loc)
+        [ SigD NoExtField $ TypeSig EpAnnNotUsed [funName] $ HsWC NoExtField funType
+        , ValD NoExtField $
+            FunBind NoExtField funName $
+              MG
+                (Generated DoPmc)
+                ( noSSA
+                    [ noSSA
+                        $ Match
+                          EpAnnNotUsed
+                          ( FunRhs
+                              { mc_strictness = NoSrcStrict
+                              , mc_fun = funName
+                              , mc_fixity = LF.Prefix
+                              }
+                          )
+                          []
+                        $ GRHSs
+                          { grhssLocalBinds = HsValBinds EpAnnNotUsed $ ValBinds NoAnnSortKey mempty []
+                          , grhssGRHSs =
+                              [noSSA $ GRHS EpAnnNotUsed [] $ errorBody]
+                          , grhssExt = EpaComments []
                           }
-                      )
-                      []
-                    $ GRHSs
-                      { grhssLocalBinds = HsValBinds EpAnnNotUsed $ ValBinds NoAnnSortKey mempty []
-                      , grhssGRHSs =
-                          [ noSSA $
-                              GRHS EpAnnNotUsed [] $
-                                noSSA $
-                                  HsApp
-                                    EpAnnNotUsed
-                                    ( noSSA $
-                                        HsVar NoExtField $
-                                          noSSA $
-                                            Unqual $
-                                              mkVarOcc "error"
-                                    )
-                                    ( noSSA $
-                                        HsLit EpAnnNotUsed $
-                                          HsString NoSourceText $
-                                            fsLit $
-                                              showSDoc flags $
-                                                ppr ffi
-                                    )
-                          ]
-                      , grhssExt = EpaComments []
-                      }
-                ]
-            )
-    ]
+                    ]
+                )
+        ]
   where
     noSSA = L noSrcSpanA
