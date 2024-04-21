@@ -1,6 +1,6 @@
 VERSION 0.8
 ARG --global GHC_VER=9.10.0.20240412
-FROM ghcr.io/konn/ghc-wasm-earthly:${GHC_VER}
+FROM ghcr.io/konn/ghc-wasm-earthly:${GHC_VER}_linux_amd64
 WORKDIR /workdir
 
 ENV GHC=wasm32-wasi-ghc
