@@ -1,7 +1,7 @@
 VERSION 0.8
 FROM DOCKERFILE --platform=linux/amd64 -f ./Dockerfile -
 WORKDIR /workdir
-ENV CABAL=wasm32-wasi-cabal --with-ghc=wasm32-wasi-ghc --with-ghc-pkg=wasm32-wasi-ghc-pkg --with-hsc2hs=wasm32-wasi-hsc2hs
+ENV CABAL=wasm32-wasi-cabal --project-file=cabal-wasm.project --with-ghc=wasm32-wasi-ghc --with-ghc-pkg=wasm32-wasi-ghc-pkg --with-hsc2hs=wasm32-wasi-hsc2hs
 
 base-image:
   SAVE IMAGE ghc-wasm-earthly:9.10.0.20240413
