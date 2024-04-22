@@ -17,10 +17,11 @@ hello:
 
 hello-js:
   ARG TARGET=wasm-jsffi-ghc-demo:exe:console-log
-  ENV MOUNT_GLOBAL_STORE="type=cache,mode=0777,id=${TARGET}#ghc-${GHC_VER}#global-store,sharing=shared,target=/root/.cabal/store"
+  ENV MOUNT_GLOBAL_STORE="type=cache,mode=0777,id=${TARGET}#ghc-${GHC_VER}#global-store,sharing=shared,target=/root/.ghc-wasm/.cabal/store"
   ENV MOUNT_DIST_NEWSTYLE="type=cache,mode=0777,id=${TARGET}#ghc${GHC_VER}#dist-newstyle,sharing=shared,target=dist-newstyle"
   COPY --keep-ts . .
   RUN --mount ${MOUNT_GLOBAL_STORE} \
+      --mount ${MOUNT_DIST_NEWSTYLE} \
       ${CABAL} build --only-dependencies ${TARGET}
   RUN --mount ${MOUNT_GLOBAL_STORE} \
       --mount ${MOUNT_DIST_NEWSTYLE} \

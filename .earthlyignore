@@ -5,3 +5,4 @@ cabal.project
 .github
 .git
 Earthfile
+workspace
