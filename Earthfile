@@ -18,7 +18,7 @@ hello:
 BUILD:
   FUNCTION
   ARG target
-  ARG outdir=$(cut -d: -f3)
+  ARG outdir=$(echo ${target} | cut -d: -f3)
   ARG wasm=${outdir}.wasm
   ENV MOUNT_GLOBAL_STORE="type=cache,mode=0777,id=${target}#ghc-${GHC_VER}#global-store,sharing=shared,target=/root/.ghc-wasm/.cabal/store"
   ENV MOUNT_DIST_NEWSTYLE="type=cache,mode=0777,id=${target}#ghc${GHC_VER}#dist-newstyle,sharing=shared,target=dist-newstyle"
@@ -44,7 +44,7 @@ BUILD:
   # Use deno to run the console-log demo
   RUN cd dist && deno run --allow-read ./run.ts ./${wasm}
 
-  SAVE ARTIFACT ./dist AS LOCAL _build/${outdir}
+  SAVE ARTIFACT ./dist/ AS LOCAL _build/${outdir}/
 
 hello-js:
   DO +BUILD --target=wasm-jsffi-ghc-demo:exe:console-log
