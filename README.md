@@ -20,7 +20,9 @@ In other platforms, it provides a dummy API that errors at runtime.
 
 ### `GHC.Wasm.FFI.Plugin`
 
-This module provides a source plugin.
+This module provides a source plugin to replace JavaScript FFI with dummy code in non-WASM backend.
+This might sounds having similar purpose of jsaddle, but it have a different goal: jsaddle aims at makes code working even with native backend by using browser as a JS backend; `GHC.Wasm.FFI.Plugin`, on the other hand, only assumes that the code type-checks and compiles. The intended use case of the latter is to use HLS on WASM-targeted code.
+
 It does nothing when used with the WASM backend.
 In other backends, on the other hand, it removes all JS FFI exports and replaces JS FFI imports with the function definition with a dummy function definition with the same name and type but just raises an error at runtime.
   
@@ -68,7 +70,26 @@ greet name = consoleLog $ "Hello, " <> fromJSString name
 
 Beware that the `foreign export` of `greet` has gone and the definition of `js_console_log` is replaced with the runtime error.
 
-## Demo 1: simple WASI app
+### Note on Plugins with WASM
+
+Currently (April 2024), WASM backend doesn't provide an interactive REPL (GHCi), which prevents Template Haskell and compiler plugin from working with WASM backend.
+The lack of Template Haskell leads to the development of this module as a source plugin - because no macro is needed and does not sacrifices well-formedness of the programs.
+
+Still, WASM backend in GHC 9.10 doesn't support GHC plugin either. So, you can just enable source plugin only when WASM backend is not used. We recommend to conditionally specify `-fplugin` option in cabal file, like this:
+
+```cabal
+library
+  if !os(wasi)
+    ghc-options: -fplugin GHC.Wasm.FFI.Plugin
+    build-depends: ghc-wasm-compat
+```
+
+With this, `GHC.Wasm.FFI.Plugin` is enabled only with non-WASM backends.
+As the implementation of the plugin for WASM backend still exists and it is no-op, it can be enabled unconditionally once WASM backends supports GHC plugins in near future.
+
+## Demos
+
+### Demo 1: simple WASI app
 
 1. Install [Earthly](https://earthly.dev).
 2. Clone repository
@@ -80,7 +101,7 @@ Beware that the `foreign export` of `greet` has gone and the definition of `js_c
     Hello, WASM World from GHC 9.10!
     ```
 
-## Demo 2: Calling JS FFI
+### Demo 2: Calling JS FFI
 
 [`wasm-jsffi-ghc-demo/` ](./wasm-jsffi-ghc-demo) contains a simple example to call the `console.log` JS function from Haskell.
 To run:
@@ -120,3 +141,7 @@ My project targets Deno.
 @Lugendre [uses](https://github.com/Lugendre/earthly-haskell) Earthly to build static binaries with Earthly:
 
 https://github.com/Lugendre/earthly-haskell
+
+### Cloudflare Worker with Haskell
+
+[Stack Builders](https://blog.cloudflare.com/cloudflare-worker-with-webassembly-and-haskell) already achieved this with Asterius.
