@@ -1,3 +1,6 @@
+FROM --platform=linux/amd64 haskell:9.8-slim-buster AS haskell-tools
+RUN cabal update && cabal install alex happy
+
 FROM --platform=linux/amd64 debian:bookworm-slim
 ARG GHC=9.10.0.20240412
 ARG CABAL=3.11.0.0.2024.4.19
@@ -28,8 +31,12 @@ RUN . ~/.ghc-wasm/env && \
 WORKDIR /root
 RUN rm -rf /root/work-wasm
 
-# The following doesn't work well..
-# RUN echo ". /root/.ghc-wasm/env" >> /etc/profile
+RUN cabal v2-update 'hackage.haskell.org,2024-04-22T06:16:57Z'
+
+# Copies toolings from haskell-tools
+COPY --from=haskell-tools /root/.local/bin/alex /usr/bin/alex
+COPY --from=haskell-tools /root/.local/bin/happy /usr/bin/happy
+COPY --from=haskell-tools /root/.local/state/cabal/store/ghc-9.8.2 /root/.local/state/cabal/store/ghc-9.8.2
 
 # So just copy-and-pasting the content of .ghc-wasm env here instead.
 ENV PATH=/root/.ghc-wasm/wasm-run/bin:$PATH
@@ -68,3 +75,5 @@ ENV CONF_CXX_OPTS_STAGE1=${CONF_CXX_OPTS_STAGE1:-"-Wno-error=int-conversion -Wno
 ENV CONF_GCC_LINKER_OPTS_STAGE1=${CONF_GCC_LINKER_OPTS_STAGE1:-"-Wl,--compress-relocations,--error-limit=0,--growable-table,--keep-section=ghc_wasm_jsffi,--stack-first,--strip-debug "}
 ENV CONFIGURE_ARGS=${CONFIGURE_ARGS:-"--host=x86_64-linux --target=wasm32-wasi --with-intree-gmp --with-system-libffi"}
 ENV CROSS_EMULATOR=${CROSS_EMULATOR:-"/root/.ghc-wasm/wasm-run/bin/wasmtime.sh"}
+
+
