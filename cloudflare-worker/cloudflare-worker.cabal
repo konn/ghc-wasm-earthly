@@ -1,0 +1,76 @@
+cabal-version: 3.0
+name: cloudflare-worker
+version: 0.1.0.0
+synopsis: WASM binding for GHC WASM backend.
+-- description:
+homepage: https://github.com/konn/cloudflare-worker-wasm#readme
+license: BSD-3-Clause
+license-file: LICENSE
+author: Hiromi ISHII
+maintainer: konn.jinro_at_gmail.com
+copyright: 2024 (c) Hiromi ISHII
+category: Web
+build-type: Simple
+extra-doc-files:
+  CHANGELOG.md
+  README.md
+
+common defaults
+  ghc-options:
+    -Wall
+    -Wcompat
+    -Widentities
+    -Wincomplete-record-updates
+    -Wincomplete-uni-patterns
+    -Wmissing-export-lists
+    -Wmissing-home-modules
+    -Wpartial-fields
+    -Wredundant-constraints
+
+  build-depends:
+    base >=4.7 && <5,
+    ghc-wasm-compat,
+
+  default-language: GHC2021
+  autogen-modules: Paths_cloudflare_worker
+  other-modules: Paths_cloudflare_worker
+
+  if !os(wasi)
+    ghc-options:
+      -fplugin
+      GHC.Wasm.FFI.Plugin
+
+library
+  import: defaults
+  build-depends:
+    bytestring,
+    containers,
+    microaeson,
+    microaeson-generics,
+    streaming,
+    text,
+
+  hs-source-dirs: src
+  -- cabal-gild: discover src
+  exposed-modules:
+    Language.WASM.JSVal.Iterator
+    Language.WASM.JSVal.Iterator.Linear
+    Language.WASM.JSVal.JSON
+    Language.WASM.JSVal.Utils
+    Network.Cloudflare.Worker
+    Network.Cloudflare.Worker.Http
+    Network.Cloudflare.Worker.Http.Headers
+    Network.Cloudflare.Worker.Http.Request
+
+executable hello-worker
+  import: defaults
+  build-depends: cloudflare-worker
+  main-is: Main.hs
+  hs-source-dirs: app
+  ghc-options: -O2
+
+  if os(wasi)
+    ghc-options:
+      -no-hs-main
+      -optl-mexec-model=reactor
+      "-optl-Wl,--export=hs_start"
