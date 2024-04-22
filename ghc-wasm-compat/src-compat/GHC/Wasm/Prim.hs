@@ -12,7 +12,7 @@ module GHC.Wasm.Prim (
   JSVal (..),
   freeJSVal,
   -- The JSString type and conversion from/to Haskell String
-  JSString (),
+  JSString (..),
   fromJSString,
   toJSString,
   -- Exception types related to JSFFI
