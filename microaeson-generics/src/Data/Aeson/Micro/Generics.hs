@@ -2,6 +2,7 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MonoLocalBinds #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators #-}
@@ -47,10 +48,10 @@ instance {-# OVERLAPPABLE #-} (GWithObject f) => GWithObject (M1 i c f) where
 
 instance
   {-# OVERLAPPING #-}
-  (Selector sel, GToJSON f) =>
-  GWithObject (M1 S sel f)
+  (Selector ('MetaSel ('Just n) x b c), GToJSON f) =>
+  GWithObject (M1 S ('MetaSel ('Just n) x b c) f)
   where
-  gwithObject (M1 f) = Map.insert (T.pack $ selName (undefined :: M1 S sel f a)) (gtoJSON f)
+  gwithObject (M1 f) = Map.insert (T.pack $ selName (undefined :: M1 S ('MetaSel ('Just n) x b c) f a)) (gtoJSON f)
   {-# INLINE gwithObject #-}
 
 instance

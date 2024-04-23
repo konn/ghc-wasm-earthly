@@ -48,15 +48,21 @@ library
     microaeson,
     microaeson-generics,
     streaming,
+    streaming-bytestring,
     text,
+    transformers,
+    vector,
 
   hs-source-dirs: src
   -- cabal-gild: discover src
   exposed-modules:
+    Data.Array.Destination.Micro
+    Language.WASM.ByteString
     Language.WASM.JSVal.Iterator
     Language.WASM.JSVal.Iterator.Linear
     Language.WASM.JSVal.JSON
     Language.WASM.JSVal.Utils
+    Language.WASM.ReadableStream
     Network.Cloudflare.Worker
     Network.Cloudflare.Worker.Http
     Network.Cloudflare.Worker.Http.Headers
