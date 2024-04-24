@@ -52,12 +52,14 @@ library
     text,
     transformers,
     vector,
+    wasm-linear-base,
 
   hs-source-dirs: src
   -- cabal-gild: discover src
   exposed-modules:
     Data.Array.Destination.Micro
     Language.WASM.ByteString
+    Language.WASM.JSVal.Convert
     Language.WASM.JSVal.Iterator
     Language.WASM.JSVal.Iterator.Linear
     Language.WASM.JSVal.JSON

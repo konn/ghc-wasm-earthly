@@ -1,0 +1,12 @@
+templateDirs: []
+hpack: false
+
+defaults:
+  template: monorepo-single
+  snapshot: lts
+
+params:
+  monorepo: ghc-wasm-earthly
+  author-name: Hiromi ISHII
+  author-email: konn.jinro_at_gmail.com
+  github-username: konn
