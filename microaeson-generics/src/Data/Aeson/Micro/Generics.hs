@@ -9,6 +9,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -Wno-deferred-out-of-scope-variables #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Data.Aeson.Micro.Generics (
@@ -18,9 +19,12 @@ module Data.Aeson.Micro.Generics (
   genericToJSON,
 ) where
 
+import Control.Applicative (empty)
 import Data.Aeson.Micro
 import Data.Aeson.Micro qualified as J
 import Data.Coerce (coerce)
+import Data.List.NonEmpty (NonEmpty)
+import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict qualified as Map
 import Data.Text qualified as T
 import Data.Vector qualified as V
@@ -158,4 +162,12 @@ instance (FromJSON a) => FromJSON (V.Vector a) where
 
 instance (ToJSON a) => ToJSON (V.Vector a) where
   toJSON = toJSON . V.toList
+  {-# INLINE toJSON #-}
+
+instance (FromJSON a) => FromJSON (NonEmpty a) where
+  parseJSON = maybe empty pure . NE.nonEmpty <=< parseJSON
+  {-# INLINE parseJSON #-}
+
+instance (ToJSON a) => ToJSON (NonEmpty a) where
+  toJSON = toJSON . NE.toList
   {-# INLINE toJSON #-}
