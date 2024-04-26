@@ -1,8 +1,10 @@
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MonoLocalBinds #-}
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators #-}
@@ -17,6 +19,7 @@ module Data.Aeson.Micro.Generics (
 ) where
 
 import Data.Aeson.Micro
+import Data.Aeson.Micro qualified as J
 import Data.Coerce (coerce)
 import Data.Map.Strict qualified as Map
 import Data.Text qualified as T
@@ -33,6 +36,22 @@ class GToJSON f where
 
 class GWithObject f where
   gwithObject :: f a -> Object -> Object
+
+instance
+  ( GWithObject f
+  , Constructor cf
+  , GWithObject g
+  , Constructor cg
+  ) =>
+  GWithObject (M1 C cf f :+: M1 C cg g)
+  where
+  gwithObject (L1 mf@(M1 f)) =
+    let con = conName mf
+     in Map.insert (T.pack con) $ J.Object $ gwithObject f mempty
+  gwithObject (R1 mg@(M1 g)) =
+    let con = conName mg
+     in Map.insert (T.pack con) $ J.Object $ gwithObject g mempty
+  {-# INLINE gwithObject #-}
 
 instance (GWithObject f, GWithObject g) => GWithObject (f :*: g) where
   gwithObject (f :*: g) = gwithObject g . gwithObject f
@@ -88,6 +107,26 @@ instance
   gparseJSON (Object dic) =
     M1 <$> gparseJSONField (Map.lookup (T.pack $ selName (undefined :: M1 S sel f a)) dic)
   gparseJSON _ = fail "expected object"
+  {-# INLINE gparseJSON #-}
+
+instance
+  ( GFromJSON f
+  , Constructor cf
+  , GFromJSON g
+  , Constructor cg
+  ) =>
+  GFromJSON (M1 c cf f :+: M1 c cg g)
+  where
+  gparseJSON =
+    let conF = T.pack $ conName (undefined :: M1 c cf f a)
+        conG = T.pack $ conName (undefined :: M1 c cg g a)
+     in J.withObject ("{ [" <> T.unpack conF <> " | " <> T.unpack conG <> "]: ... }") \obj ->
+          if
+            | Just val <- Map.lookup conF obj ->
+                L1 <$> gparseJSON val
+            | Just val <- Map.lookup conG obj ->
+                R1 <$> gparseJSON val
+            | otherwise -> fail "failed"
   {-# INLINE gparseJSON #-}
 
 instance (GFromJSON f, GFromJSON g) => GFromJSON (f :*: g) where
