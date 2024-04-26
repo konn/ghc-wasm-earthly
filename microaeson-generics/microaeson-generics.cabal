@@ -25,6 +25,7 @@ library
     containers,
     microaeson,
     text,
+    vector,
 
   ghc-options:
     -Wall

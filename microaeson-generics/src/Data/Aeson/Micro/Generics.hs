@@ -23,6 +23,7 @@ import Data.Aeson.Micro qualified as J
 import Data.Coerce (coerce)
 import Data.Map.Strict qualified as Map
 import Data.Text qualified as T
+import Data.Vector qualified as V
 import GHC.Generics
 
 class GFromJSON f where
@@ -149,4 +150,12 @@ instance (GenericFromJSON a) => FromJSON (Generically a) where
 
 instance (GenericToJSON a) => ToJSON (Generically a) where
   toJSON = genericToJSON . coerce @_ @a
+  {-# INLINE toJSON #-}
+
+instance (FromJSON a) => FromJSON (V.Vector a) where
+  parseJSON = fmap V.fromList <$> parseJSON
+  {-# INLINE parseJSON #-}
+
+instance (ToJSON a) => ToJSON (V.Vector a) where
+  toJSON = toJSON . V.toList
   {-# INLINE toJSON #-}
