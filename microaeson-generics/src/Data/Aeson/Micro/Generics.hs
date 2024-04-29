@@ -101,11 +101,7 @@ instance
   gparseJSONField (Just v) = K1 . Just <$> parseJSON v
   {-# INLINE gparseJSONField #-}
 
-instance
-  {-# OVERLAPPABLE #-}
-  (FromJSON a) =>
-  GFromJSONField (K1 i a)
-  where
+instance (FromJSON a) => GFromJSONField (K1 i a) where
   gparseJSONField (Just v) = K1 <$> parseJSON v
   gparseJSONField Nothing = fail "missing field"
   {-# INLINE gparseJSONField #-}
@@ -123,18 +119,19 @@ instance (GFromJSON' Affine f, Constructor c) => GFromJSON' 'Multi (M1 C c f) wh
   gparseJSON _ = fail "expected object"
   {-# INLINE gparseJSON #-}
 
-instance {-# OVERLAPPABLE #-} (GFromJSON' m f) => GFromJSON' m (M1 i c f) where
-  gparseJSON = fmap M1 . gparseJSON @m
-  {-# INLINE gparseJSON #-}
+instance (FromJSON c) => GFromJSON' m (K1 i c) where
+  gparseJSON = fmap K1 . parseJSON
 
 instance
   {-# OVERLAPPING #-}
-  (GFromJSONField f, Selector sel) =>
+  (GFromJSONField f, GFromJSON' Affine f, Selector sel) =>
   GFromJSON' 'Affine (M1 S sel f)
   where
-  gparseJSON (Object dic) =
-    M1 <$> gparseJSONField (Map.lookup (T.pack $ selName (undefined :: M1 S sel f a)) dic)
-  gparseJSON _ = fail "expected object"
+  gparseJSON (Object dic)
+    | let sel = T.pack $ selName (undefined :: M1 S sel f a)
+    , not $ T.null sel =
+        M1 <$> gparseJSONField (Map.lookup sel dic)
+  gparseJSON v = M1 <$> gparseJSON @Affine v
   {-# INLINE gparseJSON #-}
 
 instance
@@ -184,6 +181,10 @@ instance (ToJSON a) => ToJSON (V.Vector a) where
 instance (FromJSON a) => FromJSON (NonEmpty a) where
   parseJSON = maybe (fail "no") pure . NE.nonEmpty <=< parseJSON
   {-# INLINE parseJSON #-}
+
+instance (GFromJSON' m f) => GFromJSON' m (M1 D c f) where
+  gparseJSON = fmap M1 . gparseJSON @m
+  {-# INLINE gparseJSON #-}
 
 instance GFromJSON' 'Affine U1 where
   gparseJSON v = do
