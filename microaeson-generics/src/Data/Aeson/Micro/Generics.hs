@@ -110,7 +110,7 @@ instance (ToJSON a) => GToJSON' Affine (K1 i a) where
   gtoJSON = toJSON . unK1
   {-# INLINE gtoJSON #-}
 
-instance (GFromJSON' Affine f, Constructor c) => GFromJSON' 'Multi (M1 C c f) where
+instance (GFromJSON' Affine f, Constructor c) => GFromJSON' n (M1 C c f) where
   gparseJSON (Object dic) =
     let con = conName (undefined :: M1 C c f a)
      in case Map.lookup (T.pack con) dic of
