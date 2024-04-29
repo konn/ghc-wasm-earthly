@@ -30,7 +30,7 @@ BUILD:
       --mount ${MOUNT_DIST_NEWSTYLE} \
       ${CABAL} build  ${target}
   # From frontend/build.sh in tweag/ghc-wasm-miso-examples
-  LET HS_WASM_PATH=$(${CABAL} list-bin ${target})
+  LET HS_WASM_PATH=$(${CABAL} list-bin -v0 ${target})
   LET WASM_LIB=$(wasm32-wasi-ghc --print-libdir)
   LET DEST=dist/${wasm}
   RUN mkdir -p dist
