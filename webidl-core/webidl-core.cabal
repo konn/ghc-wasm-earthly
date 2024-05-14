@@ -1,0 +1,72 @@
+cabal-version: 3.0
+name: webidl-core
+version: 0.1.0.0
+synopsis: A simple WebIDL parser and printers
+description: Please see the README on GitHub at <https://github.com/konn/ghc-wasm-earthly/webidl-core#readme>
+homepage: https://github.com/konn/ghc-wasm-earthly#readme
+bug-reports: https://github.com/konn/ghc-wasm-earthly/issues
+author:
+maintainer:
+copyright: (c)  2024- present
+license: BSD-3-Clause
+license-file: LICENSE
+build-type: Simple
+tested-with: ghc ==9.8.4 || ==9.10.0.20240412
+extra-doc-files:
+  CHANGELOG.md
+  README.md
+
+source-repository head
+  type: git
+  location: https://github.com/konn/ghc-wasm-earthly
+  subdir: webidl-core
+
+common defaults
+  autogen-modules: Paths_webidl_core
+  other-modules: Paths_webidl_core
+  ghc-options:
+    -Wall
+    -Wcompat
+    -Widentities
+    -Wincomplete-record-updates
+    -Wincomplete-uni-patterns
+    -Wmissing-export-lists
+    -Wmissing-home-modules
+    -Wpartial-fields
+    -Wredundant-constraints
+    -Wunused-packages
+
+  default-language: GHC2021
+  build-depends:
+    base >=4.7 && <5,
+    bytestring,
+    containers,
+    deepseq,
+    hashable,
+    megaparsec,
+    parser-combinators,
+    scientific,
+    text,
+    vector,
+
+library
+  import: defaults
+  -- cabal-gild: discover src
+  exposed-modules:
+    Language.WebIDL.Parser
+    Language.WebIDL.Types
+
+  hs-source-dirs: src
+
+test-suite webidl-core-test
+  import: defaults
+  type: exitcode-stdio-1.0
+  main-is: Test.hs
+  hs-source-dirs: test
+  ghc-options:
+    -threaded
+    -O2
+    -rtsopts
+    -with-rtsopts=-N
+
+  build-depends: webidl-core

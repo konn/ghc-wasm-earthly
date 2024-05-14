@@ -1,3 +1,4 @@
 with-compiler: wasm32-wasi-ghc-9.10
 packages: **/*.cabal
+import: cabal-common.project
 optimization: False
