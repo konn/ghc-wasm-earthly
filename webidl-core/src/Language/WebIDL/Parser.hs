@@ -199,7 +199,7 @@ namespaceP =
 
 namespaceMemberP :: Parser NamespaceMember
 namespaceMemberP =
-  NamespaceOp <$> regularOperationP
+  NamespaceOp <$> regularOperationP <* semi
     <|> NamespaceReadOnly <$ reserved "readonly" <*> attributeP
     <|> NamespaceConst <$> constP
 
@@ -371,8 +371,8 @@ callbackInterfaceP = do
 
 callbackInterfaceMemberP :: Parser CallbackInterfaceMember
 callbackInterfaceMemberP =
-  CallbackInterfaceConst <$> constP
-    <|> CallbackInterfaceRegularOperation <$> regularOperationP
+  CallbackInterfaceConst <$> P.try constP
+    <|> CallbackInterfaceRegularOperation <$> regularOperationP <* semi
 
 regularOperationP :: Parser RegularOperation
 regularOperationP =
