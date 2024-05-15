@@ -250,6 +250,7 @@ stringifierP =
     *> ( AttributeStringifier
           <$> P.option ReadWrite (ReadOnly <$ reserved "readonly")
           <*> attributeP
+          <|> OperationStringifier <$> P.try regularOperationP <* semi
           <|> Stringifier <$ semi
        )
 
@@ -350,12 +351,12 @@ callbackP = reserved "callback" *> callbackRestOrInterfaceP
 
 callbackRestOrInterfaceP :: Parser Definition
 callbackRestOrInterfaceP =
-  uncurry CallbackFunctionD <$> callbackRestP
-    <|> CallbackInterfaceD
-      <$ reserved "interface"
-      <*> anyIdentifier
-      <*> braces callbackInterfaceP
-      <* semi
+  CallbackInterfaceD
+    <$ reserved "interface"
+    <*> anyIdentifier
+    <*> braces callbackInterfaceP
+    <* semi
+    <|> uncurry CallbackFunctionD <$> callbackRestP
 
 callbackRestP :: Parser (T.Text, CallbackFunction)
 callbackRestP =

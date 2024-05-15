@@ -146,6 +146,8 @@ newtype Mixin = Mixin (V.Vector (Attributed MixinMember))
 data Stringifier
   = Stringifier
   | AttributeStringifier !Access !Attribute
+  | -- | It doesn't appear in WebIDL standard, but there is...
+    OperationStringifier !RegularOperation
   deriving (Show, Eq, Ord, Generic)
 
 data MixinMember
