@@ -87,8 +87,10 @@ integerP :: Parser Integer
 integerP =
   lexeme $
     L.signed spaceComment $
-      P.try ("0" *> (("x" <|> "X") *> L.hexadecimal <|> L.octal))
-        <|> P.lookAhead (P.notFollowedBy "0") *> L.decimal
+      ( P.try ("0" *> ((P.string "x" <|> P.string "X") *> L.hexadecimal <|> L.octal))
+          <|> P.notFollowedBy (P.char '0') *> P.try L.decimal
+      )
+        <* P.notFollowedBy (P.char 'e' <|> P.char 'E' <|> P.char '.')
 
 anyString :: Parser T.Text
 anyString =
@@ -99,7 +101,7 @@ anyString =
       (P.takeWhileP (Just "non-double-quote") (/= '"'))
 
 decimal :: Parser Scientific
-decimal = P.try $ lexeme L.scientific
+decimal = lexeme $ P.try L.scientific
 
 definitionsP :: Parser IDLFragment
 definitionsP = IDLFragment <$> P.many (attributedP definitionP)
@@ -274,7 +276,7 @@ interfaceMemberP =
         <* semi
     bodyP :: Parser (InterfaceMember p)
     bodyP =
-      IfConst <$> P.try (constP <?> "const member")
+      IfConst <$> (constP <?> "const member")
         <|> IfOperation <$> P.try (operationP <* semi <?> "operation member")
         <|> IfStringifier <$> P.try (stringifierP <?> "stringifier member")
         <|> IfStaticMember <$> P.try (staticMemberP <?> "static member")
@@ -391,10 +393,13 @@ constP =
     <* semi
 
 constValueP :: Parser ConstValue
-constValueP = Bool <$> boolLit <|> floatP <|> Integer <$> integerP
+constValueP =
+  Bool <$> boolLit
+    <|> Integer <$> P.try integerP
+    <|> floatP
 
 floatP :: Parser ConstValue
-floatP = P.try infinityP <|> NaN <$ reserved "NaN" <|> Decimal <$> decimal
+floatP = P.try infinityP <|> NaN <$ reserved "NaN" <|> Decimal <$> P.try decimal
 
 infinityP :: Parser ConstValue
 infinityP =
