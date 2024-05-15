@@ -287,7 +287,7 @@ data IDLType
   | UnionType !(WithNullarity UnionType)
   deriving (Show, Eq, Ord, Generic)
 
-newtype UnionType = MkUnionType (NonEmpty (Either (Attributed DistinguishableType) (WithNullarity UnionType)))
+newtype UnionType = MkUnionType (NonEmpty (WithNullarity (Either (Attributed DistinguishableType) UnionType)))
   deriving (Show, Eq, Ord, Generic)
 
 newtype ArgumentList = ArgumentList (V.Vector (Attributed Argument))

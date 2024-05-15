@@ -505,9 +505,10 @@ unionTypeP :: Parser UnionType
 unionTypeP =
   parens $
     MkUnionType
-      <$> ( ( Left <$> attributedP distTypeP
-                <|> Right <$> optionally unionTypeP
-            )
+      <$> ( optionally
+              ( Left <$> attributedP distTypeP
+                  <|> Right <$> unionTypeP
+              )
               `PNE.sepBy1` symbol "or"
           )
 
