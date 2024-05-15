@@ -570,8 +570,8 @@ extendedAttributeP = do
                   ( parens $
                       ExtendedAttributeNamedArgList lhs rhs <$> argumentListP
                   )
+              <|> ExtendedAttributeIdentList lhs <$> parens (V.fromList <$> anyIdentifier `P.sepBy1` comma)
            )
-      <|> ExtendedAttributeIdentList lhs <$> parens (V.fromList <$> anyIdentifier `P.sepBy1` comma)
 
 keywords :: HS.HashSet T.Text
 keywords =
