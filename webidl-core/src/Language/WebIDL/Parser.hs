@@ -326,10 +326,11 @@ iterableP =
 
 staticMemberP :: Parser StaticMember
 staticMemberP =
-  StaticAttribute
-    <$> P.option ReadWrite (ReadOnly <$ reserved "readonly")
-    <*> attributeP
-    <|> StaticOp <$> regularOperationP
+  reserved "static" *> do
+    StaticAttribute
+      <$> P.option ReadWrite (ReadOnly <$ reserved "readonly")
+      <*> P.try attributeP
+      <|> StaticOp <$> regularOperationP <* semi
 
 operationP :: Parser Operation
 operationP =
