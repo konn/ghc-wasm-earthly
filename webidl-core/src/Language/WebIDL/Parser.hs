@@ -151,7 +151,7 @@ enumP =
   (,)
     <$ reserved "enum"
     <*> anyIdentifier
-    <*> braces (Enum_ <$> anyString `PNE.sepBy1` comma)
+    <*> braces (Enum_ <$> anyString `PNE.sepEndBy1` comma)
     <* semi
 
 dictionaryP :: Bool -> Parser (T.Text, Dictionary)
