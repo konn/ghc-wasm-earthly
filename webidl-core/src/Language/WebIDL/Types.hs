@@ -90,7 +90,7 @@ newtype IDLFragment = IDLFragment [Attributed Definition]
 data Interface p = Interface !(Maybe Identifier) !(V.Vector (Attributed (InterfaceMember p)))
   deriving (Show, Eq, Ord, Generic)
 
-data Special = Getter | Setter | Deleter
+data Special = Legacycaller | Getter | Setter | Deleter
   deriving (Show, Eq, Ord, Generic)
 
 data Operation

@@ -343,6 +343,7 @@ specialP =
   Getter <$ reserved "getter"
     <|> Setter <$ reserved "setter"
     <|> Deleter <$ reserved "deleter"
+    <|> Legacycaller <$ reserved "legacycaller"
 
 callbackP :: Parser Definition
 callbackP = reserved "callback" *> callbackRestOrInterfaceP
@@ -620,6 +621,7 @@ keywords =
     , "namespace"
     , "NaN"
     , "null"
+    , "or"
     , "object"
     , "octet"
     , "optional"
