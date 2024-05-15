@@ -236,7 +236,7 @@ mixinRestP =
 mixinMemberP :: Parser MixinMember
 mixinMemberP =
   MixinConst <$> P.try constP
-    <|> MixinOp <$> P.try regularOperationP
+    <|> MixinOp <$> P.try regularOperationP <* semi
     <|> MixinStringifier <$> P.try stringifierP
     <|> MixinAttribute
       <$> P.option ReadWrite (ReadOnly <$ reserved "readonly")
@@ -491,6 +491,8 @@ optionally p =
 idlTypeP :: Parser IDLType
 idlTypeP =
   Distinguishable <$> optionally distTypeP
+    <|> AnyType <$ reserved "any"
+    <|> PromiseType <$ reserved "Promise" <*> angles idlTypeP
     <|> UnionType <$> optionally unionTypeP
 
 unionTypeP :: Parser UnionType
@@ -639,4 +641,5 @@ keywords =
     , "unrestricted"
     , "unsigned"
     , "USVString"
+    , "Promise"
     ]
