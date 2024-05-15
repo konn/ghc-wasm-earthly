@@ -153,8 +153,7 @@ data MixinMember
   | MixinOp !RegularOperation
   | MixinStringifier !Stringifier
   | MixinAttribute
-      -- | 'True' if @required@
-      !Bool
+      !Access
       !Attribute
   deriving (Show, Eq, Ord, Generic)
 
@@ -285,10 +284,10 @@ data IDLType
   = Distinguishable !(WithNullarity DistinguishableType)
   | AnyType
   | PromiseType !IDLType
-  | UnionType !(Maybe UnionType)
+  | UnionType !(WithNullarity UnionType)
   deriving (Show, Eq, Ord, Generic)
 
-newtype UnionType = MkUnionType (NonEmpty (Either (Attributed IDLType) (Maybe UnionType)))
+newtype UnionType = MkUnionType (NonEmpty (Either (Attributed DistinguishableType) (WithNullarity UnionType)))
   deriving (Show, Eq, Ord, Generic)
 
 newtype ArgumentList = ArgumentList (V.Vector (Attributed Argument))
@@ -356,25 +355,25 @@ data Dictionary = Dictionary !(Maybe Identifier) !(V.Vector (Attributed Dictiona
 
 data DictionaryMember
   = RequiredMember !(Attributed IDLType) !Identifier
-  | OptionalMember !IDLType !(Maybe DefaultValue)
+  | OptionalMember !IDLType !Identifier !(Maybe DefaultValue)
   deriving (Show, Eq, Ord, Generic)
 
 data DefaultValue
   = DefaultConst !ConstValue
-  | DefaultString
+  | DefaultString !T.Text
   | DefaultEmptyArray
   | DefaultEmptyObject
   | DefaultNull
   | DefaultUndefined
   deriving (Show, Eq, Ord, Generic)
 
-data Enum_ = Enum_ (NonEmpty T.Text)
+newtype Enum_ = Enum_ (NonEmpty T.Text)
   deriving (Show, Eq, Ord, Generic)
 
 newtype Typedef = Typedef (Attributed IDLType)
   deriving (Show, Eq, Ord, Generic)
 
-data IncludesStatement = IncludesStatement Identifier
+newtype IncludesStatement = IncludesStatement Identifier
   deriving (Show, Eq, Ord, Generic)
 
 type Identifier = T.Text

@@ -38,16 +38,7 @@ common defaults
 
   default-language: GHC2021
   build-depends:
-    base >=4.7 && <5,
-    bytestring,
-    containers,
-    deepseq,
-    hashable,
-    megaparsec,
-    parser-combinators,
-    scientific,
-    text,
-    vector,
+    base >=4.7 && <5
 
 library
   import: defaults
@@ -57,6 +48,17 @@ library
     Language.WebIDL.Types
 
   hs-source-dirs: src
+  build-depends:
+    bytestring,
+    containers,
+    deepseq,
+    hashable,
+    megaparsec,
+    parser-combinators,
+    scientific,
+    text,
+    unordered-containers,
+    vector,
 
 test-suite webidl-core-test
   import: defaults

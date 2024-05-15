@@ -12,6 +12,7 @@ import Control.Applicative hiding (Const)
 import Control.Applicative.Combinators.NonEmpty qualified as PNE
 import Data.Char qualified as C
 import Data.Functor.Identity
+import Data.HashSet qualified as HS
 import Data.Scientific
 import Data.Text qualified as T
 import Data.Tuple (swap)
@@ -78,7 +79,9 @@ anyIdentifier = lexeme $ do
       Nothing
       (\c -> C.isAscii c && (C.isLetter c || C.isDigit c || c == '-' || c == '_'))
   let body = prfx <> (hd `T.cons` tl)
-  pure body
+  if body `HS.member` keywords
+    then fail $ "reserved word " <> T.unpack body
+    else pure body
 
 integerP :: Parser Integer
 integerP =
@@ -110,11 +113,23 @@ attributedP p = do
 definitionP :: Parser Definition
 definitionP =
   callbackOrInterfaceOrMixinP
+    <|> partialP
     <|> uncurry NamespaceD <$> namespaceP
-    <|> uncurry DictionaryD <$> dictionaryP
+    <|> uncurry DictionaryD <$> dictionaryP True
     <|> uncurry EnumD <$> enumP
     <|> uncurry TypedefD <$> typedefD
     <|> uncurry IncludesStatementD <$> includesStatementP
+
+partialP :: P.ParsecT Void T.Text Identity Definition
+partialP =
+  reserved "partial"
+    *> ( reserved "interface"
+          *> ( uncurry PartialMixinD <$> P.try mixinRestP
+                <|> uncurry PartialInterfaceD <$> interfaceRestP
+             )
+          <|> uncurry PartialNamespaceD <$> namespaceP
+          <|> uncurry PartialDictionaryD <$> dictionaryP False
+       )
 
 includesStatementP :: Parser (T.Text, IncludesStatement)
 includesStatementP =
@@ -139,13 +154,13 @@ enumP =
     <*> braces (Enum_ <$> anyString `PNE.sepBy1` comma)
     <* semi
 
-dictionaryP :: Parser (T.Text, Dictionary)
-dictionaryP =
+dictionaryP :: Bool -> Parser (T.Text, Dictionary)
+dictionaryP inher =
   (,)
     <$ reserved "dictionary"
     <*> anyIdentifier
     <*> ( Dictionary
-            <$> inheritanceP
+            <$> (if inher then inheritanceP else pure Nothing)
             <*> braces (V.fromList <$> many (attributedP dictionaryMemberP))
         )
     <* semi
@@ -159,13 +174,14 @@ dictionaryMemberP =
     <* semi
     <|> OptionalMember
       <$> idlTypeP
+      <*> anyIdentifier
       <*> P.optional (symbol "=" *> defaultValueP)
       <* semi
 
 defaultValueP :: Parser DefaultValue
 defaultValueP =
   DefaultConst <$> constValueP
-    <|> DefaultString <$ reserved "string"
+    <|> DefaultString <$> anyString
     <|> DefaultEmptyArray <$ symbol "[" <* symbol "]"
     <|> DefaultEmptyObject <$ symbol "{" <* symbol "}"
     <|> DefaultNull <$ reserved "null"
@@ -219,11 +235,11 @@ mixinRestP =
 
 mixinMemberP :: Parser MixinMember
 mixinMemberP =
-  MixinConst <$> constP
-    <|> MixinOp <$> regularOperationP
-    <|> MixinStringifier <$> stringifierP
+  MixinConst <$> P.try constP
+    <|> MixinOp <$> P.try regularOperationP
+    <|> MixinStringifier <$> P.try stringifierP
     <|> MixinAttribute
-      <$> P.option False (True <$ reserved "required")
+      <$> P.option ReadWrite (ReadOnly <$ reserved "readonly")
       <*> attributeP
 
 stringifierP :: Parser Stringifier
@@ -248,7 +264,7 @@ interfaceRestP =
 interfaceMemberP :: forall p. (KnownPartiality p) => Parser (InterfaceMember p)
 interfaceMemberP =
   case sPartiality @p of
-    SComplete -> constructorP <|> bodyP
+    SComplete -> P.try constructorP <|> bodyP
     SPartial -> bodyP
   where
     constructorP =
@@ -258,13 +274,13 @@ interfaceMemberP =
         <* semi
     bodyP :: Parser (InterfaceMember p)
     bodyP =
-      IfConst <$> constP
-        <|> P.option ReadWrite (ReadOnly <$ reserved "readonly") <**> memberP
-        <|> IfOperation <$> operationP <* semi
-        <|> IfStringifier <$> stringifierP
-        <|> IfStaticMember <$> staticMemberP
-        <|> IfIterable <$> iterableP
-        <|> IfAsyncIterable <$> asyncIterableP
+      IfConst <$> P.try (constP <?> "const member")
+        <|> IfOperation <$> P.try (operationP <* semi <?> "operation member")
+        <|> IfStringifier <$> P.try (stringifierP <?> "stringifier member")
+        <|> IfStaticMember <$> P.try (staticMemberP <?> "static member")
+        <|> IfIterable <$> P.try (iterableP <?> "iterable member")
+        <|> IfAsyncIterable <$> P.try (asyncIterableP <?> "async iterable member")
+        <|> P.option ReadWrite (ReadOnly <$ reserved "readonly") <**> P.try (memberP <?> "generic member")
         <|> IfInherit <$ reserved "inherit" <*> attributeP
 
 memberP :: Parser (Access -> InterfaceMember p)
@@ -358,7 +374,7 @@ regularOperationP =
   RegularOperation
     <$> idlTypeP
     <*> P.optional operationNameP
-    <*> argumentListP
+    <*> parens argumentListP
 
 operationNameP :: Parser OperationName
 operationNameP = IncludesOperation <$ reserved "includes" <|> OperationNamed <$> anyIdentifier
@@ -393,10 +409,18 @@ constTypeP = PrimConstType <$> primTypeP <|> IdentConstType <$> anyIdentifier
 primTypeP :: Parser PrimType
 primTypeP =
   integerTypeP
+    <|> floatTypeP
     <|> Boolean <$ reserved "boolean"
     <|> Byte <$ reserved "byte"
     <|> Octet <$ reserved "octet"
     <|> Bigint <$ reserved "bigint"
+
+floatTypeP :: P.ParsecT Void T.Text Identity PrimType
+floatTypeP =
+  P.option Restricted (Unrestricted <$ reserved "unrestricted")
+    <**> ( Float <$ reserved "float"
+            <|> Double <$ reserved "double"
+         )
 
 integerTypeP :: Parser PrimType
 integerTypeP =
@@ -464,13 +488,25 @@ optionally p =
   p <**> P.option Plain (Nullable <$ symbol "?")
 
 idlTypeP :: Parser IDLType
-idlTypeP = Distinguishable <$> optionally distTypeP
+idlTypeP =
+  Distinguishable <$> optionally distTypeP
+    <|> UnionType <$> optionally unionTypeP
+
+unionTypeP :: Parser UnionType
+unionTypeP =
+  parens $
+    MkUnionType
+      <$> ( ( Left <$> attributedP distTypeP
+                <|> Right <$> optionally unionTypeP
+            )
+              `PNE.sepBy1` symbol "or"
+          )
 
 distTypeP :: Parser DistinguishableType
 distTypeP =
   DPrim <$> primTypeP
     <|> DString <$> stringTypeP
-    <|> DNamed <$> anyIdentifier
+    <|> DNamed <$> P.try anyIdentifier
     <|> DSequence <$ reserved "sequence" <*> angles (attributedP idlTypeP)
     <|> DObject <$ reserved "object"
     <|> DSymbol <$ reserved "symbol"
@@ -526,6 +562,7 @@ extendedAttributeP = do
     ExtendedAttributeArgList lhs <$> parens argumentListP
       <|> equals
         *> ( ExtendedAttributeWildcard lhs <$ symbol "*"
+              <|> ExtendedAttributeIdent lhs <$> anyString
               <|> do
                 rhs <- anyIdentifier
                 P.option
@@ -535,3 +572,70 @@ extendedAttributeP = do
                   )
            )
       <|> ExtendedAttributeIdentList lhs <$> parens (V.fromList <$> anyIdentifier `P.sepBy1` comma)
+
+keywords :: HS.HashSet T.Text
+keywords =
+  HS.fromList
+    [ "ArrayBuffer"
+    , "async"
+    , "attribute"
+    , "bigint"
+    , "BigInt64Array"
+    , "BigUint64Array"
+    , "boolean"
+    , "byte"
+    , "ByteString"
+    , "callback"
+    , "const"
+    , "constructor"
+    , "DataView"
+    , "deleter"
+    , "dictionary"
+    , "DOMString"
+    , "enum"
+    , "false"
+    , "Float32Array"
+    , "Float64Array"
+    , "FrozenArray"
+    , "getter"
+    , "includes"
+    , "Infinity"
+    , "inherit"
+    , "Int16Array"
+    , "Int32Array"
+    , "Int8Array"
+    , "interface"
+    , "iterable"
+    , "long"
+    , "maplike"
+    , "mixin"
+    , "namespace"
+    , "NaN"
+    , "null"
+    , "object"
+    , "octet"
+    , "optional"
+    , "partial"
+    , "readonly"
+    , "record"
+    , "required"
+    , "sequence"
+    , "setlike"
+    , "setter"
+    , "SharedArrayBuffer"
+    , "short"
+    , "static"
+    , "string"
+    , "stringifier"
+    , "symbol"
+    , "true"
+    , "typedef"
+    , "Uint16Array"
+    , "Uint32Array"
+    , "Uint8Array"
+    , "Uint8ClampedArray"
+    , "undefined"
+    , "unrestricted"
+    , "unsigned"
+    , "USVString"
+    ]
