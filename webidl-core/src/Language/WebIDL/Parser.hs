@@ -99,7 +99,7 @@ anyString =
       (P.takeWhileP (Just "non-double-quote") (/= '"'))
 
 decimal :: Parser Scientific
-decimal = L.scientific
+decimal = P.try $ lexeme L.scientific
 
 definitionsP :: Parser IDLFragment
 definitionsP = IDLFragment <$> P.many (attributedP definitionP)
