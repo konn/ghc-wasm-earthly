@@ -635,7 +635,6 @@ keywords =
     , "SharedArrayBuffer"
     , "short"
     , "static"
-    , "string"
     , "stringifier"
     , "symbol"
     , "true"
