@@ -2,14 +2,16 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module Language.WebIDL.Parser where
+module Language.WebIDL.Parser (
+  parseIDLFragment,
+  definitionsP,
+  definitionP,
+) where
 
 import Control.Applicative hiding (Const)
 import Control.Applicative.Combinators.NonEmpty qualified as PNE
-import Control.Monad.Combinators.Expr
 import Data.Char qualified as C
 import Data.Functor.Identity
-import Data.Monoid
 import Data.Scientific
 import Data.Text qualified as T
 import Data.Tuple (swap)
@@ -20,6 +22,9 @@ import Text.Megaparsec ((<?>))
 import Text.Megaparsec qualified as P
 import Text.Megaparsec.Char qualified as P
 import Text.Megaparsec.Char.Lexer qualified as L
+
+parseIDLFragment :: T.Text -> Either (P.ParseErrorBundle T.Text Void) IDLFragment
+parseIDLFragment = P.runParser (spaceComment *> definitionsP <* P.eof) "<input>"
 
 type Parser = P.ParsecT Void T.Text Identity
 
@@ -65,7 +70,7 @@ reserved w =
       )
 
 anyIdentifier :: Parser T.Text
-anyIdentifier = do
+anyIdentifier = lexeme $ do
   prfx <- P.option "" $ T.singleton <$> (P.char '_' <|> P.char '-')
   hd <- P.letterChar
   tl <-
@@ -74,9 +79,6 @@ anyIdentifier = do
       (\c -> C.isAscii c && (C.isLetter c || C.isDigit c || c == '-' || c == '_'))
   let body = prfx <> (hd `T.cons` tl)
   pure body
-
-reservedWords :: [T.Text]
-reservedWords = ["interface", "partial", "mixin", "callback", "dictionary", "typedef", "enum", "includes"]
 
 integerP :: Parser Integer
 integerP =
@@ -103,12 +105,6 @@ attributedP :: Parser a -> Parser (Attributed a)
 attributedP p = do
   attributes <- extendedAttributeListP
   entry <- p
-  pure Attributed {..}
-
-attributedDefinitionP :: Parser (Attributed Definition)
-attributedDefinitionP = do
-  attributes <- extendedAttributeListP
-  entry <- definitionP
   pure Attributed {..}
 
 definitionP :: Parser Definition
@@ -148,11 +144,10 @@ dictionaryP =
   (,)
     <$ reserved "dictionary"
     <*> anyIdentifier
-    <*> braces
-      ( Dictionary
-          <$> inheritanceP
-          <*> (V.fromList <$> many (attributedP dictionaryMemberP))
-      )
+    <*> ( Dictionary
+            <$> inheritanceP
+            <*> braces (V.fromList <$> many (attributedP dictionaryMemberP))
+        )
     <* semi
 
 dictionaryMemberP :: Parser DictionaryMember
@@ -192,13 +187,19 @@ namespaceMemberP =
 
 attributeP :: Parser Attribute
 attributeP =
-  Attribute <$ reserved "attribute" <*> attributedP idlTypeP <*> attributeNameP <* semi
+  Attribute
+    <$ reserved "attribute"
+    <*> attributedP idlTypeP
+    <*> attributeNameP
+    <* semi
 
 attributeNameP :: Parser AttributeName
 attributeNameP =
-  AsyncAttribute <$ reserved "async"
-    <|> RequiredAttribute <$ reserved "required"
-    <|> AttributeName <$> anyIdentifier
+  ( AsyncAttribute <$ reserved "async"
+      <|> RequiredAttribute <$ reserved "required"
+      <|> AttributeName <$> anyIdentifier
+  )
+    <?> "attribute name"
 
 callbackOrInterfaceOrMixinP :: Parser Definition
 callbackOrInterfaceOrMixinP = callbackP <|> interfaceOrMixinP
@@ -238,11 +239,10 @@ interfaceRestP :: (KnownPartiality p) => Parser (T.Text, Interface p)
 interfaceRestP =
   (,)
     <$> anyIdentifier
-    <*> braces
-      ( Interface
-          <$> inheritanceP
-          <*> (V.fromList <$> many (attributedP interfaceMemberP))
-      )
+    <*> ( Interface
+            <$> inheritanceP
+            <*> braces (V.fromList <$> many (attributedP interfaceMemberP))
+        )
     <* semi
 
 interfaceMemberP :: forall p. (KnownPartiality p) => Parser (InterfaceMember p)
@@ -259,12 +259,12 @@ interfaceMemberP =
     bodyP :: Parser (InterfaceMember p)
     bodyP =
       IfConst <$> constP
-        <|> IfOperation <$> operationP
+        <|> P.option ReadWrite (ReadOnly <$ reserved "readonly") <**> memberP
+        <|> IfOperation <$> operationP <* semi
         <|> IfStringifier <$> stringifierP
         <|> IfStaticMember <$> staticMemberP
         <|> IfIterable <$> iterableP
         <|> IfAsyncIterable <$> asyncIterableP
-        <|> P.option ReadWrite (ReadOnly <$ reserved "readonly") <**> memberP
         <|> IfInherit <$ reserved "inherit" <*> attributeP
 
 memberP :: Parser (Access -> InterfaceMember p)
@@ -354,7 +354,11 @@ callbackInterfaceMemberP =
     <|> CallbackInterfaceRegularOperation <$> regularOperationP
 
 regularOperationP :: Parser RegularOperation
-regularOperationP = RegularOperation <$> idlTypeP <*> P.optional operationNameP <*> argumentListP
+regularOperationP =
+  RegularOperation
+    <$> idlTypeP
+    <*> P.optional operationNameP
+    <*> argumentListP
 
 operationNameP :: Parser OperationName
 operationNameP = IncludesOperation <$ reserved "includes" <|> OperationNamed <$> anyIdentifier
@@ -403,7 +407,9 @@ integerTypeP =
          )
 
 inheritanceP :: Parser (Maybe Identifier)
-inheritanceP = P.optional $ P.try colon *> anyIdentifier
+inheritanceP =
+  P.optional (P.try colon *> anyIdentifier)
+    <?> "inheritance"
 
 argumentListP :: Parser ArgumentList
 argumentListP = ArgumentList . V.fromList <$> attributedP argumentP `P.sepBy` comma
@@ -453,11 +459,79 @@ argKeywordP =
     <|> ArgTypedef <$ reserved "typedef"
     <|> ArgUnrestricted <$ reserved "unrestricted"
 
+optionally :: Parser a -> Parser (WithNullarity a)
+optionally p =
+  p <**> P.option Plain (Nullable <$ symbol "?")
+
 idlTypeP :: Parser IDLType
-idlTypeP = _
+idlTypeP = Distinguishable <$> optionally distTypeP
+
+distTypeP :: Parser DistinguishableType
+distTypeP =
+  DPrim <$> primTypeP
+    <|> DString <$> stringTypeP
+    <|> DNamed <$> anyIdentifier
+    <|> DSequence <$ reserved "sequence" <*> angles (attributedP idlTypeP)
+    <|> DObject <$ reserved "object"
+    <|> DSymbol <$ reserved "symbol"
+    <|> DBuffer <$> bufferTypeP
+    <|> DFrozenArray
+      <$ reserved "FrozenArray"
+      <*> angles (attributedP idlTypeP)
+    <|> DObservableArray
+      <$ reserved "FrozenArray"
+      <*> angles (attributedP idlTypeP)
+    <|> reserved "record"
+      *> angles
+        ( DRecord
+            <$> stringTypeP
+            <* comma
+            <*> attributedP idlTypeP
+        )
+    <|> DUndefined <$ reserved "undefined"
+
+bufferTypeP :: P.ParsecT Void T.Text Identity BufferType
+bufferTypeP =
+  ArrayBuffer <$ reserved "ArrayBuffer"
+    <|> SharedArrayBuffer <$ reserved "SharedArrayBuffer"
+    <|> DataView <$ reserved "DataView"
+    <|> Int8Array <$ reserved "Int8Array"
+    <|> Int16Array <$ reserved "Int16Array"
+    <|> Int32Array <$ reserved "Int32Array"
+    <|> Uint8Array <$ reserved "Uint8Array"
+    <|> Uint16Array <$ reserved "Uint16Array"
+    <|> Uint32Array <$ reserved "Uint32Array"
+    <|> Uint8ClampedArray <$ reserved "Uint8ClampedArray"
+    <|> BigInt64Array <$ reserved "BigInt64Array"
+    <|> BigUint64Array <$ reserved "BigUint64Array"
+    <|> Float32Array <$ reserved "Float32Array"
+    <|> Float64Array <$ reserved "Float64Array"
+
+stringTypeP :: P.ParsecT Void T.Text Identity StringType
+stringTypeP =
+  ByteString <$ reserved "ByteString"
+    <|> DOMString <$ reserved "DOMString"
+    <|> USVString <$ reserved "USVString"
 
 extendedAttributeListP :: Parser (V.Vector ExtendedAttribute)
 extendedAttributeListP =
   P.option V.empty $
     brackets $
       V.fromList <$> extendedAttributeP `P.sepBy1` comma
+
+extendedAttributeP :: P.ParsecT Void T.Text Identity ExtendedAttribute
+extendedAttributeP = do
+  lhs <- anyIdentifier
+  P.option (ExtendedAttributeNoArgs lhs) $
+    ExtendedAttributeArgList lhs <$> parens argumentListP
+      <|> equals
+        *> ( ExtendedAttributeWildcard lhs <$ symbol "*"
+              <|> do
+                rhs <- anyIdentifier
+                P.option
+                  (ExtendedAttributeIdent lhs rhs)
+                  ( parens $
+                      ExtendedAttributeNamedArgList lhs rhs <$> argumentListP
+                  )
+           )
+      <|> ExtendedAttributeIdentList lhs <$> parens (V.fromList <$> anyIdentifier `P.sepBy1` comma)

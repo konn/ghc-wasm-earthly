@@ -33,6 +33,11 @@ module Language.WebIDL.Types (
   IncludesStatement (..),
   CallbackFunction (..),
   IDLType (..),
+  UnionType (..),
+  DistinguishableType (..),
+  WithNullarity (..),
+  StringType (..),
+  BufferType (..),
   Identifier,
   Operation (..),
   Special (..),
@@ -63,7 +68,14 @@ import Data.Type.Equality (TestEquality (..), (:~:) (..))
 import Data.Vector qualified as V
 import GHC.Generics
 
+-- | NOTE: WebIDL spec is too ambiguous - @ExtendedAttribute@ nonterminal symbol seems unmatching with any of ExtendedAttributeNoArgs, etc.
 data ExtendedAttribute
+  = ExtendedAttributeNoArgs !Identifier
+  | ExtendedAttributeArgList !Identifier !ArgumentList
+  | ExtendedAttributeIdent !Identifier !Identifier
+  | ExtendedAttributeWildcard !Identifier
+  | ExtendedAttributeIdentList !Identifier !(V.Vector Identifier)
+  | ExtendedAttributeNamedArgList !Identifier !Identifier !ArgumentList
   deriving (Show, Eq, Ord, Generic)
 
 data Attributed a = Attributed
@@ -73,6 +85,7 @@ data Attributed a = Attributed
   deriving (Show, Eq, Ord, Generic)
 
 newtype IDLFragment = IDLFragment [Attributed Definition]
+  deriving (Show, Eq, Ord, Generic)
 
 data Interface p = Interface !(Maybe Identifier) !(V.Vector (Attributed (InterfaceMember p)))
   deriving (Show, Eq, Ord, Generic)
@@ -229,7 +242,53 @@ data Definition
 data CallbackFunction = CallbackFunction IDLType ArgumentList
   deriving (Show, Eq, Ord, Generic)
 
-data IDLType = IDLType
+data WithNullarity a
+  = Plain a
+  | Nullable a
+  deriving (Show, Eq, Ord, Generic, Functor)
+
+data StringType = ByteString | DOMString | USVString
+  deriving (Show, Eq, Ord, Generic)
+
+data BufferType
+  = ArrayBuffer
+  | SharedArrayBuffer
+  | DataView
+  | Int8Array
+  | Int16Array
+  | Int32Array
+  | Uint8Array
+  | Uint16Array
+  | Uint32Array
+  | Uint8ClampedArray
+  | BigInt64Array
+  | BigUint64Array
+  | Float32Array
+  | Float64Array
+  deriving (Show, Eq, Ord, Generic, Enum, Bounded)
+
+data DistinguishableType
+  = DPrim !PrimType
+  | DString !StringType
+  | DNamed !Identifier
+  | DSequence !(Attributed IDLType)
+  | DObject
+  | DSymbol
+  | DBuffer !BufferType
+  | DFrozenArray !(Attributed IDLType)
+  | DObservableArray !(Attributed IDLType)
+  | DRecord !StringType !(Attributed IDLType)
+  | DUndefined
+  deriving (Show, Eq, Ord, Generic)
+
+data IDLType
+  = Distinguishable !(WithNullarity DistinguishableType)
+  | AnyType
+  | PromiseType !IDLType
+  | UnionType !(Maybe UnionType)
+  deriving (Show, Eq, Ord, Generic)
+
+newtype UnionType = MkUnionType (NonEmpty (Either (Attributed IDLType) (Maybe UnionType)))
   deriving (Show, Eq, Ord, Generic)
 
 newtype ArgumentList = ArgumentList (V.Vector (Attributed Argument))
