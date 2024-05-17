@@ -58,6 +58,10 @@ instance (MonadIO m) => ConsumableM m JSVal where
   consumeM = liftIO . Unsafe.coerce . Unsafe.toLinear freeJSVal
   {-# INLINE consumeM #-}
 
+instance ConsumableM System.IO JSVal where
+  consumeM = Unsafe.toLinear freeJSVal
+  {-# INLINE consumeM #-}
+
 deriving newtype instance (MonadIO m) => ConsumableM m JSString
 
 foreign import javascript unsafe "String($1)"

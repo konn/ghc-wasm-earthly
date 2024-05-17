@@ -1,7 +1,7 @@
 cabal-version: 3.0
-name: wasm-linear-base
+name: ghc-wasm-jsobjects
 version: 0.1.0.0
-description: Please see the README on GitHub at <https://github.com/konn/ghc-wasm-earthly/wasm-linear-base#readme>
+description: Please see the README on GitHub at <https://github.com/konn/ghc-wasm-earthly/ghc-wasm-jsobjects#readme>
 homepage: https://github.com/konn/ghc-wasm-earthly#readme
 bug-reports: https://github.com/konn/ghc-wasm-earthly/issues
 author:
@@ -11,7 +11,7 @@ license: BSD-3-Clause
 license-file: LICENSE
 build-type: Simple
 tested-with:
-  ghc ==9.10.0
+  ghc ==9.8.4 || ==9.10.0.20240412
 
 extra-doc-files:
   CHANGELOG.md
@@ -20,11 +20,11 @@ extra-doc-files:
 source-repository head
   type: git
   location: https://github.com/konn/ghc-wasm-earthly
-  subdir: wasm-linear-base
+  subdir: ghc-wasm-jsobjects
 
 common defaults
-  autogen-modules: Paths_wasm_linear_base
-  other-modules: Paths_wasm_linear_base
+  autogen-modules: Paths_ghc_wasm_jsobjects
+  other-modules: Paths_ghc_wasm_jsobjects
   ghc-options:
     -Wall
     -Wcompat
@@ -37,45 +37,31 @@ common defaults
     -Wredundant-constraints
     -Wunused-packages
 
-  if !os(wasi)
-    ghc-options:
-      -fplugin
-      GHC.Wasm.FFI.Plugin
   default-language: Haskell2010
   build-depends: base >=4.7 && <5
 
 library
   import: defaults
-  build-depends:
-    ghc-wasm-compat,
-    vector,
-
   -- cabal-gild: discover src
   exposed-modules:
-    Wasm.Control.Functor.Linear
-    Wasm.Data.Array.Destination
-    Wasm.Data.Array.Destination.JSVal
-    Wasm.Data.Function.Linear
-    Wasm.Data.Functor.Linear
-    Wasm.Data.Unrestricted.Linear
-    Wasm.Data.Unrestricted.Linear.Monadic
-    Wasm.JSVal.Freeze
-    Wasm.Prelude.Linear
-    Wasm.System.IO.Linear
-    Wasm.Unsafe.Linear
+    GHC.Wasm.Object.Builtins
+    GHC.Wasm.Object.Builtins.String
+    GHC.Wasm.Object.Core
 
   hs-source-dirs: src
-  default-extensions:
-    DataKinds
-    GADTs
-    LinearTypes
-    MultiParamTypeClasses
-    PolyKinds
-    UnboxedSums
-    UnboxedTuples
-    UnliftedNewtypes
+  build-depends:
+    bytestring,
+    ghc-wasm-compat,
+    text,
+    total,
 
-executable wasm-linear-base-exe
+  if !os(wasi)
+    ghc-options:
+      -fobject-code
+      -fplugin
+      GHC.Wasm.FFI.Plugin
+
+executable ghc-wasm-jsobjects-exe
   import: defaults
   main-is: Main.hs
   hs-source-dirs: app
@@ -84,9 +70,9 @@ executable wasm-linear-base-exe
     -rtsopts
     -with-rtsopts=-N
 
-  build-depends: wasm-linear-base
+  build-depends: ghc-wasm-jsobjects
 
-test-suite wasm-linear-base-test
+test-suite ghc-wasm-jsobjects-test
   import: defaults
   type: exitcode-stdio-1.0
   main-is: Test.hs
@@ -97,4 +83,4 @@ test-suite wasm-linear-base-test
     -rtsopts
     -with-rtsopts=-N
 
-  build-depends: wasm-linear-base
+  build-depends: ghc-wasm-jsobjects

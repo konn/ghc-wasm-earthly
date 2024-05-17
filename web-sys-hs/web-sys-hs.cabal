@@ -1,7 +1,7 @@
 cabal-version: 3.0
-name: wasm-linear-base
+name: web-sys-hs
 version: 0.1.0.0
-description: Please see the README on GitHub at <https://github.com/konn/ghc-wasm-earthly/wasm-linear-base#readme>
+description: Please see the README on GitHub at <https://github.com/konn/ghc-wasm-earthly/web-sys-hs#readme>
 homepage: https://github.com/konn/ghc-wasm-earthly#readme
 bug-reports: https://github.com/konn/ghc-wasm-earthly/issues
 author:
@@ -11,20 +11,23 @@ license: BSD-3-Clause
 license-file: LICENSE
 build-type: Simple
 tested-with:
-  ghc ==9.10.0
+  ghc ==9.8.4
+  ghc ==9.10.0.20240413
 
 extra-doc-files:
   CHANGELOG.md
   README.md
 
+data-dir: webidls
+
 source-repository head
   type: git
   location: https://github.com/konn/ghc-wasm-earthly
-  subdir: wasm-linear-base
+  subdir: web-sys-hs
 
 common defaults
-  autogen-modules: Paths_wasm_linear_base
-  other-modules: Paths_wasm_linear_base
+  autogen-modules: Paths_web_sys_hs
+  other-modules: Paths_web_sys_hs
   ghc-options:
     -Wall
     -Wcompat
@@ -37,45 +40,17 @@ common defaults
     -Wredundant-constraints
     -Wunused-packages
 
-  if !os(wasi)
-    ghc-options:
-      -fplugin
-      GHC.Wasm.FFI.Plugin
   default-language: Haskell2010
   build-depends: base >=4.7 && <5
 
 library
   import: defaults
-  build-depends:
-    ghc-wasm-compat,
-    vector,
-
   -- cabal-gild: discover src
-  exposed-modules:
-    Wasm.Control.Functor.Linear
-    Wasm.Data.Array.Destination
-    Wasm.Data.Array.Destination.JSVal
-    Wasm.Data.Function.Linear
-    Wasm.Data.Functor.Linear
-    Wasm.Data.Unrestricted.Linear
-    Wasm.Data.Unrestricted.Linear.Monadic
-    Wasm.JSVal.Freeze
-    Wasm.Prelude.Linear
-    Wasm.System.IO.Linear
-    Wasm.Unsafe.Linear
-
+  exposed-modules: Lib
   hs-source-dirs: src
-  default-extensions:
-    DataKinds
-    GADTs
-    LinearTypes
-    MultiParamTypeClasses
-    PolyKinds
-    UnboxedSums
-    UnboxedTuples
-    UnliftedNewtypes
+  build-depends: webidl-core
 
-executable wasm-linear-base-exe
+executable web-sys-hs-exe
   import: defaults
   main-is: Main.hs
   hs-source-dirs: app
@@ -84,9 +59,9 @@ executable wasm-linear-base-exe
     -rtsopts
     -with-rtsopts=-N
 
-  build-depends: wasm-linear-base
+  build-depends: web-sys-hs
 
-test-suite wasm-linear-base-test
+test-suite web-sys-hs-test
   import: defaults
   type: exitcode-stdio-1.0
   main-is: Test.hs
@@ -97,4 +72,4 @@ test-suite wasm-linear-base-test
     -rtsopts
     -with-rtsopts=-N
 
-  build-depends: wasm-linear-base
+  build-depends: web-sys-hs

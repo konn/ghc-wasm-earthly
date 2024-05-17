@@ -1,3 +1,4 @@
+{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE RoleAnnotations #-}
 {-# LANGUAGE NoImplicitPrelude #-}
@@ -19,6 +20,7 @@ import qualified Control.Exception as System
 import GHC.Base (RealWorld, State#)
 import qualified GHC.Base as System
 import qualified Wasm.Control.Functor.Linear as Control
+import qualified Wasm.Data.Function.Linear as PL
 import qualified Wasm.Data.Functor.Linear as Data
 import Wasm.Data.Unrestricted.Linear
 import qualified Wasm.Unsafe.Linear as Unsafe
@@ -74,9 +76,16 @@ instance Control.Applicative IO where
   liftA2 f (IO g) (IO h) = IO (\s -> case g s of (# s', a #) -> case h s' of (# s'', b #) -> (# s'', f a b #))
   {-# INLINE liftA2 #-}
 
+instance Control.Monad IO where
+  IO f >>= k = IO (\s -> case f s of (# s', a #) -> case k a of IO g -> g s')
+  {-# INLINE (>>=) #-}
+
 class (Control.Monad m) => MonadIO m where
   liftIO :: IO a %1 -> m a
   liftSystemIO :: System.IO a -> m a
   liftSystemIO io = liftIO (fromSystemIO io)
   liftSystemIOU :: System.IO a -> m (Ur a)
   liftSystemIOU io = liftIO (fromSystemIOU io)
+
+instance MonadIO IO where
+  liftIO = PL.id
