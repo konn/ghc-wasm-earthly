@@ -1,2 +1,6 @@
-index-state: hackage.haskell.org 2024-04-20T16:05:32Z
-constraints: aeson ==2.2.1.0
+index-state: hackage.haskell.org 2024-06-10T20:40:29Z
+constraints:
+  aeson ==2.2.1.0,
+  ghc-exactprint ==1.8.0.0,
+  ghc-lib-parser == 9.10.1.20240511,
+  ghc-lib-parser-ex == 9.10.0.0,

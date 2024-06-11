@@ -2,7 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module Language.WebIDL.Parser (
+module Language.WebIDL.AST.Parser (
   parseIDLFragment,
   definitionsP,
   definitionP,
@@ -18,7 +18,7 @@ import Data.Text qualified as T
 import Data.Tuple (swap)
 import Data.Vector qualified as V
 import Data.Void (Void)
-import Language.WebIDL.Types
+import Language.WebIDL.AST.Types
 import Text.Megaparsec ((<?>))
 import Text.Megaparsec qualified as P
 import Text.Megaparsec.Char qualified as P

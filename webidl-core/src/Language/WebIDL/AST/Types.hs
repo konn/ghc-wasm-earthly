@@ -1,12 +1,14 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MonoLocalBinds #-}
 {-# LANGUAGE NoFieldSelectors #-}
 
-module Language.WebIDL.Types (
+module Language.WebIDL.AST.Types (
   IDLFragment (..),
   Attributed (..),
+  Inheritance (..),
   ExtendedAttribute (..),
   Namespace (..),
   NamespaceMember (..),
@@ -82,12 +84,28 @@ data Attributed a = Attributed
   { attributes :: !(V.Vector ExtendedAttribute)
   , entry :: !a
   }
-  deriving (Show, Eq, Ord, Generic)
+  deriving (Show, Eq, Ord, Generic, Generic1, Functor, Foldable, Traversable)
+
+instance (Semigroup a) => Semigroup (Attributed a) where
+  Attributed a1 x1 <> Attributed a2 x2 = Attributed (a1 <> a2) (x1 <> x2)
+
+instance (Monoid a) => Monoid (Attributed a) where
+  mempty = Attributed mempty mempty
 
 newtype IDLFragment = IDLFragment [Attributed Definition]
   deriving (Show, Eq, Ord, Generic)
 
-data Interface p = Interface !(Maybe Identifier) !(V.Vector (Attributed (InterfaceMember p)))
+data Inheritance p where
+  NoInheritance :: Inheritance p
+  Inherits :: Identifier -> Inheritance Complete
+
+deriving instance Show (Inheritance p)
+
+deriving instance Eq (Inheritance p)
+
+deriving instance Ord (Inheritance p)
+
+data Interface p = Interface !(Inheritance p) !(V.Vector (Attributed (InterfaceMember p)))
   deriving (Show, Eq, Ord, Generic)
 
 data Special = Legacycaller | Getter | Setter | Deleter

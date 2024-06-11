@@ -1,8 +1,7 @@
 cabal-version: 3.0
-name: webidl-core
+name: webidl-codegen-wasm
 version: 0.1.0.0
-synopsis: A simple WebIDL parser and printers
-description: Please see the README on GitHub at <https://github.com/konn/ghc-wasm-earthly/webidl-core#readme>
+description: Please see the README on GitHub at <https://github.com/konn/ghc-wasm-earthly/webidl-codegen-wasm#readme>
 homepage: https://github.com/konn/ghc-wasm-earthly#readme
 bug-reports: https://github.com/konn/ghc-wasm-earthly/issues
 author:
@@ -11,7 +10,9 @@ copyright: (c)  2024- present
 license: BSD-3-Clause
 license-file: LICENSE
 build-type: Simple
-tested-with: ghc ==9.8.4 || ==9.10.0.20240412
+tested-with:
+  ghc ==9.8.4 || ==9.10.0.20240412
+
 extra-doc-files:
   CHANGELOG.md
   README.md
@@ -19,11 +20,11 @@ extra-doc-files:
 source-repository head
   type: git
   location: https://github.com/konn/ghc-wasm-earthly
-  subdir: webidl-core
+  subdir: webidl-codegen-wasm
 
 common defaults
-  autogen-modules: Paths_webidl_core
-  other-modules: Paths_webidl_core
+  autogen-modules: Paths_webidl_codegen_wasm
+  other-modules: Paths_webidl_codegen_wasm
   ghc-options:
     -Wall
     -Wcompat
@@ -36,42 +37,45 @@ common defaults
     -Wredundant-constraints
     -Wunused-packages
 
-  default-language: GHC2021
-  build-depends:
-    base >=4.7 && <5
+  default-language: Haskell2010
+  build-depends: base >=4.7 && <5
 
 library
   import: defaults
   -- cabal-gild: discover src
-  exposed-modules:
-    Language.WebIDL.AST.Parser
-    Language.WebIDL.AST.Types
-    Language.WebIDL.Desugar
-    Language.WebIDL.Desugar.Types
-
+  exposed-modules: Language.WebIDL.CodeGen.GHC.Wasm
   hs-source-dirs: src
   build-depends:
+    aeson,
     algebraic-graphs,
     bytestring,
     containers,
-    deepseq,
-    distributive,
-    dlist,
-    generic-lens,
+    ghc-lib-parser,
+    ghc-lib-parser-ex,
+    ghc-wasm-jsobjects,
     hashable,
     lens,
-    megaparsec,
-    monoidal-containers,
     mtl,
-    parser-combinators,
-    scientific,
+    optparse-applicative,
     syb,
     text,
     transformers,
     unordered-containers,
-    vector,
+    webidl-core,
+    yaml,
 
-test-suite webidl-core-test
+executable webidl-codegen-wasm-exe
+  import: defaults
+  main-is: Main.hs
+  hs-source-dirs: app
+  ghc-options:
+    -threaded
+    -rtsopts
+    -with-rtsopts=-N
+
+  build-depends: webidl-codegen-wasm
+
+test-suite webidl-codegen-wasm-test
   import: defaults
   type: exitcode-stdio-1.0
   main-is: Test.hs
@@ -82,4 +86,4 @@ test-suite webidl-core-test
     -rtsopts
     -with-rtsopts=-N
 
-  build-depends: webidl-core
+  build-depends: webidl-codegen-wasm
