@@ -15,15 +15,22 @@ module Language.Haskell.Parser.Ex.Helper (
   parseImport,
   defaultExtensions,
   formatModule,
+  tyConOrVar,
+  mkNormalFunTy,
+  appTy,
+  promotedListTy,
 ) where
 
-import Data.Function ((&))
+import Data.Function (on, (&))
+import qualified Data.Text as T
 import GHC.Driver.DynFlags
 import GHC.Driver.Ppr (showSDoc)
 import GHC.Hs
 import GHC.LanguageExtensions (Extension (..))
 import GHC.Parser.Lexer (PState (..), ParseResult (..))
 import GHC.Real ()
+import GHC.Types.Name.Occurrence
+import GHC.Types.Name.Reader (RdrName (..))
 import GHC.Types.SrcLoc
 import GHC.Utils.Outputable
 import qualified Language.Haskell.GhclibParserEx.GHC.Parser as P
@@ -87,3 +94,20 @@ formatModule m =
     "{-# LANGUAGE GHC2021 #-}"
       : map (("{-# LANGUAGE " ++) . (++ " #-}") . pprint) defaultExtensions
       ++ [pprint m]
+
+tyConOrVar :: T.Text -> HsType GhcPs
+tyConOrVar =
+  HsTyVar [] NotPromoted
+    . L noAnn
+    . Unqual
+    . mkTyVarOcc
+    . T.unpack
+
+mkNormalFunTy :: HsType GhcPs -> HsType GhcPs -> HsType GhcPs
+mkNormalFunTy = HsFunTy noExtField (HsUnrestrictedArrow NoEpUniTok) `on` L noAnn
+
+appTy :: HsType GhcPs -> HsType GhcPs -> HsType GhcPs
+appTy = HsAppTy noExtField `on` L noAnn
+
+promotedListTy :: [HsType GhcPs] -> HsType GhcPs
+promotedListTy = HsExplicitListTy [] IsPromoted . map (L noAnn)

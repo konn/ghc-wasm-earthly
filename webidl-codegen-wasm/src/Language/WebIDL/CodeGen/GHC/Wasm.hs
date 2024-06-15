@@ -3,84 +3,90 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE NoFieldSelectors #-}
+{-# OPTIONS_GHC -Wno-redundant-constraints #-}
 
-module Language.WebIDL.CodeGen.GHC.Wasm where
+module Language.WebIDL.CodeGen.GHC.Wasm (
+  generateWasmBinding,
+  generateWasmBindingWith,
+) where
 
-import Barbies
-import Control.Exception.Safe (throwM, throwString)
-import Control.Lens (imapM_)
-import Data.Aeson (FromJSON, ToJSON)
+import Control.Arrow ((>>>))
+import Control.Exception.Safe (throwIO, throwString)
+import Control.Foldl qualified as L
+import Control.Lens (imapM_, ix, (%~))
+import Control.Monad (when, (<=<))
+import Data.Bifunctor qualified as Bi
+import Data.Char qualified as C
+import Data.DList (DList)
+import Data.DList qualified as DL
+import Data.Data (Data)
 import Data.Foldable1 (intercalate1)
+import Data.Functor.Compose (Compose (..))
 import Data.List.NonEmpty (NonEmpty)
 import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (fromJust, maybeToList)
+import Data.Maybe (fromJust, fromMaybe, maybeToList)
 import Data.Monoid (First (getFirst))
+import Data.Set (Set)
+import Data.Set qualified as Set
 import Data.String (fromString)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
+import Data.Vector qualified as V
 import Effectful
 import Effectful.Dispatch.Dynamic
+import Effectful.Dispatch.Static (unsafeEff_)
 import Effectful.FileSystem (FileSystem, createDirectoryIfMissing)
+import Effectful.FileSystem.IO.ByteString qualified as Eff
 import Effectful.FileSystem.IO.File (writeBinaryFile)
-import Effectful.Reader.Static (Reader)
+import Effectful.Reader.Static (Reader, runReader)
 import Effectful.Reader.Static qualified as EffR
-import Effectful.Writer.Static.Shared qualified as Writer
-import GHC.Generics (Generic)
+import Effectful.Writer.Static.Local (execWriter)
+import Effectful.Writer.Static.Local qualified as Writer
+import Effectful.Writer.Static.Shared qualified as SWriter
+import GHC.Generics (Generic, Generically (..))
 import GHC.Types.Name
 import GHC.Types.Name.Reader (RdrName (..))
 import GHC.Types.SrcLoc
 import Language.Haskell.Parser.Ex.Helper
-import Language.WebIDL.AST.Types (IDLFragment)
+import Language.WebIDL.AST.Parser (parseIDLFragment)
+import Language.WebIDL.AST.Types (BufferType (..), DistinguishableType (..), PrimType (..), Sign (..), StringType (..), UnionType (..), WithNullarity (..))
 import Language.WebIDL.Desugar hiding (throw)
 import NeatInterpolation (trimming)
 import Path
 import Path.IO
+import Text.Megaparsec.Error qualified as P
 
-type GHCWasmOptions = GHCWasmOptions' (Path Abs)
+type GHCWasmOptions = GHCWasmOptions' (Path Abs Dir)
 
-data GHCWasmOptions' h = GHCWasmOptions
-  { inputDir :: !(h Dir)
-  , outputDir :: !(h Dir)
+data GHCWasmOptions' fp = GHCWasmOptions
+  { inputDir :: !fp
+  , outputDir :: !fp
   , modulePrefix :: !(Maybe T.Text)
   }
-  deriving (Generic)
-  deriving anyclass (FunctorB, ConstraintsB, TraversableB)
+  deriving (Show, Eq, Ord, Generic, Functor, Foldable, Traversable)
 
-deriving instance (AllBF Show h GHCWasmOptions') => Show (GHCWasmOptions' h)
+resolveOptions :: (FileSystem :> es) => GHCWasmOptions' FilePath -> Eff es GHCWasmOptions
+resolveOptions = traverse (unsafeEff_ . resolveDir')
 
-deriving instance (AllBF Eq h GHCWasmOptions') => Eq (GHCWasmOptions' h)
-
-deriving anyclass instance FromJSON (GHCWasmOptions' SomeBase)
-
-deriving anyclass instance ToJSON (GHCWasmOptions' SomeBase)
-
-class
-  (AnyPath (SomeBase b), AbsPath (SomeBase b) ~ Path Abs b) =>
-  AnyPathOver b
-
-instance
-  (AnyPath (SomeBase b), AbsPath (SomeBase b) ~ Path Abs b) =>
-  AnyPathOver b
-
-resolveOptions :: GHCWasmOptions' SomeBase -> IO GHCWasmOptions
-resolveOptions = btraverseC @AnyPathOver makeAbsolute
-
-listWebIDLs :: GHCWasmOptions -> IO [Path Abs File]
+listWebIDLs :: (FileSystem :> es) => GHCWasmOptions -> Eff es [Path Abs File]
 listWebIDLs GHCWasmOptions {inputDir} = do
-  (_, files) <- listDirRecur inputDir
+  (_, files) <- unsafeEff_ $ listDirRecur inputDir
   pure $ filter ((== Just ".webidl") . fileExtension) files
 
 data FileTree :: Effect where
@@ -99,21 +105,39 @@ runFileTreeIOIn dir = interpret \cases
     writeBinaryFile (fromAbsFile absPath) $ TE.encodeUtf8 $ T.pack str
 
 runFileTreePure :: Eff (FileTree ': es) a -> Eff es (a, Map (Path Rel File) String)
-runFileTreePure = reinterpret Writer.runWriter \cases
+runFileTreePure = reinterpret SWriter.runWriter \cases
   _ (PutFile fp str) -> do
-    Writer.tell $ Map.singleton fp str
+    SWriter.tell $ Map.singleton fp str
 
 execFileTreePure :: Eff (FileTree ': es) a -> Eff es (Map (Path Rel File) String)
 execFileTreePure = fmap snd . runFileTreePure
 
-generateWasmBinding ::
-  (Foldable t, FileTree :> es, Reader CodeGenEnv :> es) =>
-  t IDLFragment ->
+generateWasmBindingWith ::
+  (FileSystem :> es) =>
+  GHCWasmOptions' FilePath ->
   Eff es ()
-generateWasmBinding inputs = do
-  defs <- either throwM pure $ desugar inputs
-  generateCoreClasses defs
-  pure ()
+generateWasmBindingWith opts = do
+  opts' <- resolveOptions opts
+  idls <-
+    mapM
+      ( either (throwString . P.errorBundlePretty) pure . parseIDLFragment . TE.decodeUtf8
+          <=< Eff.readFile . fromAbsFile
+      )
+      =<< listWebIDLs opts'
+  !defs <- either throwIO pure $ desugar idls
+  let !unknownTypes = fromMaybe mempty $ getUnknownIdentifiers defs
+  runFileTreeIOIn opts'.outputDir
+    $ runReader
+      CodeGenEnv {modulePrefix = opts.modulePrefix, ..}
+    $ generateWasmBinding defs
+
+generateWasmBinding ::
+  (FileTree :> es, Reader CodeGenEnv :> es) =>
+  Definitions ->
+  Eff es ()
+generateWasmBinding defs = do
+  generateCoreModules defs
+  generateMainModules defs
 
 data Module = Module
   { moduleName :: Text
@@ -149,14 +173,15 @@ renderModule Module {..} = do
 
 data CodeGenEnv = CodeGenEnv
   { modulePrefix :: !(Maybe T.Text)
+  , unknownTypes :: !(Set Identifier)
   }
   deriving (Generic)
 
 toTypeName :: Identifier -> T.Text
-toTypeName = id
+toTypeName = normaliseTypeName
 
 toPrototypeName :: Identifier -> T.Text
-toPrototypeName = (<> "Class")
+toPrototypeName = (<> "Class") . normaliseTypeName
 
 withModulePrefix :: (Reader CodeGenEnv :> es) => NonEmpty T.Text -> Eff es T.Text
 withModulePrefix names = do
@@ -164,19 +189,28 @@ withModulePrefix names = do
   pure $ maybe id (\p -> ((p <> ".") <>)) modulePrefix $ intercalate1 "." names
 
 toMainModuleName :: (Reader CodeGenEnv :> es) => Identifier -> Eff es T.Text
-toMainModuleName name = withModulePrefix $ NE.singleton name
+toMainModuleName name = withModulePrefix $ NE.singleton $ normaliseTypeName name
 
 toCoreModuleName :: (Reader CodeGenEnv :> es) => Identifier -> Eff es T.Text
-toCoreModuleName names = withModulePrefix $ names NE.:| ["Core"]
+toCoreModuleName names = withModulePrefix $ normaliseTypeName names NE.:| ["Core"]
 
-generateCoreClasses ::
+generateCoreModules ::
   ( FileTree :> es
   , Reader CodeGenEnv :> es
   ) =>
   Definitions ->
   Eff es ()
-generateCoreClasses defns = do
+generateCoreModules defns = do
   imapM_ generateInterfaceCoreModule defns.interfaces
+
+generateMainModules ::
+  ( FileTree :> es
+  , Reader CodeGenEnv :> es
+  ) =>
+  Definitions ->
+  Eff es ()
+generateMainModules defns = do
+  imapM_ generateInterfaceMainModule defns.interfaces
 
 generateInterfaceCoreModule ::
   ( FileTree :> es
@@ -185,11 +219,11 @@ generateInterfaceCoreModule ::
   Text ->
   Attributed Interface ->
   Eff es ()
-generateInterfaceCoreModule name Attributed {entry = ifs} = do
+generateInterfaceCoreModule (normaliseTypeName -> name) Attributed {entry = ifs} = skipIfContainsUnknown ifs do
   moduleName <- toCoreModuleName name
   parentMod <- mapM toCoreModuleName $ getFirst ifs.parent
   let dest = fromJust (parseRelDir $ T.unpack name) </> [relfile|Core.hs|]
-      imports = "GHC.Wasm.Object.Core" : maybeToList parentMod
+      imports = presetImports ++ maybeToList parentMod
       proto = toPrototypeName name
       protoDef =
         [trimming|type data ${proto} :: Prototype|]
@@ -203,3 +237,365 @@ generateInterfaceCoreModule name Attributed {entry = ifs} = do
       exports = Just [(tvName, proto), (tvName, name)]
 
   either throwString (putFile dest) $ renderModule Module {..}
+
+skipIfContainsUnknown :: (Data a, Reader CodeGenEnv :> es) => a -> Eff es () -> Eff es ()
+skipIfContainsUnknown inp act = do
+  unknowns <- EffR.asks @CodeGenEnv (.unknownTypes)
+  when (Set.null $ unknowns `Set.intersection` L.foldOver namedTypeIdentifiers L.set inp) act
+
+data MainModuleFragments = MainModuleFragments
+  { mainExports :: DList (NameSpace, Text)
+  , decs :: DList (Either Text (HsDecl GhcPs))
+  }
+  deriving (Generic)
+  deriving (Semigroup, Monoid) via Generically MainModuleFragments
+
+generateInterfaceMainModule ::
+  forall es.
+  ( FileTree :> es
+  , Reader CodeGenEnv :> es
+  ) =>
+  Text ->
+  Attributed Interface ->
+  Eff es ()
+generateInterfaceMainModule (normaliseTypeName -> name) Attributed {entry = ifs} = skipIfContainsUnknown ifs do
+  moduleName <- toMainModuleName name
+  let dest = fromJust (parseRelFile $ T.unpack name <> ".hs")
+  unknowns <- EffR.asks @CodeGenEnv (.unknownTypes)
+  let idents = Set.toList $ L.foldOver namedTypeIdentifiers L.set ifs Set.\\ unknowns
+  parentMods <- mapM toCoreModuleName idents
+  MainModuleFragments {..} <- execWriter go
+  let imports = presetImports ++ parentMods
+      proto = toPrototypeName name
+      exports =
+        Just $
+          (tvName, name)
+            : (tvName, proto)
+            : DL.toList mainExports
+      decls = DL.toList decs
+  either throwString (putFile dest) $
+    renderModule Module {..}
+  where
+    go = do
+      genConstructors
+      genConstants
+      genOperations
+      genStringifiers
+      genAttributes
+      genIterables
+      genAsyncIterables
+      genStaticAttributes
+      genStaticOperations
+    -- FIXME: Is this correct? We must be aware of 'Namespace'.
+    genConstructors = V.forM_ ifs.constructors \Attributed {entry = args} -> do
+      let funName = toConstructorName name args
+          reqArgNum = V.length args.requiredArgs
+          optArgNum = V.length args.optionalArgs
+          ellipsNum = length args.ellipsis
+          retName = tyConOrVar $ toTypeName name
+          argsHs =
+            V.toList $
+              V.map (toHaskellType . (\(Argument a _) -> a) . (.entry)) args.requiredArgs
+                <> V.map (toHaskellType . Nullable . (\(OptionalArgument a _ _) -> a.entry) . (.entry)) args.optionalArgs
+                <> foldMap
+                  ( \(Ellipsis ty _) ->
+                      V.singleton $
+                        toHaskellType $
+                          DFrozenArray $
+                            Attributed mempty ty
+                  )
+                  (Compose args.ellipsis)
+          sig = T.pack $ pprint $ foldr mkNormalFunTy retName argsHs
+          jsArgs =
+            T.intercalate ", " $
+              V.toList $
+                V.generate
+                  (reqArgNum + optArgNum + ellipsNum)
+                  ( \i ->
+                      if i < reqArgNum + optArgNum
+                        then T.pack $ '$' : show (i + 1)
+                        else T.pack $ "... $" ++ show (i + 1)
+                  )
+          ffiDec =
+            [trimming|
+              foreign import javascript unsafe "${name}(${jsArgs})" ${funName} :: ${sig}
+            |]
+      Writer.tell
+        MainModuleFragments
+          { mainExports = DL.singleton (varName, funName)
+          , decs = DL.singleton $ Left ffiDec
+          }
+
+    -- FIXME: Implement this
+    genConstants = pure ()
+    -- FIXME: Implement this
+    genOperations = pure ()
+    -- FIXME: Implement this
+    genStringifiers = pure ()
+    -- FIXME: Implement this
+    genAttributes = pure ()
+    -- FIXME: Implement this
+    genIterables = pure ()
+    -- FIXME: Implement this
+    genAsyncIterables = pure ()
+    -- FIXME: Implement this
+    genStaticAttributes = pure ()
+    -- FIXME: Implement this
+    genStaticOperations = pure ()
+
+normaliseTypeName :: Text -> Identifier
+normaliseTypeName =
+  ix 0 %~ C.toUpper
+
+toConstructorName :: Identifier -> ArgumentList -> T.Text
+toConstructorName name args =
+  "constructor_"
+    <> name
+    <> "_"
+    <> T.intercalate
+      "_"
+      ( V.toList $
+          V.map
+            ((.entry) >>> \(Argument a _) -> toHaskellIdentifier a)
+            args.requiredArgs
+      )
+
+class ToHaskellIdentifier a where
+  toHaskellIdentifier :: a -> T.Text
+
+instance (ToHaskellIdentifier a) => ToHaskellIdentifier (WithNullarity a) where
+  toHaskellIdentifier = \case
+    Nullable a -> "nullable_" <> toHaskellIdentifier a
+    Plain a -> toHaskellIdentifier a
+
+instance ToHaskellIdentifier StringType where
+  toHaskellIdentifier = \case
+    DOMString -> "DOMString"
+    ByteString -> "ByteString"
+    USVString -> "USVString"
+
+instance ToHaskellIdentifier PrimType where
+  toHaskellIdentifier = \case
+    Short {} -> "short"
+    Long {} -> "long"
+    LongLong {} -> "longlong"
+    Float {} -> "float"
+    Double {} -> "double"
+    Boolean {} -> "boolean"
+    Byte {} -> "byte"
+    Octet {} -> "octet"
+    Bigint {} -> "bigint"
+
+instance ToHaskellIdentifier BufferType where
+  toHaskellIdentifier = \case
+    ArrayBuffer -> "ArrayBuffer"
+    DataView -> "DataView"
+    Int8Array -> "Int8Array"
+    Uint8Array -> "Uint8Array"
+    Uint8ClampedArray -> "Uint8ClampedArray"
+    Int16Array -> "Int16Array"
+    Uint16Array -> "Uint16Array"
+    Int32Array -> "Int32Array"
+    Uint32Array -> "Uint32Array"
+    Float32Array -> "Float32Array"
+    Float64Array -> "Float64Array"
+    SharedArrayBuffer -> "SharedArrayBuffer"
+    BigInt64Array -> "BigInt64Array"
+    BigUint64Array -> "BigUint64Array"
+
+instance ToHaskellIdentifier UnionType where
+  toHaskellIdentifier (MkUnionType union) =
+    T.intercalate
+      "_"
+      ( map (toHaskellIdentifier . fmap (Bi.first (.entry))) $
+          NE.toList union
+      )
+      <> "_EndUnion"
+
+instance (ToHaskellIdentifier a, ToHaskellIdentifier b) => ToHaskellIdentifier (Either a b) where
+  toHaskellIdentifier = either toHaskellIdentifier toHaskellIdentifier
+
+instance ToHaskellIdentifier DistinguishableType where
+  toHaskellIdentifier = \case
+    DPrim p -> toHaskellIdentifier p
+    DString s -> toHaskellIdentifier s
+    DNamed s -> s
+    DSequence s -> "sequence_" <> toHaskellIdentifier s.entry
+    DObject -> "object"
+    DSymbol -> "symbol"
+    DBuffer b -> toHaskellIdentifier b
+    DFrozenArray f -> "FrozenArray_" <> toHaskellIdentifier f.entry
+    DObservableArray o -> "ObservableArray_" <> toHaskellIdentifier o.entry
+    DRecord str r -> "Record_" <> toHaskellIdentifier str <> "_" <> toHaskellIdentifier r.entry
+    DUndefined -> "undefined"
+
+instance ToHaskellIdentifier IDLType where
+  toHaskellIdentifier = \case
+    Distinguishable dt -> toHaskellIdentifier dt
+    AnyType -> "any"
+    PromiseType p -> "Promise_" <> toHaskellIdentifier p
+    UnionType u -> "Union_" <> toHaskellIdentifier u
+
+presetImports :: [Text]
+presetImports = ["GHC.Wasm.Object.Builtins", "Foreign.C.Types", "Data.Int", "Data.Word"]
+
+class ToHaskellType a where
+  toHaskellType :: a -> HsType GhcPs
+  toHaskellPrototype :: a -> HsType GhcPs
+
+instance (ToHaskellType a) => ToHaskellType (WithNullarity a) where
+  toHaskellType = \case
+    Plain a -> toHaskellType a
+    Nullable a -> tyConOrVar "Nullable" `appTy` toHaskellPrototype a
+  toHaskellPrototype = \case
+    Plain a -> toHaskellPrototype a
+    Nullable a -> tyConOrVar "NullableClass" `appTy` toHaskellPrototype a
+
+instance ToHaskellType StringType where
+  toHaskellType = \case
+    DOMString -> tyConOrVar "DOMString"
+    ByteString -> tyConOrVar "JSByteString"
+    USVString -> tyConOrVar "USVString"
+  toHaskellPrototype = \case
+    DOMString -> tyConOrVar "DOMStringClass"
+    ByteString -> tyConOrVar "ByteStringClass"
+    USVString -> tyConOrVar "USVStringClass"
+
+instance ToHaskellType PrimType where
+  toHaskellType = \case
+    Short Signed -> tyConOrVar "Int16"
+    Short Unsigned -> tyConOrVar "Word16"
+    Long Signed -> tyConOrVar "Int32"
+    Long Unsigned -> tyConOrVar "Word32"
+    LongLong Signed -> tyConOrVar "Int64"
+    LongLong Unsigned -> tyConOrVar "Word64"
+    -- FIXME: unrestrictedness?
+    Float {} -> tyConOrVar "Float"
+    -- FIXME: unrestrictedness?
+    Double {} -> tyConOrVar "Double"
+    Boolean {} -> tyConOrVar "Bool"
+    Byte {} -> tyConOrVar "Int8"
+    Octet {} -> tyConOrVar "Word8"
+    -- FIXME: implement below in ghc-wasm-jsobjects
+    Bigint {} -> tyConOrVar "Bigint"
+  toHaskellPrototype =
+    \case
+      Short Signed -> primCls `appTy` tyConOrVar "Int16"
+      Short Unsigned -> primCls `appTy` tyConOrVar "Word16"
+      Long Signed -> primCls `appTy` tyConOrVar "Int32"
+      Long Unsigned -> primCls `appTy` tyConOrVar "Word32"
+      LongLong Signed -> primCls `appTy` tyConOrVar "Int64"
+      LongLong Unsigned -> primCls `appTy` tyConOrVar "Word64"
+      -- FIXME: unrestrictedness?
+      Float {} -> primCls `appTy` tyConOrVar "Float"
+      -- FIXME: unrestrictedness?
+      Double {} -> primCls `appTy` tyConOrVar "Double"
+      Boolean {} -> primCls `appTy` tyConOrVar "Bool"
+      Byte {} -> primCls `appTy` tyConOrVar "Int8"
+      Octet {} -> primCls `appTy` tyConOrVar "Word8"
+      -- FIXME: implement below in ghc-wasm-jsobjects
+      Bigint {} -> tyConOrVar "BigintClass"
+
+instance ToHaskellType BufferType where
+  toHaskellType = \case
+    -- FIXME: implement below in ghc-wasm-jsobjects
+    ArrayBuffer -> tyConOrVar "ArrayBuffer"
+    DataView -> tyConOrVar "DataView"
+    Int8Array -> tyConOrVar "Ptr" `appTy` tyConOrVar "Int8"
+    Uint8Array -> tyConOrVar "Ptr" `appTy` tyConOrVar "Word8"
+    -- FIXME: Is this correct?
+    Uint8ClampedArray -> tyConOrVar "Ptr" `appTy` tyConOrVar "Word8"
+    Int16Array -> tyConOrVar "Ptr" `appTy` tyConOrVar "Int16"
+    Uint16Array -> tyConOrVar "Ptr" `appTy` tyConOrVar "Word16"
+    Int32Array -> tyConOrVar "Ptr" `appTy` tyConOrVar "Int32"
+    Uint32Array -> tyConOrVar "Ptr" `appTy` tyConOrVar "Word32"
+    Float32Array -> tyConOrVar "Ptr" `appTy` tyConOrVar "Float"
+    Float64Array -> tyConOrVar "Ptr" `appTy` tyConOrVar "Double"
+    -- FIXME: implement below in ghc-wasm-jsobjects
+    SharedArrayBuffer -> tyConOrVar "SharedArrayBuffer"
+    BigInt64Array -> tyConOrVar "Ptr" `appTy` tyConOrVar "Int64"
+    BigUint64Array -> tyConOrVar "Ptr" `appTy` tyConOrVar "Word64"
+  toHaskellPrototype = \case
+    -- FIXME: implement below in ghc-wasm-jsobjects
+    ArrayBuffer -> tyConOrVar "ArrayBufferClass"
+    -- FIXME: implement below in ghc-wasm-jsobjects
+    DataView -> tyConOrVar "DataViewClass"
+    Int8Array -> primCls `appTy` (tyConOrVar "Ptr" `appTy` tyConOrVar "Int8")
+    Uint8Array -> primCls `appTy` (tyConOrVar "Ptr" `appTy` tyConOrVar "Word8")
+    -- FIXME: Is this correct?
+    Uint8ClampedArray -> primCls `appTy` (tyConOrVar "Ptr" `appTy` tyConOrVar "Word8")
+    Int16Array -> primCls `appTy` (tyConOrVar "Ptr" `appTy` tyConOrVar "Int16")
+    Uint16Array -> primCls `appTy` (tyConOrVar "Ptr" `appTy` tyConOrVar "Word16")
+    Int32Array -> primCls `appTy` (tyConOrVar "Ptr" `appTy` tyConOrVar "Int32")
+    Uint32Array -> primCls `appTy` (tyConOrVar "Ptr" `appTy` tyConOrVar "Word32")
+    Float32Array -> primCls `appTy` (tyConOrVar "Ptr" `appTy` tyConOrVar "Float")
+    Float64Array -> primCls `appTy` (tyConOrVar "Ptr" `appTy` tyConOrVar "Double")
+    -- FIXME: implement below in ghc-wasm-jsobjects
+    SharedArrayBuffer -> tyConOrVar "SharedArrayBufferClass"
+    BigInt64Array -> primCls `appTy` (tyConOrVar "Ptr" `appTy` tyConOrVar "Int64")
+    BigUint64Array -> primCls `appTy` (tyConOrVar "Ptr" `appTy` tyConOrVar "Word64")
+
+instance ToHaskellType DistinguishableType where
+  toHaskellPrototype = \case
+    DPrim p -> toHaskellPrototype p
+    DString s -> toHaskellPrototype s
+    DNamed s -> tyConOrVar $ toPrototypeName s
+    -- FIXME: Implement below in ghc-wasm-jsobjects
+    DSequence s -> tyConOrVar "JSSequenceClass" `appTy` toHaskellPrototype s.entry
+    DObject -> tyConOrVar "AnyClass"
+    -- FIXME: Implement below in ghc-wasm-jsobjects
+    DSymbol -> tyConOrVar "SymbolClass"
+    DBuffer b -> toHaskellPrototype b
+    -- FIXME: Implement below in ghc-wasm-jsobjects
+    DFrozenArray f -> tyConOrVar "FrozenArrayClass" `appTy` toHaskellPrototype f.entry
+    -- FIXME: Implement below in ghc-wasm-jsobjects
+    DObservableArray o -> tyConOrVar "ObservableArrayClass" `appTy` toHaskellPrototype o.entry
+    -- FIXME: Implement below in ghc-wasm-jsobjects
+    DRecord str r -> tyConOrVar "RecordClass" `appTy` toHaskellPrototype str `appTy` toHaskellType r.entry
+    DUndefined -> tyConOrVar "UndefinedClass"
+
+  toHaskellType = \case
+    DPrim p -> toHaskellType p
+    DString s -> toHaskellType s
+    DNamed s -> tyConOrVar $ toTypeName s
+    -- FIXME: Implement below in ghc-wasm-jsobjects
+    DSequence s -> tyConOrVar "JSSequenceClass" `appTy` toHaskellType s.entry
+    DObject -> tyConOrVar "AnyClass"
+    -- FIXME: Implement below in ghc-wasm-jsobjects
+    DSymbol -> tyConOrVar "SymbolClass"
+    DBuffer b -> toHaskellType b
+    -- FIXME: Implement below in ghc-wasm-jsobjects
+    DFrozenArray f -> tyConOrVar "FrozenArrayClass" `appTy` toHaskellType f.entry
+    -- FIXME: Implement below in ghc-wasm-jsobjects
+    DObservableArray o -> tyConOrVar "ObservableArrayClass" `appTy` toHaskellType o.entry
+    -- FIXME: Implement below in ghc-wasm-jsobjects
+    DRecord str r -> tyConOrVar "RecordClass" `appTy` toHaskellType str `appTy` toHaskellType r.entry
+    DUndefined -> tyConOrVar "UndefinedClass"
+
+instance ToHaskellType UnionType where
+  toHaskellPrototype (MkUnionType comps) =
+    let comps' =
+          map
+            ( fmap (either (toHaskellPrototype . (.entry)) toHaskellPrototype)
+                >>> \case
+                  Nullable p -> tyConOrVar "NullableClass" `appTy` p
+                  Plain p -> p
+            )
+            $ NE.toList comps
+     in tyConOrVar "UnionClass" `appTy` promotedListTy comps'
+  toHaskellType = appTy (tyConOrVar "JSObject") . toHaskellPrototype
+
+instance ToHaskellType IDLType where
+  toHaskellPrototype = \case
+    Distinguishable dt -> toHaskellPrototype dt
+    AnyType -> tyConOrVar "AnyClass"
+    PromiseType p -> tyConOrVar "PromiseClass" `appTy` toHaskellPrototype p
+    UnionType u -> toHaskellPrototype u
+  toHaskellType = \case
+    Distinguishable dt -> toHaskellType dt
+    AnyType -> tyConOrVar "JSAny"
+    PromiseType p -> tyConOrVar "Promise" `appTy` toHaskellType p
+    UnionType u -> toHaskellType u
+
+primCls :: HsType GhcPs
+primCls = tyConOrVar "JSPrimClass"

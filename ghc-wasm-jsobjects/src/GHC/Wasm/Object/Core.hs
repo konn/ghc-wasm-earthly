@@ -56,6 +56,8 @@ module GHC.Wasm.Object.Core (
   FromJSVal (..),
   HasJSRep (..),
   Prototype,
+  JSPrimClass,
+  JSPrim,
 ) where
 
 import Data.Coerce (coerce)
@@ -131,6 +133,7 @@ type family sub <:? super where
   _ <:? AnyClass = 'True
   AnyClass <:? _ = 'False
   NullClass <:? NullableClass a = 'True
+  b <:? NullableClass a = b <:? a
   UnionClass '[] <:? c = 'True
   UnionClass (x ': xs) <:? c = x <:? c && UnionClass xs <:? c
   _ <:? EnumClass '[] = 'False
@@ -246,3 +249,8 @@ type instance SuperclassOf NullClass = 'Nothing
 type JSNull = JSObject NullClass
 
 type Prototype = UnliftedType
+
+type JSPrimClass :: Type -> Prototype
+type data JSPrimClass a :: Prototype
+
+type JSPrim a = JSObject (JSPrimClass a)
