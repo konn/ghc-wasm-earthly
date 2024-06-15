@@ -43,24 +43,34 @@ common defaults
 library
   import: defaults
   -- cabal-gild: discover src
-  exposed-modules: Language.WebIDL.CodeGen.GHC.Wasm
+  exposed-modules:
+    Language.Haskell.Parser.Ex.Helper
+    Language.WebIDL.CodeGen.GHC.Wasm
+
   hs-source-dirs: src
   build-depends:
     aeson,
     algebraic-graphs,
+    barbies,
     bytestring,
     containers,
+    effectful,
     ghc-lib-parser,
     ghc-lib-parser-ex,
     ghc-wasm-jsobjects,
     hashable,
     lens,
     mtl,
+    neat-interpolation,
     optparse-applicative,
+    path,
+    path-io,
+    safe-exceptions,
     syb,
     text,
     transformers,
     unordered-containers,
+    vector,
     webidl-core,
     yaml,
 

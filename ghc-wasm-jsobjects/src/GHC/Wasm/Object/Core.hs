@@ -55,6 +55,7 @@ module GHC.Wasm.Object.Core (
   KnownEnum (),
   FromJSVal (..),
   HasJSRep (..),
+  Prototype,
 ) where
 
 import Data.Coerce (coerce)
@@ -243,3 +244,5 @@ type data NullClass :: UnliftedType
 type instance SuperclassOf NullClass = 'Nothing
 
 type JSNull = JSObject NullClass
+
+type Prototype = UnliftedType
