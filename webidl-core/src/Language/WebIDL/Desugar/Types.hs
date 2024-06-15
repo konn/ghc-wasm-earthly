@@ -2,22 +2,37 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DerivingVia #-}
-{-# LANGUAGE DisambiguateRecordFields #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE NoFieldSelectors #-}
 
 module Language.WebIDL.Desugar.Types (
   Definitions (..),
   Interface (..),
+  ArgumentList (..),
   Namespace (..),
   Mixin (..),
   Identifier,
   Typedef (..),
+  IDLType (..),
+  Const (..),
+  OperationName (..),
+  Operation (..),
+  RegularOperation (..),
+  Argument (..),
+  OptionalArgument (..),
+  Ellipsis (..),
+  Stringifier (..),
+  Maplike (..),
+  Special (..),
+  Setlike (..),
+  Iterable (..),
+  Access (..),
+  AsyncIterable (..),
   Enumeration (..),
   Dictionary (..),
   CallbackFunction (..),
   CallbackInterface (..),
-  Args (..),
   Desugarer (),
   runDesugarer,
   throw,
@@ -37,9 +52,22 @@ import Data.Map.Monoidal.Strict (MonoidalMap)
 import Data.Monoid
 import Data.Text (Text)
 import GHC.Generics
-import Language.WebIDL.AST.Types (Attributed (..), ExtendedAttribute (..), IDLFragment, Identifier)
+import Language.WebIDL.AST.Types (Access (..), Argument (..), ArgumentList (..), AsyncIterable (..), Attribute, Attributed (..), Const (..), Ellipsis (..), ExtendedAttribute (..), IDLFragment, IDLType (..), Identifier, Iterable (..), Maplike (..), Operation (..), OperationName (..), OptionalArgument (..), RegularOperation (..), Setlike (..), Special (..), Stringifier (..))
 
-data Interface = Interface {constructors :: !(DList Args)}
+data Interface = Interface
+  { constructors :: !(DList (Attributed ArgumentList))
+  , constants :: !(DList (Attributed Const))
+  , operations :: !(DList (Attributed Operation))
+  , stringifiers :: !(DList (Attributed Stringifier))
+  , attributes :: !(DList (Attributed (Access, Attribute)))
+  , inheritedAttributes :: !(DList (Attributed Attribute))
+  , iterables :: !(DList (Attributed Iterable))
+  , maplikes :: !(DList (Attributed (Access, Maplike)))
+  , setlikes :: !(DList (Attributed (Access, Setlike)))
+  , asyncIterables :: !(DList (Attributed AsyncIterable))
+  , staticAttributes :: !(DList (Attributed Attribute))
+  , staticOperations :: !(DList (Attributed Operation))
+  }
   deriving (Show, Eq, Generic)
   deriving (Semigroup, Monoid) via Generically Interface
 
@@ -48,6 +76,11 @@ data Namespace = Namespace
   deriving (Semigroup, Monoid) via Generically Namespace
 
 data Mixin = Mixin
+  { constants :: !(DList (Attributed Const))
+  , operations :: !(DList (Attributed RegularOperation))
+  , stringifiers :: !(DList (Attributed Stringifier))
+  , attributes :: !(DList (Attributed (Access, Attribute)))
+  }
   deriving (Show, Eq, Generic)
   deriving (Semigroup, Monoid) via Generically Mixin
 
@@ -87,6 +120,7 @@ data Definitions = Definitions
 
 data DesugarError
   = InterfaceAlreadyDefined !Identifier
+  | MixinAlreadyDefined !Identifier
   | NoCompleteEntityFound !IDLFragment
   | CyclicInheritance !(NonEmpty Text)
   deriving (Show, Eq, Generic)

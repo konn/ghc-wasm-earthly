@@ -57,6 +57,7 @@ library
     deepseq,
     distributive,
     dlist,
+    foldl,
     generic-lens,
     hashable,
     lens,
