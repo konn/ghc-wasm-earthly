@@ -39,7 +39,7 @@ import Data.List.NonEmpty (NonEmpty)
 import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (fromJust, fromMaybe, maybeToList)
+import Data.Maybe (fromJust, fromMaybe, isNothing, maybeToList)
 import Data.Monoid (First (getFirst))
 import Data.Set (Set)
 import Data.Set qualified as Set
@@ -291,7 +291,7 @@ generateInterfaceMainModule (normaliseTypeName -> name) Attributed {entry = ifs}
       let funName = toConstructorName name args
           reqArgNum = V.length args.requiredArgs
           optArgNum = V.length args.optionalArgs
-          ellipsNum = length args.ellipsis
+          ellipsNum = if isNothing args.ellipsis then 0 else 1
           retName = tyConOrVar $ toTypeName name
           argsHs =
             V.toList $
@@ -349,7 +349,7 @@ normaliseTypeName =
 
 toConstructorName :: Identifier -> ArgumentList -> T.Text
 toConstructorName name args =
-  "constructor_"
+  "js_cons_"
     <> name
     <> "_"
     <> T.intercalate
@@ -358,6 +358,12 @@ toConstructorName name args =
           V.map
             ((.entry) >>> \(Argument a _) -> toHaskellIdentifier a)
             args.requiredArgs
+            <> V.map
+              ((.entry) >>> \(OptionalArgument a _ _) -> toHaskellIdentifier $ Nullable a.entry)
+              args.optionalArgs
+            <> foldMap
+              ((.entry) >>> \(Ellipsis a _) -> V.singleton $ toHaskellIdentifier a)
+              args.ellipsis
       )
 
 class ToHaskellIdentifier a where
