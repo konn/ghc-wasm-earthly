@@ -65,8 +65,8 @@ data Interface = Interface
   , maplikes :: !(DList (Attributed (Access, Maplike)))
   , setlikes :: !(DList (Attributed (Access, Setlike)))
   , asyncIterables :: !(DList (Attributed AsyncIterable))
-  , staticAttributes :: !(DList (Attributed Attribute))
-  , staticOperations :: !(DList (Attributed Operation))
+  , staticAttributes :: !(DList (Attributed (Access, Attribute)))
+  , staticOperations :: !(DList (Attributed RegularOperation))
   }
   deriving (Show, Eq, Generic)
   deriving (Semigroup, Monoid) via Generically Interface

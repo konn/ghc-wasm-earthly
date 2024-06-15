@@ -10,7 +10,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE NoFieldSelectors #-}
 
-module Language.WebIDL.Desugar where
+module Language.WebIDL.Desugar (desugar) where
 
 import Algebra.Graph.AdjacencyMap qualified as AM
 import Algebra.Graph.AdjacencyMap.Algorithm qualified as AM
@@ -26,13 +26,9 @@ import Control.Lens (
   (<>=),
  )
 import Control.Lens qualified as Lens
-import Control.Lens.Extras (is)
 import Control.Monad (forM_, when)
-import Data.Bifunctor qualified as Bi
-import Data.Coerce (coerce)
 import Data.DList (DList)
 import Data.DList qualified as DL
-import Data.Functor.Compose
 import Data.Generics.Labels ()
 import Data.Maybe (isJust)
 import Data.Vector qualified as V
@@ -228,9 +224,9 @@ desugarInterface =
     stringifiers <- L.handles (attributedL AST._IfStringifier) dlistL
     attributes <- L.handles (attributedL AST._IfAttribute) dlistL
     statics <-
-      L.handles (attributedL AST._IfAttribute) do
-        atts <- undefined
-        ops <- undefined
+      L.handles (attributedL AST._IfStaticMember) do
+        atts <- L.handles (attributedL #_StaticAttribute) dlistL
+        ops <- L.handles (attributedL #_StaticOp) dlistL
         pure (atts, ops)
     maplikes <- L.handles (attributedL AST._IfMaplike) dlistL
     setlikes <- L.handles (attributedL AST._IfSetlike) dlistL
