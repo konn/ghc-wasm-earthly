@@ -26,6 +26,7 @@ import Control.Lens (
   (.~),
   (<<?=),
   (<>=),
+  (?=),
  )
 import Control.Lens qualified as Lens
 import Control.Monad (forM_, when)
@@ -178,6 +179,8 @@ resolvePartials Partials {..} = do
 
 resolveCompletes :: Completes -> Desugarer ()
 resolveCompletes Completes {..} = do
+  forM_ enumerations \(n, Attributed {entry = AST.Enum_ body, ..}) -> do
+    #enums . at n ?= Attributed {entry = Enumeration body, ..}
   forM_ interfaces \(n, Attributed {..}) -> do
     registerInterface n attributes entry
   eith <- uses #interfaceInheritance AM.topSort

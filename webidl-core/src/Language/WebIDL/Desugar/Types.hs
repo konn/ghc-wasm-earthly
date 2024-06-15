@@ -98,9 +98,8 @@ data Typedef = Typedef
   deriving (Show, Eq, Generic)
   deriving (Semigroup, Monoid) via Generically Typedef
 
-data Enumeration = Enumeration
+newtype Enumeration = Enumeration (NonEmpty Text)
   deriving (Show, Eq, Generic)
-  deriving (Semigroup, Monoid) via Generically Enumeration
 
 data Dictionary = Dictionary
   { requiredMembers :: !(Map Identifier (Attributed IDLType))
@@ -121,8 +120,8 @@ data Definitions = Definitions
   { interfaces :: !(MonoidalMap Identifier (Attributed Interface))
   , namespaces :: !(MonoidalMap Identifier (Attributed Namespace))
   , mixins :: !(MonoidalMap Identifier (Attributed Mixin))
-  , typedefs :: !(MonoidalMap Identifier (Attributed Typedef))
-  , enums :: !(MonoidalMap Identifier (Attributed Enumeration))
+  , typedefs :: !(Map Identifier (Attributed IDLType))
+  , enums :: !(Map Identifier (Attributed Enumeration))
   , dictionaries :: !(MonoidalMap Identifier (Attributed Dictionary))
   , callbackFunctions :: !(MonoidalMap Identifier (Attributed CallbackFunction))
   , callbackInterfaces :: !(MonoidalMap Identifier (Attributed CallbackInterface))
