@@ -17,8 +17,8 @@
 module Language.WebIDL.CodeGen.GHC.Wasm where
 
 import Barbies
-import Control.Exception.Safe (throwM)
-import Control.Lens (iforM_)
+import Control.Exception.Safe (throwM, throwString)
+import Control.Lens (imapM_)
 import Data.Aeson (FromJSON, ToJSON)
 import Data.Foldable1 (intercalate1)
 import Data.List.NonEmpty (NonEmpty)
@@ -39,6 +39,8 @@ import Effectful.Reader.Static (Reader)
 import Effectful.Reader.Static qualified as EffR
 import Effectful.Writer.Static.Shared qualified as Writer
 import GHC.Generics (Generic)
+import GHC.Types.Name
+import GHC.Types.Name.Reader (RdrName (..))
 import GHC.Types.SrcLoc
 import Language.Haskell.Parser.Ex.Helper
 import Language.WebIDL.AST.Types (IDLFragment)
@@ -113,21 +115,41 @@ generateWasmBinding inputs = do
   generateCoreClasses defs
   pure ()
 
-withModuleNamed :: Text -> [Text] -> [LHsDecl GhcPs] -> HsModule GhcPs
-withModuleNamed name imports decls =
-  HsModule
-    { hsmodName = Just $ L noAnn $ ModuleName $ fromString $ T.unpack name
-    , hsmodImports =
-        [ imp
-        | m <- imports
-        , Right imp <- pure $ parseImport $ "import " <> T.unpack m
-        ]
-    , hsmodExt = XModulePs noAnn (EpVirtualBraces 1) Nothing Nothing
-    , hsmodExports = Nothing
-    , hsmodDecls = decls
-    }
+data Module = Module
+  { moduleName :: Text
+  , exports :: Maybe [(NameSpace, Text)]
+  , imports :: [Text]
+  , decls :: [Either Text (HsDecl GhcPs)]
+  }
+  deriving (Generic)
 
-newtype CodeGenEnv = CodeGenEnv {modulePrefix :: Maybe T.Text}
+renderModule :: Module -> Either String String
+renderModule Module {..} = do
+  hsmodImports <-
+    mapM
+      (either Left pure . parseImport . ("import " <>) . T.unpack)
+      imports
+  hsmodDecls <-
+    mapM
+      (either (either Left Right . parseDec . T.unpack) (Right . L noAnn))
+      decls
+  pure $
+    formatModule $
+      HsModule
+        { hsmodName = Just $ L noAnn $ ModuleName $ fromString $ T.unpack moduleName
+        , hsmodImports
+        , hsmodExt = XModulePs noAnn (EpVirtualBraces 1) Nothing Nothing
+        , hsmodExports =
+            L noAnn
+              . map
+                (\(ns, nam) -> L noAnn $ IEVar Nothing (L noAnn (IEName noExtField $ L noAnn $ Unqual $ mkOccName ns $ T.unpack nam)) Nothing)
+              <$> exports
+        , hsmodDecls
+        }
+
+data CodeGenEnv = CodeGenEnv
+  { modulePrefix :: !(Maybe T.Text)
+  }
   deriving (Generic)
 
 toTypeName :: Identifier -> T.Text
@@ -154,23 +176,30 @@ generateCoreClasses ::
   Definitions ->
   Eff es ()
 generateCoreClasses defns = do
-  iforM_ defns.interfaces \name Attributed {entry = ifs} -> do
-    headModule <- toCoreModuleName name
-    parentMod <- mapM toCoreModuleName $ getFirst ifs.parent
-    let dest = fromJust (parseRelDir $ T.unpack name) </> [relfile|Core.hs|]
-        imps = "GHC.Wasm.Object.Core" : maybeToList parentMod
-        proto = toPrototypeName name
-        protoDef =
-          [trimming|type data ${proto} :: Prototype|]
-        aliasDef = [trimming|type ${name} = JSObject ${proto}|]
-        superDef = case getFirst ifs.parent of
-          Just p ->
-            let super = toPrototypeName p
-             in [trimming|type instance SuperclassOf ${proto} = 'Just ${super}|]
-          Nothing -> [trimming|type instance SuperclassOf ${proto} = 'Nothing|]
-        decs =
-          map
-            (either error id . parseDec . T.unpack)
-            [protoDef, aliasDef, superDef]
+  imapM_ generateInterfaceCoreModule defns.interfaces
 
-    putFile dest $ formatModule $ withModuleNamed headModule imps decs
+generateInterfaceCoreModule ::
+  ( FileTree :> es
+  , Reader CodeGenEnv :> es
+  ) =>
+  Text ->
+  Attributed Interface ->
+  Eff es ()
+generateInterfaceCoreModule name Attributed {entry = ifs} = do
+  moduleName <- toCoreModuleName name
+  parentMod <- mapM toCoreModuleName $ getFirst ifs.parent
+  let dest = fromJust (parseRelDir $ T.unpack name) </> [relfile|Core.hs|]
+      imports = "GHC.Wasm.Object.Core" : maybeToList parentMod
+      proto = toPrototypeName name
+      protoDef =
+        [trimming|type data ${proto} :: Prototype|]
+      aliasDef = [trimming|type ${name} = JSObject ${proto}|]
+      superDef = case getFirst ifs.parent of
+        Just p ->
+          let super = toPrototypeName p
+           in [trimming|type instance SuperclassOf ${proto} = 'Just ${super}|]
+        Nothing -> [trimming|type instance SuperclassOf ${proto} = 'Nothing|]
+      decls = map Left [protoDef, aliasDef, superDef]
+      exports = Just [(tvName, proto), (tvName, name)]
+
+  either throwString (putFile dest) $ renderModule Module {..}
