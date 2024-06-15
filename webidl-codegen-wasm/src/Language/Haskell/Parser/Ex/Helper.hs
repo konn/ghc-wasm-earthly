@@ -19,10 +19,13 @@ module Language.Haskell.Parser.Ex.Helper (
   mkNormalFunTy,
   appTy,
   promotedListTy,
+  ioTy,
+  unitT,
 ) where
 
 import Data.Function (on, (&))
 import qualified Data.Text as T
+import GHC.Core.TyCo.Ppr (appPrec)
 import GHC.Driver.DynFlags
 import GHC.Driver.Ppr (showSDoc)
 import GHC.Hs
@@ -107,7 +110,13 @@ mkNormalFunTy :: HsType GhcPs -> HsType GhcPs -> HsType GhcPs
 mkNormalFunTy = HsFunTy noExtField (HsUnrestrictedArrow NoEpUniTok) `on` L noAnn
 
 appTy :: HsType GhcPs -> HsType GhcPs -> HsType GhcPs
-appTy = HsAppTy noExtField `on` L noAnn
+appTy l r = HsAppTy noExtField (L noAnn l) (parenthesizeHsType appPrec $ L noAnn r)
 
 promotedListTy :: [HsType GhcPs] -> HsType GhcPs
 promotedListTy = HsExplicitListTy [] IsPromoted . map (L noAnn)
+
+ioTy :: HsType GhcPs
+ioTy = tyConOrVar $ T.pack "IO"
+
+unitT :: HsType GhcPs
+unitT = HsTupleTy (AnnParen AnnParens noAnn noAnn) HsBoxedOrConstraintTuple []
