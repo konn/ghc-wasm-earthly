@@ -179,6 +179,10 @@ resolvePartials Partials {..} = do
 
 resolveCompletes :: Completes -> Desugarer ()
 resolveCompletes Completes {..} = do
+  forM_ callbackFunctions \(n, Attributed {..}) -> do
+    #callbackFunctions . at n ?= Attributed {entry = entry, ..}
+  forM_ callbackInterfaces \(n, Attributed {..}) -> do
+    #callbackInterfaces . at n ?= Attributed {entry = entry, ..}
   forM_ enumerations \(n, Attributed {entry = AST.Enum_ body, ..}) -> do
     #enums . at n ?= Attributed {entry = Enumeration body, ..}
   forM_ typedefs \(n, Attributed {entry = AST.Typedef body, ..}) -> do

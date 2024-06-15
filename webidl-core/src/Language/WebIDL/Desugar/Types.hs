@@ -57,7 +57,32 @@ import Data.Map.Strict (Map)
 import Data.Monoid
 import Data.Text (Text)
 import GHC.Generics
-import Language.WebIDL.AST.Types (Access (..), Argument (..), ArgumentList (..), AsyncIterable (..), Attribute, Attributed (..), Const (..), DefaultValue (..), Ellipsis (..), ExtendedAttribute (..), IDLFragment, IDLType (..), Identifier, Iterable (..), Maplike (..), Operation (..), OperationName (..), OptionalArgument (..), RegularOperation (..), Setlike (..), Special (..), Stringifier (..))
+import Language.WebIDL.AST.Types (
+  Access (..),
+  Argument (..),
+  ArgumentList (..),
+  AsyncIterable (..),
+  Attribute,
+  Attributed (..),
+  CallbackFunction (..),
+  CallbackInterface (..),
+  Const (..),
+  DefaultValue (..),
+  Ellipsis (..),
+  ExtendedAttribute (..),
+  IDLFragment,
+  IDLType (..),
+  Identifier,
+  Iterable (..),
+  Maplike (..),
+  Operation (..),
+  OperationName (..),
+  OptionalArgument (..),
+  RegularOperation (..),
+  Setlike (..),
+  Special (..),
+  Stringifier (..),
+ )
 
 data Interface = Interface
   { parent :: !(First Identifier)
@@ -108,14 +133,6 @@ data Dictionary = Dictionary
   deriving (Show, Eq, Generic)
   deriving (Semigroup, Monoid) via Generically Dictionary
 
-data CallbackFunction = CallbackFunction
-  deriving (Show, Eq, Generic)
-  deriving (Semigroup, Monoid) via Generically CallbackFunction
-
-data CallbackInterface = CallbackInterface
-  deriving (Show, Eq, Generic)
-  deriving (Semigroup, Monoid) via Generically CallbackInterface
-
 data Definitions = Definitions
   { interfaces :: !(MonoidalMap Identifier (Attributed Interface))
   , namespaces :: !(MonoidalMap Identifier (Attributed Namespace))
@@ -123,8 +140,8 @@ data Definitions = Definitions
   , typedefs :: !(Map Identifier (Attributed (Attributed IDLType)))
   , enums :: !(Map Identifier (Attributed Enumeration))
   , dictionaries :: !(MonoidalMap Identifier (Attributed Dictionary))
-  , callbackFunctions :: !(MonoidalMap Identifier (Attributed CallbackFunction))
-  , callbackInterfaces :: !(MonoidalMap Identifier (Attributed CallbackInterface))
+  , callbackFunctions :: !(Map Identifier (Attributed CallbackFunction))
+  , callbackInterfaces :: !(Map Identifier (Attributed CallbackInterface))
   , interfaceInheritance :: !(AM.AdjacencyMap Identifier)
   , dictionaryInheritance :: !(AM.AdjacencyMap Identifier)
   }
