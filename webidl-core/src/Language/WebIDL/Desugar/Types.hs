@@ -3,6 +3,7 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -21,7 +22,6 @@ module Language.WebIDL.Desugar.Types (
   Mixin,
   Mixin' (..),
   Identifier,
-  Typedef (..),
   IDLType (..),
   Const (..),
   OperationName (..),
@@ -49,20 +49,29 @@ module Language.WebIDL.Desugar.Types (
   ExtendedAttribute (..),
   Attributed (..),
   DefaultValue (..),
+  getUnknownIdentifiers,
 ) where
 
 import Algebra.Graph.AdjacencyMap qualified as AM
 import Barbies
 import Control.Exception (Exception)
+import Control.Foldl qualified as L
+import Control.Lens (folded)
 import Control.Monad.State (MonadState)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State.Strict
 import Data.DList (DList)
 import Data.DList qualified as DL
+import Data.Data (Data)
+import Data.Data.Lens
+import Data.Generics.Labels ()
 import Data.List.NonEmpty (NonEmpty)
-import Data.Map.Monoidal.Strict (MonoidalMap)
+import Data.Map.Monoidal.Strict (MonoidalMap (..))
 import Data.Map.Strict (Map)
+import Data.Map.Strict qualified as Map
 import Data.Monoid
+import Data.Set (Set)
+import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Vector qualified as V
 import GHC.Generics
@@ -77,6 +86,7 @@ import Language.WebIDL.AST.Types (
   CallbackInterface (..),
   Const (..),
   DefaultValue (..),
+  DistinguishableType,
   Ellipsis (..),
   ExtendedAttribute (..),
   IDLFragment,
@@ -92,6 +102,7 @@ import Language.WebIDL.AST.Types (
   Special (..),
   Stringifier (..),
  )
+import Type.Reflection (Typeable)
 
 type Interface = Interface' V.Vector
 
@@ -113,6 +124,10 @@ data Interface' h = Interface
   deriving (Generic)
   deriving anyclass (FunctorB, ConstraintsB)
 
+deriving instance
+  (Typeable h, AllBF Data h Interface') =>
+  Data (Interface' h)
+
 deriving via Generically (Interface' DList) instance Semigroup (Interface' DList)
 
 deriving via Generically (Interface' DList) instance Monoid (Interface' DList)
@@ -132,6 +147,10 @@ data Namespace' h = Namespace
   }
   deriving (Generic)
   deriving anyclass (FunctorB, ConstraintsB)
+
+deriving instance
+  (Typeable h, AllBF Data h Namespace') =>
+  Data (Namespace' h)
 
 deriving instance (AllBF Show h Namespace') => Show (Namespace' h)
 
@@ -160,6 +179,10 @@ data Mixin' h = Mixin
   deriving (Generic)
   deriving anyclass (FunctorB, ConstraintsB)
 
+deriving instance
+  (Typeable h, AllBF Data h Mixin') =>
+  Data (Mixin' h)
+
 deriving instance (AllBF Show h Mixin') => Show (Mixin' h)
 
 deriving instance (AllBF Eq h Mixin') => Eq (Mixin' h)
@@ -176,18 +199,14 @@ deriving via
   instance
     Monoid (Mixin' DList)
 
-data Typedef = Typedef
-  deriving (Show, Eq, Generic)
-  deriving (Semigroup, Monoid) via Generically Typedef
-
 newtype Enumeration = Enumeration (NonEmpty Text)
-  deriving (Show, Eq, Ord, Generic)
+  deriving (Show, Eq, Ord, Generic, Data)
 
 data Dictionary = Dictionary
   { requiredMembers :: !(Map Identifier (Attributed IDLType))
   , optionalMembers :: !(Map Identifier (Attributed (IDLType, Maybe DefaultValue)))
   }
-  deriving (Show, Eq, Ord, Generic)
+  deriving (Show, Eq, Ord, Generic, Data)
   deriving (Semigroup, Monoid) via Generically Dictionary
 
 data Definitions' p = Definitions
@@ -260,3 +279,33 @@ mixinToInterface Mixin {..} =
     , stringifiers
     , attributes
     }
+
+getUnknownIdentifiers :: Definitions -> Maybe (Set Identifier)
+getUnknownIdentifiers defns =
+  let knownIdents =
+        mconcat
+          [ Map.keysSet $ getMonoidalMap defns.interfaces
+          , Map.keysSet $ getMonoidalMap defns.namespaces
+          , Map.keysSet $ getMonoidalMap defns.mixins
+          , Map.keysSet defns.typedefs
+          , Map.keysSet defns.enums
+          , Map.keysSet $ getMonoidalMap defns.dictionaries
+          , Map.keysSet defns.callbackFunctions
+          , Map.keysSet defns.callbackInterfaces
+          ]
+      allIdents =
+        mconcat
+          [ L.foldOver (folded . biplate @_ @DistinguishableType . #_DNamed) L.set defns.interfaces
+          , L.foldOver (folded . biplate @_ @DistinguishableType . #_DNamed) L.set $ getMonoidalMap defns.namespaces
+          , L.foldOver (folded . biplate @_ @DistinguishableType . #_DNamed) L.set $ getMonoidalMap defns.mixins
+          , L.foldOver (folded . biplate @_ @DistinguishableType . #_DNamed) L.set defns.typedefs
+          , L.foldOver (folded . biplate @_ @DistinguishableType . #_DNamed) L.set defns.enums
+          , L.foldOver (folded . biplate @_ @DistinguishableType . #_DNamed) L.set $ getMonoidalMap defns.dictionaries
+          , L.foldOver (folded . biplate @_ @DistinguishableType . #_DNamed) L.set defns.callbackFunctions
+          , L.foldOver (folded . biplate @_ @DistinguishableType . #_DNamed) L.set defns.callbackInterfaces
+          ]
+
+      unknowns = allIdents Set.\\ knownIdents
+   in if Set.null unknowns
+        then Nothing
+        else Just unknowns

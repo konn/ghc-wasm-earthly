@@ -174,4 +174,3 @@ generateCoreClasses defns = do
             [protoDef, aliasDef, superDef]
 
     putFile dest $ formatModule $ withModuleNamed headModule imps decs
-  pure ()
