@@ -65,7 +65,7 @@ import GHC.Types.Name.Reader (RdrName (..))
 import GHC.Types.SrcLoc
 import Language.Haskell.Parser.Ex.Helper
 import Language.WebIDL.AST.Parser (parseIDLFragment)
-import Language.WebIDL.AST.Types (BufferType (..), DistinguishableType (..), PrimType (..), Sign (..), StringType (..), UnionType (..), WithNullarity (..))
+import Language.WebIDL.AST.Types (Attribute (..), AttributeName (..), BufferType (..), DistinguishableType (..), PrimType (..), Sign (..), StringType (..), UnionType (..), WithNullarity (..))
 import Language.WebIDL.Desugar hiding (throw)
 import NeatInterpolation (trimming)
 import Path
@@ -219,7 +219,7 @@ generateInterfaceCoreModule ::
   Text ->
   Attributed Interface ->
   Eff es ()
-generateInterfaceCoreModule (normaliseTypeName -> name) Attributed {entry = ifs} = skipIfContainsUnknown ifs do
+generateInterfaceCoreModule (normaliseTypeName -> name) Attributed {entry = ifs} = do
   moduleName <- toCoreModuleName name
   parentMod <- mapM toCoreModuleName $ getFirst ifs.parent
   let dest = fromJust (parseRelDir $ T.unpack name) </> [relfile|Core.hs|]
@@ -258,7 +258,7 @@ generateInterfaceMainModule ::
   Text ->
   Attributed Interface ->
   Eff es ()
-generateInterfaceMainModule (normaliseTypeName -> name) Attributed {entry = ifs} = skipIfContainsUnknown ifs do
+generateInterfaceMainModule (normaliseTypeName -> name) Attributed {entry = ifs} = do
   moduleName <- toMainModuleName name
   let dest = fromJust (parseRelFile $ T.unpack name <> ".hs")
   unknowns <- EffR.asks @CodeGenEnv (.unknownTypes)
@@ -287,43 +287,14 @@ generateInterfaceMainModule (normaliseTypeName -> name) Attributed {entry = ifs}
       genStaticAttributes
       genStaticOperations
     -- FIXME: Is this correct? We must be aware of 'Namespace'.
-    genConstructors = V.forM_ ifs.constructors \Attributed {entry = args} -> do
+    genConstructors = V.forM_ ifs.constructors \Attributed {entry = args} -> skipIfContainsUnknown args do
       let funName = toConstructorName name args
-          reqArgNum = V.length args.requiredArgs
-          optArgNum = V.length args.optionalArgs
-          ellipsNum = if isNothing args.ellipsis then 0 else 1
-          retName = tyConOrVar $ toTypeName name
-          argsHs =
-            V.toList $
-              V.map (toHaskellType . (\(Argument a _) -> a) . (.entry)) args.requiredArgs
-                <> V.map (toHaskellType . Nullable . (\(OptionalArgument a _ _) -> a.entry) . (.entry)) args.optionalArgs
-                <> foldMap
-                  ( \(Ellipsis ty _) ->
-                      V.singleton $
-                        toHaskellType $
-                          DFrozenArray $
-                            Attributed mempty ty
-                  )
-                  (Compose args.ellipsis)
-          sig = T.pack $ pprint $ foldr mkNormalFunTy retName argsHs
-          jsArgs =
-            T.intercalate ", " $
-              V.toList $
-                V.generate
-                  (reqArgNum + optArgNum + ellipsNum)
-                  ( \i ->
-                      if i < reqArgNum + optArgNum
-                        then T.pack $ '$' : show (i + 1)
-                        else T.pack $ "... $" ++ show (i + 1)
-                  )
-          ffiDec =
-            [trimming|
-              foreign import javascript unsafe "${name}(${jsArgs})" ${funName} :: ${sig}
-            |]
+          retName = ioTy `appTy` tyConOrVar (toTypeName name)
+          ffiDec = renderJSFFIImport $ toJSFFIImport funName args retName
       Writer.tell
         MainModuleFragments
           { mainExports = DL.singleton (varName, funName)
-          , decs = DL.singleton $ Left ffiDec
+          , decs = DL.singleton ffiDec
           }
 
     -- FIXME: Implement this
@@ -332,8 +303,41 @@ generateInterfaceMainModule (normaliseTypeName -> name) Attributed {entry = ifs}
     genOperations = pure ()
     -- FIXME: Implement this
     genStringifiers = pure ()
-    -- FIXME: Implement this
-    genAttributes = pure ()
+    genAttributes = do
+      let atts = ifs.attributes <> V.map (fmap (ReadWrite,)) ifs.inheritedAttributes
+      V.forM_ atts \Attributed {entry = (rw, attrib@(Attribute ty attName))} ->
+        skipIfContainsUnknown attrib do
+          let readerName = "js_get_" <> att
+              att = toHaskellIdentifier attName
+              readerSig =
+                T.pack $
+                  pprint $
+                    mkNormalFunTy
+                      (tyConOrVar (toTypeName name))
+                      (ioTy `appTy` toHaskellType (Nullable ty.entry))
+              reader =
+                "foreign import javascript unsafe \"$1." <> att <> "\" " <> readerName <> " :: " <> readerSig
+          Writer.tell
+            MainModuleFragments
+              { mainExports = DL.singleton (varName, readerName)
+              , decs = DL.singleton $ Left reader
+              }
+          when (rw == ReadWrite) do
+            let writerName = "js_set_" <> toHaskellIdentifier attName
+                writerSig =
+                  T.pack $
+                    pprint $
+                      mkNormalFunTy
+                        (tyConOrVar (toTypeName name))
+                        (toHaskellType ty.entry `mkNormalFunTy` (ioTy `appTy` unitT))
+                writer =
+                  "foreign import javascript unsafe \"$1." <> att <> " = $2\" " <> writerName <> " :: " <> writerSig
+            Writer.tell
+              MainModuleFragments
+                { mainExports = DL.singleton (varName, writerName)
+                , decs = DL.singleton $ Left writer
+                }
+
     -- FIXME: Implement this
     genIterables = pure ()
     -- FIXME: Implement this
@@ -342,6 +346,51 @@ generateInterfaceMainModule (normaliseTypeName -> name) Attributed {entry = ifs}
     genStaticAttributes = pure ()
     -- FIXME: Implement this
     genStaticOperations = pure ()
+
+renderJSFFIImport :: JSFFIImport -> Either Text (HsDecl GhcPs)
+renderJSFFIImport JSFFIImport {..} =
+  let sig = T.pack $ pprint signature
+   in Left
+        [trimming|
+          foreign import javascript safe "${funName}(${jsArgs})" ${funName} :: ${sig}
+        |]
+
+toJSFFIImport :: T.Text -> ArgumentList -> HsType GhcPs -> JSFFIImport
+toJSFFIImport funName args retType =
+  let reqArgNum = V.length args.requiredArgs
+      optArgNum = V.length args.optionalArgs
+      ellipsNum = if isNothing args.ellipsis then 0 else 1
+      argsHs =
+        V.toList $
+          V.map (toHaskellType . (\(Argument a _) -> a) . (.entry)) args.requiredArgs
+            <> V.map (toHaskellType . Nullable . (\(OptionalArgument a _ _) -> a.entry) . (.entry)) args.optionalArgs
+            <> foldMap
+              ( \(Ellipsis ty _) ->
+                  V.singleton $
+                    toHaskellType $
+                      DFrozenArray $
+                        Attributed mempty ty
+              )
+              (Compose args.ellipsis)
+      signature = foldr mkNormalFunTy retType argsHs
+      jsArgs =
+        T.intercalate ", " $
+          V.toList $
+            V.generate
+              (reqArgNum + optArgNum + ellipsNum)
+              ( \i ->
+                  if i < reqArgNum + optArgNum
+                    then T.pack $ '$' : show (i + 1)
+                    else T.pack $ "... $" ++ show (i + 1)
+              )
+   in JSFFIImport {..}
+
+data JSFFIImport = JSFFIImport
+  { funName :: !Text
+  , signature :: !(HsType GhcPs)
+  , jsArgs :: !Text
+  }
+  deriving (Generic)
 
 normaliseTypeName :: Text -> Identifier
 normaliseTypeName =
@@ -368,6 +417,12 @@ toConstructorName name args =
 
 class ToHaskellIdentifier a where
   toHaskellIdentifier :: a -> T.Text
+
+instance ToHaskellIdentifier AttributeName where
+  toHaskellIdentifier = \case
+    AttributeName s -> s
+    AsyncAttribute -> "async"
+    RequiredAttribute -> "required"
 
 instance (ToHaskellIdentifier a) => ToHaskellIdentifier (WithNullarity a) where
   toHaskellIdentifier = \case
