@@ -266,7 +266,7 @@ desugarMixin =
     attributes <- L.handles (attributedL #_MixinAttribute) dlistL
     pure Mixin {..}
 
-desugarNamespace :: V.Vector (Attributed AST.NamespaceMember) -> Namespace
+desugarNamespace :: V.Vector (Attributed AST.NamespaceMember) -> Namespace' DList
 desugarNamespace =
   L.fold do
     constants <- L.handles (attributedL #_NamespaceConst) dlistL
@@ -303,7 +303,7 @@ desugarInterface ::
   (AST.KnownPartiality p) =>
   Inheritance p ->
   V.Vector (Attributed (AST.InterfaceMember p)) ->
-  Interface
+  Interface' DList
 desugarInterface i =
   let parent = case i of
         NoInheritance -> First Nothing

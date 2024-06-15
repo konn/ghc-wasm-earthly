@@ -52,6 +52,7 @@ library
   hs-source-dirs: src
   build-depends:
     algebraic-graphs,
+    barbies,
     bytestring,
     containers,
     deepseq,
