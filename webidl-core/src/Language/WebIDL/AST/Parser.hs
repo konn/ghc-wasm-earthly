@@ -117,7 +117,7 @@ definitionP =
   callbackOrInterfaceOrMixinP
     <|> partialP
     <|> uncurry NamespaceD <$> namespaceP
-    <|> uncurry DictionaryD <$> dictionaryP True
+    <|> uncurry DictionaryD <$> dictionaryP
     <|> uncurry EnumD <$> enumP
     <|> uncurry TypedefD <$> typedefD
     <|> uncurry IncludesStatementD <$> includesStatementP
@@ -130,7 +130,7 @@ partialP =
                 <|> uncurry PartialInterfaceD <$> interfaceRestP
              )
           <|> uncurry PartialNamespaceD <$> namespaceP
-          <|> uncurry PartialDictionaryD <$> dictionaryP False
+          <|> uncurry PartialDictionaryD <$> dictionaryP
        )
 
 includesStatementP :: Parser (T.Text, IncludesStatement)
@@ -156,13 +156,13 @@ enumP =
     <*> braces (Enum_ <$> anyString `PNE.sepEndBy1` comma)
     <* semi
 
-dictionaryP :: Bool -> Parser (T.Text, Dictionary)
-dictionaryP inher =
+dictionaryP :: (KnownPartiality p) => Parser (T.Text, Dictionary p)
+dictionaryP =
   (,)
     <$ reserved "dictionary"
     <*> anyIdentifier
     <*> ( Dictionary
-            <$> (if inher then inheritanceP else pure Nothing)
+            <$> inheritanceP
             <*> braces (V.fromList <$> many (attributedP dictionaryMemberP))
         )
     <* semi
@@ -438,10 +438,18 @@ integerTypeP =
               *> P.option Long (LongLong <$ reserved "long")
          )
 
-inheritanceP :: Parser (Maybe Identifier)
+inheritanceP ::
+  forall p.
+  (KnownPartiality p) =>
+  Parser (Inheritance p)
 inheritanceP =
-  P.optional (P.try colon *> anyIdentifier)
-    <?> "inheritance"
+  case sPartiality @p of
+    SComplete ->
+      P.option
+        NoInheritance
+        (Inherits <$ P.try colon <*> anyIdentifier)
+        <?> "inheritance"
+    SPartial -> NoInheritance <$ P.notFollowedBy (colon *> anyIdentifier)
 
 argumentListP :: Parser ArgumentList
 argumentListP = ArgumentList . V.fromList <$> attributedP argumentP `P.sepBy` comma

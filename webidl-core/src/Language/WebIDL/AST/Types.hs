@@ -251,8 +251,8 @@ data Definition
   | CallbackInterfaceD !Identifier !CallbackInterface
   | NamespaceD !Identifier !Namespace
   | PartialNamespaceD !Identifier !Namespace
-  | DictionaryD !Identifier !Dictionary
-  | PartialDictionaryD !Identifier !Dictionary
+  | DictionaryD !Identifier !(Dictionary Complete)
+  | PartialDictionaryD !Identifier !(Dictionary Partial)
   | TypedefD !Identifier !Typedef
   | EnumD !Identifier !Enum_
   | IncludesStatementD !Identifier IncludesStatement
@@ -370,7 +370,7 @@ data Attribute = Attribute !(Attributed IDLType) !AttributeName
 data AttributeName = AsyncAttribute | RequiredAttribute | AttributeName !Identifier
   deriving (Show, Eq, Ord, Generic)
 
-data Dictionary = Dictionary !(Maybe Identifier) !(V.Vector (Attributed DictionaryMember))
+data Dictionary p = Dictionary !(Inheritance p) !(V.Vector (Attributed DictionaryMember))
   deriving (Show, Eq, Ord, Generic)
 
 data DictionaryMember
