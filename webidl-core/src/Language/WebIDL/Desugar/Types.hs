@@ -42,6 +42,7 @@ module Language.WebIDL.Desugar.Types (
   DesugarError (..),
   ExtendedAttribute (..),
   Attributed (..),
+  DefaultValue (..),
 ) where
 
 import Algebra.Graph.AdjacencyMap qualified as AM
@@ -52,13 +53,15 @@ import Control.Monad.Trans.State.Strict
 import Data.DList (DList)
 import Data.List.NonEmpty (NonEmpty)
 import Data.Map.Monoidal.Strict (MonoidalMap)
+import Data.Map.Strict (Map)
 import Data.Monoid
 import Data.Text (Text)
 import GHC.Generics
-import Language.WebIDL.AST.Types (Access (..), Argument (..), ArgumentList (..), AsyncIterable (..), Attribute, Attributed (..), Const (..), Ellipsis (..), ExtendedAttribute (..), IDLFragment, IDLType (..), Identifier, Iterable (..), Maplike (..), Operation (..), OperationName (..), OptionalArgument (..), RegularOperation (..), Setlike (..), Special (..), Stringifier (..))
+import Language.WebIDL.AST.Types (Access (..), Argument (..), ArgumentList (..), AsyncIterable (..), Attribute, Attributed (..), Const (..), DefaultValue (..), Ellipsis (..), ExtendedAttribute (..), IDLFragment, IDLType (..), Identifier, Iterable (..), Maplike (..), Operation (..), OperationName (..), OptionalArgument (..), RegularOperation (..), Setlike (..), Special (..), Stringifier (..))
 
 data Interface = Interface
-  { constructors :: !(DList (Attributed ArgumentList))
+  { parent :: !(First Identifier)
+  , constructors :: !(DList (Attributed ArgumentList))
   , constants :: !(DList (Attributed Const))
   , operations :: !(DList (Attributed Operation))
   , stringifiers :: !(DList (Attributed Stringifier))
@@ -100,6 +103,9 @@ data Enumeration = Enumeration
   deriving (Semigroup, Monoid) via Generically Enumeration
 
 data Dictionary = Dictionary
+  { requiredMembers :: !(Map Identifier (Attributed IDLType))
+  , optionalMembers :: !(Map Identifier (Attributed (IDLType, Maybe DefaultValue)))
+  }
   deriving (Show, Eq, Generic)
   deriving (Semigroup, Monoid) via Generically Dictionary
 
@@ -120,7 +126,8 @@ data Definitions = Definitions
   , dictionaries :: !(MonoidalMap Identifier (Attributed Dictionary))
   , callbackFunctions :: !(MonoidalMap Identifier (Attributed CallbackFunction))
   , callbackInterfaces :: !(MonoidalMap Identifier (Attributed CallbackInterface))
-  , inheritance :: !(AM.AdjacencyMap Identifier)
+  , interfaceInheritance :: !(AM.AdjacencyMap Identifier)
+  , dictionaryInheritance :: !(AM.AdjacencyMap Identifier)
   }
   deriving (Show, Eq, Generic)
   deriving (Semigroup, Monoid) via Generically Definitions
@@ -128,6 +135,7 @@ data Definitions = Definitions
 data DesugarError
   = InterfaceAlreadyDefined !Identifier
   | MixinAlreadyDefined !Identifier
+  | DictionaryAlreadyDefined !Identifier
   | NoCompleteEntityFound !IDLFragment
   | CyclicInheritance !(NonEmpty Text)
   | MixinNotFound !Identifier

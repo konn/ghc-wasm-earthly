@@ -64,6 +64,7 @@ library
     megaparsec,
     monoidal-containers,
     mtl,
+    ordered-containers,
     parser-combinators,
     scientific,
     syb,

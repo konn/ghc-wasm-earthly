@@ -458,7 +458,7 @@ data Dictionary p = Dictionary !(Inheritance p) !(V.Vector (Attributed Dictionar
   deriving (Show, Eq, Ord, Generic)
 
 data DictionaryMember
-  = RequiredMember !(Attributed IDLType) !Identifier
+  = RequiredMember !IDLType !Identifier
   | OptionalMember !IDLType !Identifier !(Maybe DefaultValue)
   deriving (Show, Eq, Ord, Generic)
 

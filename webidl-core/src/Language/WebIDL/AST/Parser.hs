@@ -171,7 +171,7 @@ dictionaryMemberP :: Parser DictionaryMember
 dictionaryMemberP =
   RequiredMember
     <$ reserved "required"
-    <*> attributedP idlTypeP
+    <*> idlTypeP
     <*> anyIdentifier
     <* semi
     <|> OptionalMember

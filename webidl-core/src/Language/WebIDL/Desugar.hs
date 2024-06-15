@@ -33,6 +33,7 @@ import Data.DList (DList)
 import Data.DList qualified as DL
 import Data.Generics.Labels ()
 import Data.Maybe (isJust)
+import Data.Monoid (First (..))
 import Data.Vector qualified as V
 import GHC.Generics (Generic, Generically (..))
 import Language.WebIDL.AST.Types (IDLFragment, Inheritance (..), SPartiality (..), sPartiality)
@@ -158,8 +159,8 @@ resolvePartials :: Partials -> Desugarer ()
 resolvePartials Partials {..} = do
   forM_ mixins \(n, Attributed {entry = AST.Mixin body, ..}) -> do
     #mixins . ix n <>= Attributed {entry = desugarMixin body, ..}
-  forM_ interfaces \(n, Attributed {entry = AST.Interface NoInheritance body, ..}) -> do
-    #interfaces . ix n <>= Attributed {entry = desugarInterface body, ..}
+  forM_ interfaces \(n, Attributed {entry = AST.Interface ih body, ..}) -> do
+    #interfaces . ix n <>= Attributed {entry = desugarInterface ih body, ..}
   forM_ inclusions \(n, AST.IncludesStatement mixin) -> do
     ma <- use $ #mixins . at mixin
     case ma of
@@ -172,12 +173,14 @@ resolvePartials Partials {..} = do
         { entry = desugarNamespace body
         , attributes
         }
+  forM_ dictionaries \(name, Attributed {entry = AST.Dictionary NoInheritance body}) ->
+    #dictionaries . at name . Lens._Just . #entry <>= desugarDictionary body
 
 resolveCompletes :: Completes -> Desugarer ()
 resolveCompletes Completes {..} = do
   forM_ interfaces \(n, Attributed {..}) -> do
     registerInterface n attributes entry
-  eith <- uses #inheritance AM.topSort
+  eith <- uses #interfaceInheritance AM.topSort
   forM_ mixins \(n, Attributed {..}) -> do
     registerMixin n attributes entry
   forM_ namespaces \(n, Attributed {..}) -> do
@@ -185,7 +188,48 @@ resolveCompletes Completes {..} = do
   case eith of
     Left cyc -> throw $ CyclicInheritance cyc
     Right {} -> pure ()
-  pure ()
+  forM_ dictionaries \(n, Attributed {..}) -> do
+    registerDictionary n attributes entry
+  dictGraph <- use #interfaceInheritance
+  case AM.topSort dictGraph of
+    Left cyc -> throw $ CyclicInheritance cyc
+    Right tieBreak -> do
+      forM_ tieBreak \targ -> do
+        forM_ (AM.postSet targ dictGraph) \p -> do
+          use (#dictionaries . at p) >>= mapM_ \parent -> do
+            #dictionaries . at targ . Lens._Just . #entry <>= parent.entry
+
+registerDictionary :: Identifier -> V.Vector ExtendedAttribute -> AST.Dictionary AST.Complete -> Desugarer ()
+registerDictionary name atts (AST.Dictionary inh body) = do
+  old <-
+    #dictionaries . at name
+      <<?= Attributed
+        { entry = desugarDictionary body
+        , attributes = atts
+        }
+  when (isJust old) $ throw $ DictionaryAlreadyDefined name
+  case inh of
+    AST.NoInheritance -> pure ()
+    AST.Inherits super ->
+      #dictionaryInheritance <>= AM.edge name super
+
+desugarDictionary :: V.Vector (Attributed AST.DictionaryMember) -> Dictionary
+desugarDictionary = L.fold do
+  requiredMembers <-
+    L.handles (attributedL #_RequiredMember) $
+      L.premap
+        ( \Attributed {entry = (typ, name), ..} ->
+            (name, Attributed {entry = typ, ..})
+        )
+        L.map
+  optionalMembers <-
+    L.handles (attributedL #_OptionalMember) $
+      L.premap
+        ( \Attributed {entry = (typ, name, def), ..} ->
+            (name, Attributed {entry = (typ, def), ..})
+        )
+        L.map
+  pure Dictionary {..}
 
 registerNamespace :: Identifier -> V.Vector ExtendedAttribute -> AST.Namespace -> Desugarer ()
 registerNamespace name atts (AST.Namespace body) = do
@@ -238,37 +282,41 @@ registerInterface ::
 registerInterface name atts (AST.Interface inh body) = do
   old <-
     #interfaces . at name
-      <<?= Attributed {entry = desugarInterface body, attributes = atts}
+      <<?= Attributed {entry = desugarInterface inh body, attributes = atts}
   when (isJust old) $ throw $ InterfaceAlreadyDefined name
   case inh of
     AST.NoInheritance -> pure ()
     AST.Inherits super ->
-      #inheritance <>= AM.edge name super
+      #interfaceInheritance <>= AM.edge name super
 
 desugarInterface ::
   forall p.
   (AST.KnownPartiality p) =>
+  Inheritance p ->
   V.Vector (Attributed (AST.InterfaceMember p)) ->
   Interface
-desugarInterface =
-  L.fold do
-    constructors <- case sPartiality @p of
-      SComplete -> L.handles (attributedL AST._Constructor) dlistL
-      SPartial -> pure mempty
-    constants <- L.handles (attributedL AST._IfConst) dlistL
-    operations <- L.handles (attributedL AST._IfOperation) dlistL
-    iterables <- L.handles (attributedL AST._IfIterable) dlistL
-    asyncIterables <- L.handles (attributedL AST._IfAsyncIterable) dlistL
-    stringifiers <- L.handles (attributedL AST._IfStringifier) dlistL
-    attributes <- L.handles (attributedL AST._IfAttribute) dlistL
-    statics <-
-      L.handles (attributedL AST._IfStaticMember) do
-        atts <- L.handles (attributedL #_StaticAttribute) dlistL
-        ops <- L.handles (attributedL #_StaticOp) dlistL
-        pure (atts, ops)
-    maplikes <- L.handles (attributedL AST._IfMaplike) dlistL
-    setlikes <- L.handles (attributedL AST._IfSetlike) dlistL
-    inheritedAttributes <- L.handles (attributedL AST._IfInherit) dlistL
-    pure $
-      let (staticAttributes, staticOperations) = statics
-       in Interface {..}
+desugarInterface i =
+  let parent = case i of
+        NoInheritance -> First Nothing
+        Inherits p -> First $ Just p
+   in L.fold do
+        constructors <- case sPartiality @p of
+          SComplete -> L.handles (attributedL AST._Constructor) dlistL
+          SPartial -> pure mempty
+        constants <- L.handles (attributedL AST._IfConst) dlistL
+        operations <- L.handles (attributedL AST._IfOperation) dlistL
+        iterables <- L.handles (attributedL AST._IfIterable) dlistL
+        asyncIterables <- L.handles (attributedL AST._IfAsyncIterable) dlistL
+        stringifiers <- L.handles (attributedL AST._IfStringifier) dlistL
+        attributes <- L.handles (attributedL AST._IfAttribute) dlistL
+        statics <-
+          L.handles (attributedL AST._IfStaticMember) do
+            atts <- L.handles (attributedL #_StaticAttribute) dlistL
+            ops <- L.handles (attributedL #_StaticOp) dlistL
+            pure (atts, ops)
+        maplikes <- L.handles (attributedL AST._IfMaplike) dlistL
+        setlikes <- L.handles (attributedL AST._IfSetlike) dlistL
+        inheritedAttributes <- L.handles (attributedL AST._IfInherit) dlistL
+        pure $
+          let (staticAttributes, staticOperations) = statics
+           in Interface {..}
