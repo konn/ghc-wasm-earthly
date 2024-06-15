@@ -181,6 +181,8 @@ resolveCompletes :: Completes -> Desugarer ()
 resolveCompletes Completes {..} = do
   forM_ enumerations \(n, Attributed {entry = AST.Enum_ body, ..}) -> do
     #enums . at n ?= Attributed {entry = Enumeration body, ..}
+  forM_ typedefs \(n, Attributed {entry = AST.Typedef body, ..}) -> do
+    #typedefs . at n ?= Attributed {entry = body, ..}
   forM_ interfaces \(n, Attributed {..}) -> do
     registerInterface n attributes entry
   eith <- uses #interfaceInheritance AM.topSort

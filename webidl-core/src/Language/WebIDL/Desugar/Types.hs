@@ -120,7 +120,7 @@ data Definitions = Definitions
   { interfaces :: !(MonoidalMap Identifier (Attributed Interface))
   , namespaces :: !(MonoidalMap Identifier (Attributed Namespace))
   , mixins :: !(MonoidalMap Identifier (Attributed Mixin))
-  , typedefs :: !(Map Identifier (Attributed IDLType))
+  , typedefs :: !(Map Identifier (Attributed (Attributed IDLType)))
   , enums :: !(Map Identifier (Attributed Enumeration))
   , dictionaries :: !(MonoidalMap Identifier (Attributed Dictionary))
   , callbackFunctions :: !(MonoidalMap Identifier (Attributed CallbackFunction))
