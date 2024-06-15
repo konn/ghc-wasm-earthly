@@ -146,14 +146,15 @@ generateCoreClasses defns = do
               | p <- maybeToList $ getFirst ifs.parent
               ]
         protoDef =
-          [trimming|type data ${name} :: Prototype|]
+          [trimming|type data ${name}Name :: Prototype|]
+        aliasDef = [trimming|type ${name} = JSObject ${name}Class|]
         superDef = case getFirst ifs.parent of
-          Just p -> [trimming|type instance SuperclassOf ${name} = ${p}|]
-          Nothing -> [trimming|type instance SuperclassOf ${name} = AnyClass|]
+          Just p -> [trimming|type instance SuperclassOf ${name}Name = 'Just ${p}Class|]
+          Nothing -> [trimming|type instance SuperclassOf ${name}Name = 'Nothing|]
         decs =
           map
             (either error id . parseDec . T.unpack)
-            [protoDef, superDef]
+            [protoDef, aliasDef, superDef]
 
     putFile dest $ formatModule $ withModuleNamed headModule imps decs
   pure ()
