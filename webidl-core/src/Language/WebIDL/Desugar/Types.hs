@@ -50,13 +50,14 @@ module Language.WebIDL.Desugar.Types (
   Attributed (..),
   DefaultValue (..),
   getUnknownIdentifiers,
+  namedTypeIdentifiers,
 ) where
 
 import Algebra.Graph.AdjacencyMap qualified as AM
 import Barbies
 import Control.Exception (Exception)
 import Control.Foldl qualified as L
-import Control.Lens (folded)
+import Control.Lens (Traversal', folded)
 import Control.Monad.State (MonadState)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State.Strict
@@ -295,17 +296,20 @@ getUnknownIdentifiers defns =
           ]
       allIdents =
         mconcat
-          [ L.foldOver (folded . biplate @_ @DistinguishableType . #_DNamed) L.set defns.interfaces
-          , L.foldOver (folded . biplate @_ @DistinguishableType . #_DNamed) L.set $ getMonoidalMap defns.namespaces
-          , L.foldOver (folded . biplate @_ @DistinguishableType . #_DNamed) L.set $ getMonoidalMap defns.mixins
-          , L.foldOver (folded . biplate @_ @DistinguishableType . #_DNamed) L.set defns.typedefs
-          , L.foldOver (folded . biplate @_ @DistinguishableType . #_DNamed) L.set defns.enums
-          , L.foldOver (folded . biplate @_ @DistinguishableType . #_DNamed) L.set $ getMonoidalMap defns.dictionaries
+          [ L.foldOver (folded . namedTypeIdentifiers) L.set defns.interfaces
+          , L.foldOver (folded . namedTypeIdentifiers) L.set $ getMonoidalMap defns.namespaces
+          , L.foldOver (folded . namedTypeIdentifiers) L.set $ getMonoidalMap defns.mixins
+          , L.foldOver (folded . namedTypeIdentifiers) L.set defns.typedefs
+          , L.foldOver (folded . namedTypeIdentifiers) L.set defns.enums
+          , L.foldOver (folded . namedTypeIdentifiers) L.set $ getMonoidalMap defns.dictionaries
           , L.foldOver (folded . biplate @_ @DistinguishableType . #_DNamed) L.set defns.callbackFunctions
-          , L.foldOver (folded . biplate @_ @DistinguishableType . #_DNamed) L.set defns.callbackInterfaces
+          , L.foldOver (folded . namedTypeIdentifiers) L.set defns.callbackInterfaces
           ]
 
       unknowns = allIdents Set.\\ knownIdents
    in if Set.null unknowns
         then Nothing
         else Just unknowns
+
+namedTypeIdentifiers :: (Data a) => Traversal' a Identifier
+namedTypeIdentifiers = biplate @_ @DistinguishableType . #_DNamed
