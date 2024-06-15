@@ -1,3 +1,4 @@
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DuplicateRecordFields #-}
@@ -26,6 +27,17 @@ module Language.WebIDL.AST.Types (
   Access (..),
   Interface (..),
   InterfaceMember (..),
+  _Constructor,
+  _IfConst,
+  _IfOperation,
+  _IfStringifier,
+  _IfStaticMember,
+  _IfIterable,
+  _IfAsyncIterable,
+  _IfAttribute,
+  _IfMaplike,
+  _IfSetlike,
+  _IfInherit,
   CallbackInterface (..),
   CallbackInterfaceMember (..),
   Mixin (..),
@@ -65,6 +77,7 @@ module Language.WebIDL.AST.Types (
   KnownPartiality (..),
 ) where
 
+import Control.Lens (Prism, Prism', prism)
 import Data.List.NonEmpty (NonEmpty)
 import Data.Scientific (Scientific)
 import Data.Text qualified as T
@@ -153,6 +166,70 @@ data InterfaceMember p where
   IfMaplike :: Access -> Maplike -> InterfaceMember p
   IfSetlike :: Access -> Setlike -> InterfaceMember p
   IfInherit :: Attribute -> InterfaceMember p
+
+_Constructor :: Prism (InterfaceMember p) (InterfaceMember Complete) ArgumentList ArgumentList
+_Constructor = prism Constructor \case
+  Constructor x -> Right x
+  IfConst x -> Left (IfConst x)
+  IfOperation x -> Left (IfOperation x)
+  IfStringifier x -> Left (IfStringifier x)
+  IfStaticMember x -> Left (IfStaticMember x)
+  IfIterable x -> Left (IfIterable x)
+  IfAsyncIterable x -> Left (IfAsyncIterable x)
+  IfAttribute x y -> Left (IfAttribute x y)
+  IfMaplike x y -> Left (IfMaplike x y)
+  IfSetlike rw x -> Left (IfSetlike rw x)
+  IfInherit x -> Left (IfInherit x)
+
+_IfConst :: Prism' (InterfaceMember p) Const
+_IfConst = prism IfConst \case
+  IfConst x -> Right x
+  x -> Left x
+
+_IfOperation :: Prism' (InterfaceMember p) Operation
+_IfOperation = prism IfOperation \case
+  IfOperation x -> Right x
+  x -> Left x
+
+_IfStringifier :: Prism' (InterfaceMember p) Stringifier
+_IfStringifier = prism IfStringifier \case
+  IfStringifier x -> Right x
+  x -> Left x
+
+_IfStaticMember :: Prism' (InterfaceMember p) StaticMember
+_IfStaticMember = prism IfStaticMember \case
+  IfStaticMember x -> Right x
+  x -> Left x
+
+_IfIterable :: Prism' (InterfaceMember p) Iterable
+_IfIterable = prism IfIterable \case
+  IfIterable x -> Right x
+  x -> Left x
+
+_IfAsyncIterable :: Prism' (InterfaceMember p) AsyncIterable
+_IfAsyncIterable = prism IfAsyncIterable \case
+  IfAsyncIterable x -> Right x
+  x -> Left x
+
+_IfAttribute :: Prism' (InterfaceMember p) (Access, Attribute)
+_IfAttribute = prism (uncurry IfAttribute) \case
+  IfAttribute x y -> Right (x, y)
+  x -> Left x
+
+_IfMaplike :: Prism' (InterfaceMember p) (Access, Maplike)
+_IfMaplike = prism (uncurry IfMaplike) \case
+  IfMaplike x y -> Right (x, y)
+  x -> Left x
+
+_IfSetlike :: Prism' (InterfaceMember p) (Access, Setlike)
+_IfSetlike = prism (uncurry IfSetlike) \case
+  IfSetlike x y -> Right (x, y)
+  x -> Left x
+
+_IfInherit :: Prism' (InterfaceMember p) Attribute
+_IfInherit = prism IfInherit \case
+  IfInherit x -> Right x
+  x -> Left x
 
 deriving instance Show (InterfaceMember p)
 
