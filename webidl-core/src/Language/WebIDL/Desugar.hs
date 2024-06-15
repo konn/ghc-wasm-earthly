@@ -19,6 +19,8 @@ import Control.Lens (
   At (at),
   foldMapOf,
   folded,
+  ix,
+  use,
   uses,
   (&),
   (.~),
@@ -33,7 +35,7 @@ import Data.Generics.Labels ()
 import Data.Maybe (isJust)
 import Data.Vector qualified as V
 import GHC.Generics (Generic, Generically (..))
-import Language.WebIDL.AST.Types (IDLFragment, SPartiality (..), sPartiality)
+import Language.WebIDL.AST.Types (IDLFragment, Inheritance (..), SPartiality (..), sPartiality)
 import Language.WebIDL.AST.Types qualified as AST
 import Language.WebIDL.Desugar.Types
 
@@ -153,19 +155,47 @@ classifyFragments =
     )
 
 resolvePartials :: Partials -> Desugarer ()
-resolvePartials = undefined
+resolvePartials Partials {..} = do
+  forM_ mixins \(n, Attributed {entry = AST.Mixin body, ..}) -> do
+    #mixins . ix n <>= Attributed {entry = desugarMixin body, ..}
+  forM_ interfaces \(n, Attributed {entry = AST.Interface NoInheritance body, ..}) -> do
+    #interfaces . ix n <>= Attributed {entry = desugarInterface body, ..}
+  forM_ inclusions \(n, AST.IncludesStatement mixin) -> do
+    ma <- use $ #mixins . at mixin
+    case ma of
+      Nothing -> throw $ MixinNotFound mixin
+      Just mems ->
+        #interfaces . ix n . #entry <>= mixinToInterface mems.entry
+  forM_ namespaces \(name, Attributed {entry = AST.Namespace body, ..}) ->
+    #namespaces . at name
+      <<?= Attributed
+        { entry = desugarNamespace body
+        , attributes
+        }
 
 resolveCompletes :: Completes -> Desugarer ()
 resolveCompletes Completes {..} = do
-  forM_ mixins \(n, Attributed {..}) -> do
-    registerMixin n attributes entry
   forM_ interfaces \(n, Attributed {..}) -> do
     registerInterface n attributes entry
   eith <- uses #inheritance AM.topSort
+  forM_ mixins \(n, Attributed {..}) -> do
+    registerMixin n attributes entry
+  forM_ namespaces \(n, Attributed {..}) -> do
+    registerNamespace n attributes entry
   case eith of
     Left cyc -> throw $ CyclicInheritance cyc
     Right {} -> pure ()
   pure ()
+
+registerNamespace :: Identifier -> V.Vector ExtendedAttribute -> AST.Namespace -> Desugarer ()
+registerNamespace name atts (AST.Namespace body) = do
+  old <-
+    #namespaces . at name
+      <<?= Attributed
+        { entry = desugarNamespace body
+        , attributes = atts
+        }
+  when (isJust old) $ throw $ MixinAlreadyDefined name
 
 registerMixin :: Identifier -> V.Vector ExtendedAttribute -> AST.Mixin -> Desugarer ()
 registerMixin name atts (AST.Mixin body) = do
@@ -182,6 +212,14 @@ desugarMixin =
     stringifiers <- L.handles (attributedL #_MixinStringifier) dlistL
     attributes <- L.handles (attributedL #_MixinAttribute) dlistL
     pure Mixin {..}
+
+desugarNamespace :: V.Vector (Attributed AST.NamespaceMember) -> Namespace
+desugarNamespace =
+  L.fold do
+    constants <- L.handles (attributedL #_NamespaceConst) dlistL
+    operations <- L.handles (attributedL #_NamespaceOp) dlistL
+    readOnlyAttributes <- L.handles (attributedL #_NamespaceReadOnly) dlistL
+    pure Namespace {..}
 
 attributedL :: Lens.Fold a b -> Lens.Fold (Attributed a) (Attributed b)
 attributedL orig = Lens.runFold do

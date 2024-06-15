@@ -4,7 +4,9 @@
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE OverloadedRecordDot #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE NoFieldSelectors #-}
+{-# OPTIONS_GHC -Wno-ambiguous-fields #-}
 
 module Language.WebIDL.Desugar.Types (
   Definitions (..),
@@ -29,6 +31,7 @@ module Language.WebIDL.Desugar.Types (
   Iterable (..),
   Access (..),
   AsyncIterable (..),
+  mixinToInterface,
   Enumeration (..),
   Dictionary (..),
   CallbackFunction (..),
@@ -72,6 +75,10 @@ data Interface = Interface
   deriving (Semigroup, Monoid) via Generically Interface
 
 data Namespace = Namespace
+  { operations :: !(DList (Attributed RegularOperation))
+  , readOnlyAttributes :: !(DList (Attributed Attribute))
+  , constants :: !(DList (Attributed Const))
+  }
   deriving (Show, Eq, Generic)
   deriving (Semigroup, Monoid) via Generically Namespace
 
@@ -123,6 +130,7 @@ data DesugarError
   | MixinAlreadyDefined !Identifier
   | NoCompleteEntityFound !IDLFragment
   | CyclicInheritance !(NonEmpty Text)
+  | MixinNotFound !Identifier
   deriving (Show, Eq, Generic)
   deriving anyclass (Exception)
 
@@ -135,3 +143,12 @@ runDesugarer = flip execStateT mempty . (.unDesugarer)
 
 throw :: DesugarError -> Desugarer a
 throw = Desugarer . lift . Left
+
+mixinToInterface :: Mixin -> Interface
+mixinToInterface Mixin {..} =
+  mempty
+    { constants
+    , operations = fmap (fmap $ Operation Nothing) operations
+    , stringifiers
+    , attributes
+    }
