@@ -3,6 +3,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedRecordDot #-}
@@ -11,18 +12,17 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE NoFieldSelectors #-}
 
 module Language.WebIDL.CodeGen.GHC.Wasm where
 
 import Barbies
-import Control.Arrow ((>>>))
 import Control.Exception.Safe (throwM)
 import Control.Lens (iforM_)
-import Control.Monad (forM_)
-import Control.Monad.Trans.Class (lift)
 import Data.Aeson (FromJSON, ToJSON)
-import Data.Functor.Identity (Identity (..))
-import Data.List (intercalate)
+import Data.Foldable1 (intercalate1)
+import Data.List.NonEmpty (NonEmpty)
+import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (fromJust, maybeToList)
@@ -42,7 +42,6 @@ import GHC.Generics (Generic)
 import GHC.Types.SrcLoc
 import Language.Haskell.Parser.Ex.Helper
 import Language.WebIDL.AST.Types (IDLFragment)
-import Language.WebIDL.Desugar (desugar)
 import Language.WebIDL.Desugar hiding (throw)
 import NeatInterpolation (trimming)
 import Path
@@ -106,7 +105,7 @@ execFileTreePure :: Eff (FileTree ': es) a -> Eff es (Map (Path Rel File) String
 execFileTreePure = fmap snd . runFileTreePure
 
 generateWasmBinding ::
-  (Foldable t, FileTree :> es, Reader GHCWasmOptions :> es) =>
+  (Foldable t, FileTree :> es, Reader CodeGenEnv :> es) =>
   t IDLFragment ->
   Eff es ()
 generateWasmBinding inputs = do
@@ -128,29 +127,47 @@ withModuleNamed name imports decls =
     , hsmodDecls = decls
     }
 
+newtype CodeGenEnv = CodeGenEnv {modulePrefix :: Maybe T.Text}
+  deriving (Generic)
+
+toTypeName :: Identifier -> T.Text
+toTypeName = id
+
+toPrototypeName :: Identifier -> T.Text
+toPrototypeName = (<> "Class")
+
+withModulePrefix :: (Reader CodeGenEnv :> es) => NonEmpty T.Text -> Eff es T.Text
+withModulePrefix names = do
+  CodeGenEnv {modulePrefix} <- EffR.ask @CodeGenEnv
+  pure $ maybe id (\p -> ((p <> ".") <>)) modulePrefix $ intercalate1 "." names
+
+toMainModuleName :: (Reader CodeGenEnv :> es) => Identifier -> Eff es T.Text
+toMainModuleName name = withModulePrefix $ NE.singleton name
+
+toCoreModuleName :: (Reader CodeGenEnv :> es) => Identifier -> Eff es T.Text
+toCoreModuleName names = withModulePrefix $ names NE.:| ["Core"]
+
 generateCoreClasses ::
-  (FileTree :> es, Reader GHCWasmOptions :> es) =>
+  ( FileTree :> es
+  , Reader CodeGenEnv :> es
+  ) =>
   Definitions ->
   Eff es ()
 generateCoreClasses defns = do
-  GHCWasmOptions {..} <- EffR.ask @GHCWasmOptions
-  let toModuleName =
-        maybe id (\p -> ((p <> ".") <>)) modulePrefix
-          . T.intercalate "."
   iforM_ defns.interfaces \name Attributed {entry = ifs} -> do
+    headModule <- toCoreModuleName name
+    parentMod <- mapM toCoreModuleName $ getFirst ifs.parent
     let dest = fromJust (parseRelDir $ T.unpack name) </> [relfile|Core.hs|]
-        headModule = toModuleName [name]
-        imps =
-          "GHC.Wasm.Object.Core"
-            : [ toModuleName [p, "Core"]
-              | p <- maybeToList $ getFirst ifs.parent
-              ]
+        imps = "GHC.Wasm.Object.Core" : maybeToList parentMod
+        proto = toPrototypeName name
         protoDef =
-          [trimming|type data ${name}Name :: Prototype|]
-        aliasDef = [trimming|type ${name} = JSObject ${name}Class|]
+          [trimming|type data ${proto} :: Prototype|]
+        aliasDef = [trimming|type ${name} = JSObject ${proto}|]
         superDef = case getFirst ifs.parent of
-          Just p -> [trimming|type instance SuperclassOf ${name}Name = 'Just ${p}Class|]
-          Nothing -> [trimming|type instance SuperclassOf ${name}Name = 'Nothing|]
+          Just p ->
+            let super = toPrototypeName p
+             in [trimming|type instance SuperclassOf ${proto} = 'Just ${super}|]
+          Nothing -> [trimming|type instance SuperclassOf ${proto} = 'Nothing|]
         decs =
           map
             (either error id . parseDec . T.unpack)
