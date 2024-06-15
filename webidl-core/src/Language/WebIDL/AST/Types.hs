@@ -310,16 +310,15 @@ data IDLType
 newtype UnionType = MkUnionType (NonEmpty (WithNullarity (Either (Attributed DistinguishableType) UnionType)))
   deriving (Show, Eq, Ord, Generic)
 
-newtype ArgumentList = ArgumentList (V.Vector (Attributed Argument))
+data ArgumentList = ArgumentList
+  { args :: !(V.Vector (Attributed Argument))
+  , ellipsis :: !(Maybe (Attributed (IDLType, ArgumentName)))
+  }
   deriving (Show, Eq, Ord, Generic)
 
 data Argument
   = OptionalArg !(Attributed IDLType) !ArgumentName !(Maybe DefaultValue)
-  | RequiredArg
-      !IDLType
-      -- | 'True' if ellipsis (@...@) is given
-      !Bool
-      !ArgumentName
+  | RequiredArg !IDLType !ArgumentName
   deriving (Show, Eq, Ord, Generic)
 
 data ArgNameKeyword

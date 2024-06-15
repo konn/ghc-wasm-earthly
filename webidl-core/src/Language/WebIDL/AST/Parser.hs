@@ -10,7 +10,9 @@ module Language.WebIDL.AST.Parser (
 
 import Control.Applicative hiding (Const)
 import Control.Applicative.Combinators.NonEmpty qualified as PNE
+import Control.Monad (unless)
 import Data.Char qualified as C
+import Data.Functor (void)
 import Data.Functor.Identity
 import Data.HashSet qualified as HS
 import Data.Scientific
@@ -452,7 +454,18 @@ inheritanceP =
     SPartial -> NoInheritance <$ P.notFollowedBy (colon *> anyIdentifier)
 
 argumentListP :: Parser ArgumentList
-argumentListP = ArgumentList . V.fromList <$> attributedP argumentP `P.sepBy` comma
+argumentListP = do
+  args <-
+    V.fromList
+      <$> P.try (attributedP argumentP) `P.sepEndBy` comma
+  ellipsis <-
+    P.optional $
+      attributedP $
+        (,)
+          <$> idlTypeP
+          <* symbol "..."
+          <*> argNameP
+  pure ArgumentList {..}
 
 argumentP :: P.ParsecT Void T.Text Identity Argument
 argumentP =
@@ -463,7 +476,7 @@ argumentP =
     <*> P.optional (symbol "=" *> defaultValueP)
     <|> RequiredArg
       <$> idlTypeP
-      <*> P.option False (True <$ symbol "...")
+      <* P.notFollowedBy (symbol "...")
       <*> argNameP
 
 argNameP :: P.ParsecT Void T.Text Identity ArgumentName
