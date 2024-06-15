@@ -10,7 +10,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE NoFieldSelectors #-}
 
-module Language.WebIDL.Desugar (desugar) where
+module Language.WebIDL.Desugar (desugar, module Language.WebIDL.Desugar.Types) where
 
 import Algebra.Graph.AdjacencyMap qualified as AM
 import Algebra.Graph.AdjacencyMap.Algorithm qualified as AM

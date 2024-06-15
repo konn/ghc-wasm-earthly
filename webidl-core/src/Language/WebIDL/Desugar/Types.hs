@@ -181,13 +181,13 @@ data Typedef = Typedef
   deriving (Semigroup, Monoid) via Generically Typedef
 
 newtype Enumeration = Enumeration (NonEmpty Text)
-  deriving (Show, Eq, Generic)
+  deriving (Show, Eq, Ord, Generic)
 
 data Dictionary = Dictionary
   { requiredMembers :: !(Map Identifier (Attributed IDLType))
   , optionalMembers :: !(Map Identifier (Attributed (IDLType, Maybe DefaultValue)))
   }
-  deriving (Show, Eq, Generic)
+  deriving (Show, Eq, Ord, Generic)
   deriving (Semigroup, Monoid) via Generically Dictionary
 
 data Definitions' p = Definitions
@@ -204,6 +204,24 @@ data Definitions' p = Definitions
   }
   deriving (Generic)
   deriving anyclass (FunctorB)
+
+deriving instance
+  ( AllBF Show h Mixin'
+  , AllBF Show h Interface'
+  ) =>
+  Show (Definitions' h)
+
+deriving instance
+  ( AllBF Eq h Mixin'
+  , AllBF Eq h Interface'
+  ) =>
+  Eq (Definitions' h)
+
+deriving instance
+  ( AllBF Ord h Mixin'
+  , AllBF Ord h Interface'
+  ) =>
+  Ord (Definitions' h)
 
 deriving via Generically (Definitions' DList) instance Semigroup (Definitions' DList)
 
