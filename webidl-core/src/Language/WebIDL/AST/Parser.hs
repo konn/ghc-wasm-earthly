@@ -10,9 +10,7 @@ module Language.WebIDL.AST.Parser (
 
 import Control.Applicative hiding (Const)
 import Control.Applicative.Combinators.NonEmpty qualified as PNE
-import Control.Monad (unless)
 import Data.Char qualified as C
-import Data.Functor (void)
 import Data.Functor.Identity
 import Data.HashSet qualified as HS
 import Data.Scientific
@@ -124,7 +122,7 @@ definitionP =
     <|> uncurry TypedefD <$> typedefD
     <|> uncurry IncludesStatementD <$> includesStatementP
 
-partialP :: P.ParsecT Void T.Text Identity Definition
+partialP :: Parser Definition
 partialP =
   reserved "partial"
     *> ( reserved "interface"
@@ -294,13 +292,13 @@ memberP =
     <|> flip IfSetlike <$> setlikeP
     <|> flip IfAttribute <$> attributeP
 
-maplikeP :: P.ParsecT Void T.Text Identity Maplike
+maplikeP :: Parser Maplike
 maplikeP =
   reserved "maplike"
     *> angles (Maplike <$> attributedP idlTypeP <* comma <*> attributedP idlTypeP)
     <* semi
 
-setlikeP :: P.ParsecT Void T.Text Identity Setlike
+setlikeP :: Parser Setlike
 setlikeP =
   Setlike
     <$ reserved "setlike"
@@ -341,7 +339,7 @@ operationP :: Parser Operation
 operationP =
   Operation <$> P.optional specialP <*> regularOperationP
 
-specialP :: P.ParsecT Void T.Text Identity Special
+specialP :: Parser Special
 specialP =
   Getter <$ reserved "getter"
     <|> Setter <$ reserved "setter"
@@ -425,7 +423,7 @@ primTypeP =
     <|> Octet <$ reserved "octet"
     <|> Bigint <$ reserved "bigint"
 
-floatTypeP :: P.ParsecT Void T.Text Identity PrimType
+floatTypeP :: Parser PrimType
 floatTypeP =
   P.option Restricted (Unrestricted <$ reserved "unrestricted")
     <**> ( Float <$ reserved "float"
@@ -455,36 +453,45 @@ inheritanceP =
 
 argumentListP :: Parser ArgumentList
 argumentListP = do
-  args <-
+  requiredArgs <-
     V.fromList
       <$> P.try (attributedP argumentP) `P.sepEndBy` comma
-  ellipsis <-
-    P.optional $
-      attributedP $
-        (,)
-          <$> idlTypeP
-          <* symbol "..."
-          <*> argNameP
+  optionalArgs <-
+    V.fromList
+      <$> P.try (attributedP optionalArgumentP) `P.sepEndBy` comma
+  ellipsis <- P.optional $ attributedP ellipsisP
   pure ArgumentList {..}
 
-argumentP :: P.ParsecT Void T.Text Identity Argument
-argumentP =
-  OptionalArg
+optionalArgumentP :: Parser OptionalArgument
+optionalArgumentP =
+  OptionalArgument
     <$ reserved "optional"
     <*> attributedP idlTypeP
     <*> argNameP
     <*> P.optional (symbol "=" *> defaultValueP)
-    <|> RequiredArg
-      <$> idlTypeP
-      <* P.notFollowedBy (symbol "...")
-      <*> argNameP
 
-argNameP :: P.ParsecT Void T.Text Identity ArgumentName
+argumentP :: Parser Argument
+argumentP =
+  Argument
+    <$ P.notFollowedBy (reserved "optional")
+    <*> idlTypeP
+    <* P.notFollowedBy (symbol "...")
+    <*> argNameP
+
+ellipsisP :: Parser Ellipsis
+ellipsisP =
+  Ellipsis
+    <$ P.notFollowedBy (reserved "optional")
+    <*> idlTypeP
+    <* symbol "..."
+    <*> argNameP
+
+argNameP :: Parser ArgumentName
 argNameP =
   ArgKeyword <$> argKeywordP
     <|> ArgIdent <$> anyIdentifier
 
-argKeywordP :: P.ParsecT Void T.Text Identity ArgNameKeyword
+argKeywordP :: Parser ArgNameKeyword
 argKeywordP =
   ArgAsync <$ reserved "async"
     <|> ArgAttribute <$ reserved "attribute"
@@ -558,7 +565,7 @@ distTypeP =
         )
     <|> DUndefined <$ reserved "undefined"
 
-bufferTypeP :: P.ParsecT Void T.Text Identity BufferType
+bufferTypeP :: Parser BufferType
 bufferTypeP =
   ArrayBuffer <$ reserved "ArrayBuffer"
     <|> SharedArrayBuffer <$ reserved "SharedArrayBuffer"
@@ -575,7 +582,7 @@ bufferTypeP =
     <|> Float32Array <$ reserved "Float32Array"
     <|> Float64Array <$ reserved "Float64Array"
 
-stringTypeP :: P.ParsecT Void T.Text Identity StringType
+stringTypeP :: Parser StringType
 stringTypeP =
   ByteString <$ reserved "ByteString"
     <|> DOMString <$ reserved "DOMString"
@@ -587,7 +594,7 @@ extendedAttributeListP =
     brackets $
       V.fromList <$> extendedAttributeP `P.sepBy1` comma
 
-extendedAttributeP :: P.ParsecT Void T.Text Identity ExtendedAttribute
+extendedAttributeP :: Parser ExtendedAttribute
 extendedAttributeP = do
   lhs <- anyIdentifier
   P.option (ExtendedAttributeNoArgs lhs) $

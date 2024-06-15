@@ -47,7 +47,9 @@ module Language.WebIDL.AST.Types (
   OperationName (..),
   ArgumentList (..),
   Argument (..),
+  OptionalArgument (..),
   ArgumentName (..),
+  Ellipsis (..),
   Const (..),
   ConstType (..),
   ConstValue (..),
@@ -311,14 +313,20 @@ newtype UnionType = MkUnionType (NonEmpty (WithNullarity (Either (Attributed Dis
   deriving (Show, Eq, Ord, Generic)
 
 data ArgumentList = ArgumentList
-  { args :: !(V.Vector (Attributed Argument))
-  , ellipsis :: !(Maybe (Attributed (IDLType, ArgumentName)))
+  { requiredArgs :: !(V.Vector (Attributed Argument))
+  , optionalArgs :: !(V.Vector (Attributed OptionalArgument))
+  , ellipsis :: !(Maybe (Attributed Ellipsis))
   }
   deriving (Show, Eq, Ord, Generic)
 
-data Argument
-  = OptionalArg !(Attributed IDLType) !ArgumentName !(Maybe DefaultValue)
-  | RequiredArg !IDLType !ArgumentName
+data OptionalArgument
+  = OptionalArgument !(Attributed IDLType) !ArgumentName !(Maybe DefaultValue)
+  deriving (Show, Eq, Ord, Generic)
+
+data Argument = Argument !IDLType !ArgumentName
+  deriving (Show, Eq, Ord, Generic)
+
+data Ellipsis = Ellipsis !IDLType !ArgumentName
   deriving (Show, Eq, Ord, Generic)
 
 data ArgNameKeyword
