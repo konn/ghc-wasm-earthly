@@ -20,7 +20,10 @@
 
 module Language.WebIDL.CodeGen.GHC.Wasm (
   generateWasmBinding,
+  generateWasmBindingPure,
   generateWasmBindingWith,
+  runFileTreePure,
+  execFileTreePure,
 ) where
 
 import Control.Arrow ((>>>))
@@ -65,7 +68,7 @@ import GHC.Types.Name.Reader (RdrName (..))
 import GHC.Types.SrcLoc
 import Language.Haskell.Parser.Ex.Helper
 import Language.WebIDL.AST.Parser (parseIDLFragment)
-import Language.WebIDL.AST.Types (Attribute (..), AttributeName (..), BufferType (..), DistinguishableType (..), PrimType (..), Sign (..), StringType (..), UnionType (..), WithNullarity (..))
+import Language.WebIDL.AST.Types (Attribute (..), AttributeName (..), BufferType (..), DistinguishableType (..), IDLFragment, PrimType (..), Sign (..), StringType (..), UnionType (..), WithNullarity (..))
 import Language.WebIDL.Desugar hiding (throw)
 import NeatInterpolation (trimming)
 import Path
@@ -126,10 +129,23 @@ generateWasmBindingWith opts = do
       =<< listWebIDLs opts'
   !definitions <- either throwIO pure $ desugar idls
   let !unknownTypes = fromMaybe mempty $ getUnknownIdentifiers definitions
-  runFileTreeIOIn opts'.outputDir
-    $ runReader
+  runFileTreeIOIn opts'.outputDir $
+    runReader
       CodeGenEnv {modulePrefix = opts.modulePrefix, ..}
-    $ generateWasmBinding
+      generateWasmBinding
+
+generateWasmBindingPure ::
+  (Foldable t, FileSystem :> es) =>
+  Maybe Text ->
+  t IDLFragment ->
+  Eff es (Map (Path Rel File) String)
+generateWasmBindingPure modulePrefix idls = do
+  !definitions <- either throwIO pure $ desugar idls
+  let !unknownTypes = fromMaybe mempty $ getUnknownIdentifiers definitions
+  execFileTreePure $
+    runReader
+      CodeGenEnv {modulePrefix = modulePrefix, ..}
+      generateWasmBinding
 
 generateWasmBinding ::
   (FileTree :> es, Reader CodeGenEnv :> es) =>
