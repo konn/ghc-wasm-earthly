@@ -318,7 +318,6 @@ generateInterfaceMainModule (normaliseTypeName -> name) Attributed {entry = ifs}
 
     -- FIXME: Implement this
     genConstants = pure ()
-    -- FIXME: Implement this
     genOperations = do
       V.forM_ ifs.operations \Attributed {entry = op@(Operation msp reg)} -> do
         skipIfContainsUnknown op do
@@ -340,6 +339,7 @@ generateInterfaceMainModule (normaliseTypeName -> name) Attributed {entry = ifs}
                   , decs = DL.singleton ffiDec
                   }
             _ -> pure ()
+    -- FIXME: Implement this
     genStringifiers = pure ()
     genAttributes = do
       let atts = ifs.attributes <> V.map (fmap (ReadWrite,)) ifs.inheritedAttributes
@@ -605,8 +605,7 @@ instance ToHaskellType PrimType where
     Boolean {} -> tyConOrVar "Bool"
     Byte {} -> tyConOrVar "Int8"
     Octet {} -> tyConOrVar "Word8"
-    -- FIXME: implement below in ghc-wasm-jsobjects
-    Bigint {} -> tyConOrVar "Bigint"
+    Bigint {} -> tyConOrVar "BigInt"
   toHaskellPrototype =
     \case
       Short Signed -> primCls `appTy` tyConOrVar "Int16"
@@ -622,8 +621,7 @@ instance ToHaskellType PrimType where
       Boolean {} -> primCls `appTy` tyConOrVar "Bool"
       Byte {} -> primCls `appTy` tyConOrVar "Int8"
       Octet {} -> primCls `appTy` tyConOrVar "Word8"
-      -- FIXME: implement below in ghc-wasm-jsobjects
-      Bigint {} -> tyConOrVar "BigintClass"
+      Bigint {} -> tyConOrVar "BigIntClass"
 
 instance ToHaskellType BufferType where
   isAsyncJSType = const False

@@ -45,6 +45,7 @@ library
   -- cabal-gild: discover src
   exposed-modules:
     GHC.Wasm.Object.Builtins
+    GHC.Wasm.Object.Builtins.BigInt
     GHC.Wasm.Object.Builtins.String
     GHC.Wasm.Object.Core
 
