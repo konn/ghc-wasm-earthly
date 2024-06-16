@@ -11,13 +11,15 @@ module GHC.Wasm.Object.Builtins (
   Promise,
   upcastPromise,
   await,
+  module GHC.Wasm.Object.Builtins.BigInt,
+  module GHC.Wasm.Object.Builtins.Buffer,
   module GHC.Wasm.Object.Builtins.String,
   module GHC.Wasm.Object.Builtins.Sequence,
-  module GHC.Wasm.Object.Builtins.BigInt,
 ) where
 
 import GHC.Exts (UnliftedType)
 import GHC.Wasm.Object.Builtins.BigInt
+import GHC.Wasm.Object.Builtins.Buffer
 import GHC.Wasm.Object.Builtins.Sequence
 import GHC.Wasm.Object.Builtins.String
 import GHC.Wasm.Object.Core

@@ -629,39 +629,38 @@ instance ToHaskellType BufferType where
     -- FIXME: implement below in ghc-wasm-jsobjects
     ArrayBuffer -> tyConOrVar "ArrayBuffer"
     DataView -> tyConOrVar "DataView"
-    Int8Array -> tyConOrVar "Ptr" `appTy` tyConOrVar "Int8"
-    Uint8Array -> tyConOrVar "Ptr" `appTy` tyConOrVar "Word8"
+    Int8Array -> tyConOrVar "JSByteArray" `appTy` tyConOrVar "Int8"
+    Uint8Array -> tyConOrVar "JSByteArray" `appTy` tyConOrVar "Word8"
     -- FIXME: Is this correct?
-    Uint8ClampedArray -> tyConOrVar "Ptr" `appTy` tyConOrVar "Word8"
-    Int16Array -> tyConOrVar "Ptr" `appTy` tyConOrVar "Int16"
-    Uint16Array -> tyConOrVar "Ptr" `appTy` tyConOrVar "Word16"
-    Int32Array -> tyConOrVar "Ptr" `appTy` tyConOrVar "Int32"
-    Uint32Array -> tyConOrVar "Ptr" `appTy` tyConOrVar "Word32"
-    Float32Array -> tyConOrVar "Ptr" `appTy` tyConOrVar "Float"
-    Float64Array -> tyConOrVar "Ptr" `appTy` tyConOrVar "Double"
+    Uint8ClampedArray -> tyConOrVar "JSByteArray" `appTy` tyConOrVar "Word8"
+    Int16Array -> tyConOrVar "JSByteArray" `appTy` tyConOrVar "Int16"
+    Uint16Array -> tyConOrVar "JSByteArray" `appTy` tyConOrVar "Word16"
+    Int32Array -> tyConOrVar "JSByteArray" `appTy` tyConOrVar "Int32"
+    Uint32Array -> tyConOrVar "JSByteArray" `appTy` tyConOrVar "Word32"
+    Float32Array -> tyConOrVar "JSByteArray" `appTy` tyConOrVar "Float"
+    Float64Array -> tyConOrVar "JSByteArray" `appTy` tyConOrVar "Double"
     -- FIXME: implement below in ghc-wasm-jsobjects
     SharedArrayBuffer -> tyConOrVar "SharedArrayBuffer"
-    BigInt64Array -> tyConOrVar "Ptr" `appTy` tyConOrVar "Int64"
-    BigUint64Array -> tyConOrVar "Ptr" `appTy` tyConOrVar "Word64"
+    BigInt64Array -> tyConOrVar "JSByteArray" `appTy` tyConOrVar "Int64"
+    BigUint64Array -> tyConOrVar "JSByteArray" `appTy` tyConOrVar "Word64"
   toHaskellPrototype = \case
     -- FIXME: implement below in ghc-wasm-jsobjects
     ArrayBuffer -> tyConOrVar "ArrayBufferClass"
     -- FIXME: implement below in ghc-wasm-jsobjects
     DataView -> tyConOrVar "DataViewClass"
-    Int8Array -> primCls `appTy` (tyConOrVar "Ptr" `appTy` tyConOrVar "Int8")
-    Uint8Array -> primCls `appTy` (tyConOrVar "Ptr" `appTy` tyConOrVar "Word8")
+    Int8Array -> tyConOrVar "JSByteArrayClass" `appTy` tyConOrVar "Int8"
+    Uint8Array -> tyConOrVar "JSByteArrayClass" `appTy` tyConOrVar "Word8"
     -- FIXME: Is this correct?
-    Uint8ClampedArray -> primCls `appTy` (tyConOrVar "Ptr" `appTy` tyConOrVar "Word8")
-    Int16Array -> primCls `appTy` (tyConOrVar "Ptr" `appTy` tyConOrVar "Int16")
-    Uint16Array -> primCls `appTy` (tyConOrVar "Ptr" `appTy` tyConOrVar "Word16")
-    Int32Array -> primCls `appTy` (tyConOrVar "Ptr" `appTy` tyConOrVar "Int32")
-    Uint32Array -> primCls `appTy` (tyConOrVar "Ptr" `appTy` tyConOrVar "Word32")
-    Float32Array -> primCls `appTy` (tyConOrVar "Ptr" `appTy` tyConOrVar "Float")
-    Float64Array -> primCls `appTy` (tyConOrVar "Ptr" `appTy` tyConOrVar "Double")
-    -- FIXME: implement below in ghc-wasm-jsobjects
+    Uint8ClampedArray -> tyConOrVar "JSByteArrayClass" `appTy` tyConOrVar "Word8"
+    Int16Array -> tyConOrVar "JSByteArrayClass" `appTy` tyConOrVar "Int16"
+    Uint16Array -> tyConOrVar "JSByteArrayClass" `appTy` tyConOrVar "Word16"
+    Int32Array -> tyConOrVar "JSByteArrayClass" `appTy` tyConOrVar "Int32"
+    Uint32Array -> tyConOrVar "JSByteArrayClass" `appTy` tyConOrVar "Word32"
+    Float32Array -> tyConOrVar "JSByteArrayClass" `appTy` tyConOrVar "Float"
+    Float64Array -> tyConOrVar "JSByteArrayClass" `appTy` tyConOrVar "Double"
     SharedArrayBuffer -> tyConOrVar "SharedArrayBufferClass"
-    BigInt64Array -> primCls `appTy` (tyConOrVar "Ptr" `appTy` tyConOrVar "Int64")
-    BigUint64Array -> primCls `appTy` (tyConOrVar "Ptr" `appTy` tyConOrVar "Word64")
+    BigInt64Array -> tyConOrVar "JSByteArrayClass" `appTy` tyConOrVar "Int64"
+    BigUint64Array -> tyConOrVar "JSByteArrayClass" `appTy` tyConOrVar "Word64"
 
 instance ToHaskellType DistinguishableType where
   isAsyncJSType = \case

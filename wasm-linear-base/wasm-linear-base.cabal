@@ -54,6 +54,7 @@ library
   exposed-modules:
     Wasm.Control.Functor.Linear
     Wasm.Data.Array.Destination
+    Wasm.Data.Array.Destination.Generic
     Wasm.Data.Array.Destination.JSVal
     Wasm.Data.Function.Linear
     Wasm.Data.Functor.Linear
