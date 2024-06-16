@@ -59,13 +59,17 @@ module GHC.Wasm.Object.Core (
   HasJSRep (..),
   JSPrimClass,
   JSPrim,
+  JSPrimitive (..),
 ) where
 
 import Data.Coerce (coerce)
+import Data.Int
 import Data.Kind (Constraint)
 import Data.Proxy (Proxy (..))
 import Data.Type.Bool (If, type (&&), type (||))
 import Data.Void (absurd)
+import Data.Word
+import Foreign (Storable)
 import GHC.Base (Type)
 import GHC.Exts (UnliftedType)
 import GHC.OverloadedLabels (IsLabel (..))
@@ -255,3 +259,127 @@ type JSPrimClass :: Type -> Prototype
 type data JSPrimClass a :: Prototype
 
 type JSPrim a = JSObject (JSPrimClass a)
+
+class (Storable a) => JSPrimitive a where
+  toJSPrim :: a -> JSPrim a
+  fromJSPrim :: JSPrim a -> a
+
+foreign import javascript unsafe "$1"
+  toJSPrim_Int8 :: Int8 -> JSPrim Int8
+
+foreign import javascript unsafe "$1"
+  fromJSPrim_Int8 :: JSPrim Int8 -> Int8
+
+instance JSPrimitive Int8 where
+  toJSPrim = toJSPrim_Int8
+  fromJSPrim = fromJSPrim_Int8
+
+foreign import javascript unsafe "$1"
+  toJSPrim_Int16 :: Int16 -> JSPrim Int16
+
+foreign import javascript unsafe "$1"
+  fromJSPrim_Int16 :: JSPrim Int16 -> Int16
+
+instance JSPrimitive Int16 where
+  toJSPrim = toJSPrim_Int16
+  fromJSPrim = fromJSPrim_Int16
+
+foreign import javascript unsafe "$1"
+  toJSPrim_Int32 :: Int32 -> JSPrim Int32
+
+foreign import javascript unsafe "$1"
+  fromJSPrim_Int32 :: JSPrim Int32 -> Int32
+
+instance JSPrimitive Int32 where
+  toJSPrim = toJSPrim_Int32
+  fromJSPrim = fromJSPrim_Int32
+
+foreign import javascript unsafe "$1"
+  toJSPrim_Int64 :: Int64 -> JSPrim Int64
+
+foreign import javascript unsafe "$1"
+  fromJSPrim_Int64 :: JSPrim Int64 -> Int64
+
+instance JSPrimitive Int64 where
+  toJSPrim = toJSPrim_Int64
+  fromJSPrim = fromJSPrim_Int64
+
+foreign import javascript unsafe "$1"
+  toJSPrim_Int :: Int -> JSPrim Int
+
+foreign import javascript unsafe "$1"
+  fromJSPrim_Int :: JSPrim Int -> Int
+
+instance JSPrimitive Int where
+  toJSPrim = toJSPrim_Int
+  fromJSPrim = fromJSPrim_Int
+
+foreign import javascript unsafe "$1"
+  toJSPrim_Word8 :: Word8 -> JSPrim Word8
+
+foreign import javascript unsafe "$1"
+  fromJSPrim_Word8 :: JSPrim Word8 -> Word8
+
+instance JSPrimitive Word8 where
+  toJSPrim = toJSPrim_Word8
+  fromJSPrim = fromJSPrim_Word8
+
+foreign import javascript unsafe "$1"
+  toJSPrim_Word16 :: Word16 -> JSPrim Word16
+
+foreign import javascript unsafe "$1"
+  fromJSPrim_Word16 :: JSPrim Word16 -> Word16
+
+instance JSPrimitive Word16 where
+  toJSPrim = toJSPrim_Word16
+  fromJSPrim = fromJSPrim_Word16
+
+foreign import javascript unsafe "$1"
+  toJSPrim_Word32 :: Word32 -> JSPrim Word32
+
+foreign import javascript unsafe "$1"
+  fromJSPrim_Word32 :: JSPrim Word32 -> Word32
+
+instance JSPrimitive Word32 where
+  toJSPrim = toJSPrim_Word32
+  fromJSPrim = fromJSPrim_Word32
+
+foreign import javascript unsafe "$1"
+  toJSPrim_Word64 :: Word64 -> JSPrim Word64
+
+foreign import javascript unsafe "$1"
+  fromJSPrim_Word64 :: JSPrim Word64 -> Word64
+
+instance JSPrimitive Word64 where
+  toJSPrim = toJSPrim_Word64
+  fromJSPrim = fromJSPrim_Word64
+
+foreign import javascript unsafe "$1"
+  toJSPrim_Word :: Word -> JSPrim Word
+
+foreign import javascript unsafe "$1"
+  fromJSPrim_Word :: JSPrim Word -> Word
+
+instance JSPrimitive Word where
+  toJSPrim = toJSPrim_Word
+  fromJSPrim = fromJSPrim_Word
+
+foreign import javascript unsafe "$1"
+  toJSPrim_Double :: Double -> JSPrim Double
+
+foreign import javascript unsafe "$1"
+  fromJSPrim_Double :: JSPrim Double -> Double
+
+instance JSPrimitive Double where
+  toJSPrim = toJSPrim_Double
+  fromJSPrim = fromJSPrim_Double
+
+foreign import javascript unsafe "$1"
+  toJSPrim_Float :: Float -> JSPrim Float
+
+foreign import javascript unsafe "$1"
+  fromJSPrim_Float :: JSPrim Float -> Float
+
+instance JSPrimitive Float where
+  toJSPrim = toJSPrim_Float
+  fromJSPrim = fromJSPrim_Float
