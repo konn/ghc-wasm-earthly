@@ -34,6 +34,7 @@ import qualified Data.ByteString.Internal as BS
 import qualified Data.ByteString.Unsafe as BS
 import Data.Coerce (coerce)
 import Foreign
+import Foreign.C (CChar)
 import GHC.Exts (UnliftedType)
 import GHC.Wasm.Object.Core
 import GHC.Wasm.Prim
@@ -42,6 +43,12 @@ import GHC.Wasm.Prim
 type data DOMStringClass :: UnliftedType
 
 type instance SuperclassOf DOMStringClass = 'Nothing
+
+fromDOMString :: JSObject DOMStringClass -> JSString
+fromDOMString = coerce . unJSObject
+
+-- | A WebIDL @DOMString@ value, which corresponds to a JavaScript string.
+type DOMString = JSObject DOMStringClass
 
 foreign import javascript safe "if ($1 === null) { return \"\"; } else { return $1; }"
   js_null_to_empty :: JSString -> JSString
@@ -53,12 +60,6 @@ toDOMString ::
   DOMString
 toDOMString False = unsafeAsObject . coerce
 toDOMString True = unsafeAsObject . coerce . js_null_to_empty
-
-fromDOMString :: JSObject DOMStringClass -> JSString
-fromDOMString = coerce . unJSObject
-
--- | A WebIDL @DOMString@ value, which corresponds to a JavaScript string.
-type DOMString = JSObject DOMStringClass
 
 -- | A WebIDL @ByteString@ class, which corresponds to a JavaScript byte sequence as a string.
 type data ByteStringClass :: UnliftedType
@@ -92,7 +93,7 @@ toHaskellByteString jsbs = do
   BS.createUptoN lenMax \buf -> js_encodeInto jsstr buf lenMax
 
 foreign import javascript unsafe "(new TextDecoder('utf-8', {fatal: true})).decode(new Uint8Array(__exports.memory.buffer, $1, $2))"
-  js_toJSString :: Ptr a -> Int -> IO JSByteString
+  js_toJSString :: Ptr CChar -> Int -> IO JSByteString
 
 fromHaskellByteString :: BS.ByteString -> IO JSByteString
 fromHaskellByteString bs =

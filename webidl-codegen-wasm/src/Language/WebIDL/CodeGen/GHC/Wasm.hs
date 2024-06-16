@@ -724,12 +724,12 @@ instance ToHaskellType IDLType where
   toHaskellPrototype = \case
     Distinguishable dt -> toHaskellPrototype dt
     AnyType -> tyConOrVar "AnyClass"
-    PromiseType p -> tyConOrVar "PromiseClass" `appTy` toHaskellPrototype p
+    PromiseType p -> tyConOrVar "PromiseClass" `appTy` toHaskellType p
     UnionType u -> toHaskellPrototype u
   toHaskellType = \case
     Distinguishable dt -> toHaskellType dt
     AnyType -> tyConOrVar "JSAny"
-    PromiseType p -> tyConOrVar "Promise" `appTy` toHaskellPrototype p
+    PromiseType p -> tyConOrVar "Promise" `appTy` toHaskellType p
     UnionType u -> toHaskellType u
 
 primCls :: HsType GhcPs

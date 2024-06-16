@@ -45,6 +45,7 @@ library
   build-depends:
     bytestring,
     containers,
+    ghc-wasm-jsobjects,
     microaeson,
     microaeson-generics,
     streaming,

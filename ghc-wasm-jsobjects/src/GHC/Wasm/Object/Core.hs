@@ -13,8 +13,10 @@
 {-# OPTIONS_GHC -Wno-redundant-constraints #-}
 
 module GHC.Wasm.Object.Core (
+  Prototype,
+
   -- * Basic Objects and its hierarchy
-  JSObject,
+  JSObject (..),
   upcast,
   unsafeCast,
   unJSObject,
@@ -55,7 +57,6 @@ module GHC.Wasm.Object.Core (
   KnownEnum (),
   FromJSVal (..),
   HasJSRep (..),
-  Prototype,
   JSPrimClass,
   JSPrim,
 ) where
@@ -73,6 +74,8 @@ import GHC.TypeLits (KnownSymbol, Symbol, symbolVal)
 import GHC.Wasm.Prim (JSString (..), JSVal, fromJSString, toJSString)
 import Lens.Family.Total
 
+type Prototype = UnliftedType
+
 class FromJSVal a where
   fromJSVal :: JSVal -> IO (Maybe a)
 
@@ -88,25 +91,25 @@ instance HasJSRep AnyClass where
 instance (HasJSRep cls) => FromJSVal (JSObject cls) where
   fromJSVal = decodeJSVal
 
--- NOTE: we limit class tag to be 'UnliftedType' to avoid unintended instance of (<:)
-type JSObject :: UnliftedType -> Type
+-- NOTE: we limit class tag to be 'Prototype' to avoid unintended instance of (<:)
+type JSObject :: Prototype -> Type
 newtype JSObject c = JSObject JSVal
 
 type JSAny = JSObject AnyClass
 
-type data AnyClass :: UnliftedType
+type data AnyClass :: Prototype
 
-type SuperclassOf :: UnliftedType -> Maybe UnliftedType
+type SuperclassOf :: Prototype -> Maybe Prototype
 type family SuperclassOf c
 
-type (<:) :: UnliftedType -> UnliftedType -> Constraint
+type (<:) :: Prototype -> Prototype -> Constraint
 type sub <: super =
   If
     (sub <:? super)
     (() :: Constraint)
     (Unsatisfiable ('Text "The class " :<>: ShowType sub :<>: Text " is not a subclass of " :<>: ShowType super))
 
-type data UnionClass :: [UnliftedType] -> UnliftedType
+type data UnionClass :: [Prototype] -> Prototype
 
 type instance SuperclassOf (UnionClass xs) = 'Nothing
 
@@ -115,7 +118,7 @@ type Union cs = JSObject (UnionClass cs)
 inject :: (c <: UnionClass cs) => JSObject c -> Union cs
 inject = coerce
 
-type data UndefinedClass :: UnliftedType
+type data UndefinedClass :: Prototype
 
 type instance SuperclassOf UndefinedClass = 'Nothing
 
@@ -127,13 +130,13 @@ foreign import javascript safe "undefined"
 instance HasJSRep UndefinedClass where
   decodeJSVal _ = pure $ Just js_undefined
 
-type (<:?) :: UnliftedType -> UnliftedType -> Bool
+type (<:?) :: Prototype -> Prototype -> Bool
 type family sub <:? super where
   sub <:? sub = 'True
   _ <:? AnyClass = 'True
   AnyClass <:? _ = 'False
   NullClass <:? NullableClass a = 'True
-  b <:? NullableClass a = b <:? a
+  b <:? NullableClass (JSObject a) = b <:? a
   UnionClass '[] <:? c = 'True
   UnionClass (x ': xs) <:? c = x <:? c && UnionClass xs <:? c
   _ <:? EnumClass '[] = 'False
@@ -178,7 +181,7 @@ instance (KnownEnum xs) => HasJSRep (EnumClass xs) where
       then pure $ injectEnum @xs $ JSString jsv
       else pure Nothing
 
-type EnumClass :: [Symbol] -> UnliftedType
+type EnumClass :: [Symbol] -> Prototype
 type data EnumClass xs
 
 type instance SuperclassOf (EnumClass xs) = 'Nothing
@@ -235,20 +238,18 @@ instance
 onEnum :: ((() -> Either () Void) -> s -> Either () r) -> o -> (r -> o) -> s -> o
 onEnum p = on p . const
 
-type NullableClass :: UnliftedType -> UnliftedType
+type NullableClass :: Type -> Prototype
 type data NullableClass a
 
 type instance SuperclassOf (NullableClass a) = 'Nothing
 
 type Nullable a = JSObject (NullableClass a)
 
-type data NullClass :: UnliftedType
+type data NullClass :: Prototype
 
 type instance SuperclassOf NullClass = 'Nothing
 
 type JSNull = JSObject NullClass
-
-type Prototype = UnliftedType
 
 type JSPrimClass :: Type -> Prototype
 type data JSPrimClass a :: Prototype
