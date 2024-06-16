@@ -201,7 +201,7 @@ resolveCompletes Completes {..} = do
     Right {} -> pure ()
   forM_ dictionaries \(n, Attributed {..}) -> do
     registerDictionary n attributes entry
-  dictGraph <- use #interfaceInheritance
+  dictGraph <- use #dictionaryInheritance
   case AM.topSort dictGraph of
     Left cyc -> throw $ CyclicInheritance cyc
     Right tieBreak -> do
