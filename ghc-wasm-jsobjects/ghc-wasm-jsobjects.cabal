@@ -46,6 +46,8 @@ library
   exposed-modules:
     GHC.Wasm.Object.Builtins
     GHC.Wasm.Object.Builtins.BigInt
+    GHC.Wasm.Object.Builtins.Iterator
+    GHC.Wasm.Object.Builtins.Sequence
     GHC.Wasm.Object.Builtins.String
     GHC.Wasm.Object.Core
 
@@ -53,8 +55,11 @@ library
   build-depends:
     bytestring,
     ghc-wasm-compat,
+    streaming,
     text,
     total,
+    vector,
+    wasm-linear-base,
 
   if !os(wasi)
     ghc-options:

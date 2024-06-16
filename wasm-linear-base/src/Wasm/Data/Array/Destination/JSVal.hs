@@ -2,6 +2,7 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE QualifiedDo #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# OPTIONS_GHC -Wno-name-shadowing #-}
 
 module Wasm.Data.Array.Destination.JSVal (
   JSArray (..),
@@ -13,9 +14,12 @@ module Wasm.Data.Array.Destination.JSVal (
   fill,
   dropEmpty,
   splitAt,
+  fromFunction,
+  mirror,
 ) where
 
 import Data.Ord (Ord (..))
+import qualified Data.Vector as V
 import GHC.IO (unsafeDupablePerformIO)
 import GHC.Stack
 import GHC.Wasm.Prim
@@ -72,6 +76,22 @@ fill a (DJSArray off len mvec) =
     else
       a
         PL.& Unsafe.toLinear (\x -> js_set_array off x mvec `P.seq` ())
+
+fromFunction :: (Int -> JSVal) -> DJSArray %1 -> ()
+fromFunction f (DJSArray off len mvec) = go 0
+  where
+    go !i
+      | i < len =
+          case js_set_array (off + i) (f i) mvec of
+            () -> go (i + 1)
+      | otherwise = ()
+
+mirror :: (HasCallStack) => V.Vector JSVal -> DJSArray %1 -> ()
+mirror v arr =
+  size arr PL.& \(Ur sz, arr) ->
+    if V.length v < sz
+      then error "Destination.JSVal.mirror: source too short" arr
+      else fromFunction (v V.!) arr
 
 dropEmpty :: (HasCallStack) => DJSArray %1 -> ()
 dropEmpty (DJSArray _ len (JSArray v)) =
