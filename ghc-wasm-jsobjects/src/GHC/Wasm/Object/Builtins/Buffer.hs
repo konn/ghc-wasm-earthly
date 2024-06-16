@@ -85,9 +85,13 @@ import GHC.Wasm.Object.Core
 
 type data ArrayBufferClass :: Prototype
 
+type instance SuperclassOf ArrayBufferClass = 'Nothing
+
 type ArrayBuffer = JSObject ArrayBufferClass
 
 type data SharedArrayBufferClass :: Prototype
+
+type instance SuperclassOf SharedArrayBufferClass = 'Nothing
 
 type SharedArrayBuffer = JSObject SharedArrayBufferClass
 
@@ -129,6 +133,8 @@ usePrimVectorAsJSByteArray (PV.Vector off len (ByteArray ba)) f = do
        in usePrimArrayAsJSByteArray pa' f
 
 type data JSByteArrayClass :: Type -> Prototype
+
+type instance SuperclassOf (JSByteArrayClass a) = 'Nothing
 
 type JSByteArray a = JSObject (JSByteArrayClass a)
 
@@ -278,6 +284,8 @@ foreign import javascript unsafe "$1.length"
   js_buffer_elemLength :: JSByteArray a -> Int
 
 type data DataViewClass :: Prototype
+
+type instance SuperclassOf DataViewClass = 'Nothing
 
 type DataView = JSObject DataViewClass
 
