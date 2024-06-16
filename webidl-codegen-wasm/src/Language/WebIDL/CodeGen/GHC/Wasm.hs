@@ -682,7 +682,6 @@ instance ToHaskellType DistinguishableType where
     DNamed s -> tyConOrVar $ toPrototypeName s
     DSequence s -> tyConOrVar "JSSequenceClass" `appTy` toHaskellPrototype s.entry
     DObject -> tyConOrVar "AnyClass"
-    -- FIXME: Implement below in ghc-wasm-jsobjects
     DSymbol -> tyConOrVar "JSSymbolClass"
     DBuffer b -> toHaskellPrototype b
     -- FIXME: Implement below in ghc-wasm-jsobjects
@@ -699,7 +698,6 @@ instance ToHaskellType DistinguishableType where
     DNamed s -> tyConOrVar $ toTypeName s
     DSequence s -> tyConOrVar "JSSequence" `appTy` toHaskellPrototype s.entry
     DObject -> tyConOrVar "JSAny"
-    -- FIXME: Implement below in ghc-wasm-jsobjects
     DSymbol -> tyConOrVar "JSSymbol"
     DBuffer b -> toHaskellType b
     -- FIXME: Implement below in ghc-wasm-jsobjects

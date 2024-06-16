@@ -60,6 +60,8 @@ module GHC.Wasm.Object.Core (
   JSPrimClass,
   JSPrim,
   JSPrimitive (..),
+  JSSymbolClass,
+  JSSymbol,
 ) where
 
 import Data.Coerce (coerce)
@@ -383,3 +385,9 @@ foreign import javascript unsafe "$1"
 instance JSPrimitive Float where
   toJSPrim = toJSPrim_Float
   fromJSPrim = fromJSPrim_Float
+
+data JSSymbolClass :: Prototype
+
+type instance SuperclassOf JSSymbolClass = 'Nothing
+
+type JSSymbol = JSObject JSSymbolClass
