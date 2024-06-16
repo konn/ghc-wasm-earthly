@@ -291,17 +291,27 @@ generateDictionaryModules = do
                 (toHaskellType . (.entry) <$> dict.requiredMembers)
                   <> (appTy (tyConOrVar "Nullable") . toHaskellPrototype . fst . (.entry) <$> dict.optionalMembers)
         fieldTyStr = T.pack $ pprint fieldTy
+        reifiedName = "Reified" <> name
+        field = name <> "Fields"
+        fieldsDef =
+          [trimming|
+            type ${field} = ${fieldTyStr}
+          |]
         protoDef =
           [trimming|
-              type ${proto} = JSDictionaryClass ${fieldTyStr}
-            |]
+            type ${proto} = JSDictionaryClass ${field}
+          |]
         alias =
           [trimming|
-              type ${name} = JSObject ${proto}
-            |]
+            type ${name} = JSObject ${proto}
+          |]
+        reified =
+          [trimming|
+            type ${reifiedName} = ReifiedDictionary ${field}
+          |]
 
-        exports = Just [(tvName, proto), (tvName, name)]
-        decls = map Left [protoDef, alias]
+        exports = Just [(tvName, field), (tvName, proto), (tvName, name), (tvName, reifiedName)]
+        decls = map Left [fieldsDef, protoDef, alias, reified]
     either throwString (putFile coreDest) $
       renderModule Module {moduleName = coreModuleName, ..}
     either throwString (putFile dest) $
