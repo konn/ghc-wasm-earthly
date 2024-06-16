@@ -81,7 +81,7 @@ import Data.Primitive (PrimArray (..), copyPrimArray, copyPrimArrayToPtr, copyPt
 import Data.Primitive.Types (Prim)
 import qualified Data.Vector.Primitive as PV
 import Foreign
-import GHC.Wasm.Object.Core (JSObject, Prototype)
+import GHC.Wasm.Object.Core
 
 type data ArrayBufferClass :: Prototype
 
@@ -238,43 +238,43 @@ foreign import javascript unsafe "new Float32Array(__exports.memory.buffer, $1, 
 foreign import javascript unsafe "new Float64Array(__exports.memory.buffer, $1, $2)"
   js_alloc_float64 :: Ptr Double -> Int -> IO (JSByteArray Double)
 
-foreign import javascript safe "new Int8Array($1)"
+foreign import javascript unsafe "new Int8Array($1)"
   js_fromArrayBuffer__int8 :: ArrayBuffer -> IO Int8Array
 
-foreign import javascript safe "new Uint8Array($1)"
+foreign import javascript unsafe "new Uint8Array($1)"
   js_fromArrayBuffer__uint8 :: ArrayBuffer -> IO Uint8Array
 
-foreign import javascript safe "new Int16Array($1)"
+foreign import javascript unsafe "new Int16Array($1)"
   js_fromArrayBuffer__int16 :: ArrayBuffer -> IO Int16Array
 
-foreign import javascript safe "new Uint16Array($1)"
+foreign import javascript unsafe "new Uint16Array($1)"
   js_fromArrayBuffer__uint16 :: ArrayBuffer -> IO Uint16Array
 
-foreign import javascript safe "new Int32Array($1)"
+foreign import javascript unsafe "new Int32Array($1)"
   js_fromArrayBuffer__int32 :: ArrayBuffer -> IO Int32Array
 
-foreign import javascript safe "new Uint32Array($1)"
+foreign import javascript unsafe "new Uint32Array($1)"
   js_fromArrayBuffer__uint32 :: ArrayBuffer -> IO Uint32Array
 
-foreign import javascript safe "new BigInt64Array($1)"
+foreign import javascript unsafe "new BigInt64Array($1)"
   js_fromArrayBuffer__bigint64 :: ArrayBuffer -> IO BigInt64Array
 
-foreign import javascript safe "new BigUint64Array($1)"
+foreign import javascript unsafe "new BigUint64Array($1)"
   js_fromArrayBuffer__biguint64 :: ArrayBuffer -> IO BigUint64Array
 
-foreign import javascript safe "new Float32Array($1)"
+foreign import javascript unsafe "new Float32Array($1)"
   js_fromArrayBuffer__float32 :: ArrayBuffer -> IO Float32Array
 
-foreign import javascript safe "new Float64Array($1)"
+foreign import javascript unsafe "new Float64Array($1)"
   js_fromArrayBuffer__float64 :: ArrayBuffer -> IO Float64Array
 
-foreign import javascript safe "$1.byteOffset"
+foreign import javascript unsafe "$1.byteOffset"
   js_buffer_byteOffset :: JSByteArray a -> Ptr a
 
-foreign import javascript safe "$1.byteLength"
+foreign import javascript unsafe "$1.byteLength"
   js_buffer_byteLength :: JSByteArray a -> Int
 
-foreign import javascript safe "$1.length"
+foreign import javascript unsafe "$1.length"
   js_buffer_elemLength :: JSByteArray a -> Int
 
 type data DataViewClass :: Prototype
