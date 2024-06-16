@@ -3,6 +3,7 @@
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -161,7 +162,8 @@ resolvePartials Partials {..} = do
   forM_ mixins \(n, Attributed {entry = AST.Mixin body, ..}) -> do
     #mixins . ix n <>= Attributed {entry = desugarMixin body, ..}
   forM_ interfaces \(n, Attributed {entry = AST.Interface ih body, ..}) -> do
-    #interfaces . ix n <>= Attributed {entry = desugarInterface ih body, ..}
+    let conss = extractLegacyConstructors attributes
+    #interfaces . ix n <>= Attributed {entry = desugarInterface ih body <> mempty {constructors = L.fold dlistL conss}, ..}
   forM_ inclusions \(n, AST.IncludesStatement mixin) -> do
     ma <- use $ #mixins . at mixin
     case ma of
@@ -289,14 +291,21 @@ registerInterface ::
   AST.Interface AST.Complete ->
   Desugarer ()
 registerInterface name atts (AST.Interface inh body) = do
+  let conss = extractLegacyConstructors atts
   old <-
     #interfaces . at name
-      <<?= Attributed {entry = desugarInterface inh body, attributes = atts}
+      <<?= Attributed {entry = desugarInterface inh body <> mempty {constructors = DL.fromList (V.toList conss)}, attributes = atts}
   when (isJust old) $ throw $ InterfaceAlreadyDefined name
   case inh of
     AST.NoInheritance -> pure ()
     AST.Inherits super ->
       #interfaceInheritance <>= AM.edge name super
+
+extractLegacyConstructors :: V.Vector ExtendedAttribute -> V.Vector (Attributed ArgumentList)
+extractLegacyConstructors = V.mapMaybe \case
+  AST.ExtendedAttributeArgList "Constructor" args ->
+    Just $ Attributed {entry = args, attributes = mempty}
+  _ -> Nothing
 
 desugarInterface ::
   forall p.
