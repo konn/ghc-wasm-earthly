@@ -49,6 +49,7 @@ library
     GHC.Wasm.Object.Builtins.BigInt
     GHC.Wasm.Object.Builtins.Buffer
     GHC.Wasm.Object.Builtins.Iterator
+    GHC.Wasm.Object.Builtins.Record
     GHC.Wasm.Object.Builtins.Sequence
     GHC.Wasm.Object.Builtins.String
     GHC.Wasm.Object.Core
@@ -56,6 +57,7 @@ library
   hs-source-dirs: src
   build-depends:
     bytestring,
+    containers,
     ghc-wasm-compat,
     primitive,
     streaming,

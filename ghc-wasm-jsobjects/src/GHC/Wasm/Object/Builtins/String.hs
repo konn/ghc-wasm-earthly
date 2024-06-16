@@ -1,7 +1,9 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeData #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE UnliftedDatatypes #-}
 {-# OPTIONS_GHC -Wno-redundant-constraints #-}
 
@@ -13,7 +15,7 @@ module GHC.Wasm.Object.Builtins.String (
   fromDOMString,
 
   -- * ByteStrings
-  ByteStringClass,
+  JSByteStringClass,
   JSByteString,
   toJSByteString,
   fromJSByteString,
@@ -27,6 +29,9 @@ module GHC.Wasm.Object.Builtins.String (
   USVString,
   toUSVString,
   fromUSVString,
+
+  -- * Conversion functions
+  IsJavaScriptString (..),
 ) where
 
 import qualified Data.ByteString as BS
@@ -62,11 +67,11 @@ toDOMString False = unsafeAsObject . coerce
 toDOMString True = unsafeAsObject . coerce . js_null_to_empty
 
 -- | A WebIDL @ByteString@ class, which corresponds to a JavaScript byte sequence as a string.
-type data ByteStringClass :: UnliftedType
+type data JSByteStringClass :: UnliftedType
 
-type instance SuperclassOf ByteStringClass = 'Nothing
+type instance SuperclassOf JSByteStringClass = 'Nothing
 
-type JSByteString = JSObject ByteStringClass
+type JSByteString = JSObject JSByteStringClass
 
 fromJSByteString :: JSByteString -> JSString
 fromJSByteString = JSString . unJSObject
@@ -110,3 +115,19 @@ fromUSVString = coerce . unJSObject
 
 toUSVString :: JSString -> USVString
 toUSVString = unsafeAsObject . coerce
+
+class IsJavaScriptString p where
+  convertToJSString :: JSObject p -> JSString
+  convertFromJSString :: JSString -> Maybe (JSObject p)
+
+instance IsJavaScriptString DOMStringClass where
+  convertFromJSString = Just . toDOMString False
+  convertToJSString = fromDOMString
+
+instance IsJavaScriptString USVStringClass where
+  convertFromJSString = Just . toUSVString
+  convertToJSString = fromUSVString
+
+instance IsJavaScriptString JSByteStringClass where
+  convertFromJSString = toJSByteString
+  convertToJSString = fromJSByteString

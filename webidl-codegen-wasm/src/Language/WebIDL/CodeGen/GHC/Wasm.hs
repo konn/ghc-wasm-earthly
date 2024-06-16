@@ -586,7 +586,7 @@ instance ToHaskellType StringType where
     USVString -> tyConOrVar "USVString"
   toHaskellPrototype = \case
     DOMString -> tyConOrVar "DOMStringClass"
-    ByteString -> tyConOrVar "ByteStringClass"
+    ByteString -> tyConOrVar "JSByteStringClass"
     USVString -> tyConOrVar "USVStringClass"
 
 instance ToHaskellType PrimType where
@@ -681,8 +681,7 @@ instance ToHaskellType DistinguishableType where
     DBuffer b -> toHaskellPrototype b
     DFrozenArray f -> tyConOrVar "FrozenArrayClass" `appTy` toHaskellPrototype f.entry
     DObservableArray o -> tyConOrVar "ObservableArrayClass" `appTy` toHaskellPrototype o.entry
-    -- FIXME: Implement below in ghc-wasm-jsobjects
-    DRecord str r -> tyConOrVar "RecordClass" `appTy` toHaskellPrototype str `appTy` toHaskellType r.entry
+    DRecord str r -> tyConOrVar "JSRecordClass" `appTy` toHaskellPrototype str `appTy` toHaskellType r.entry
     DUndefined -> tyConOrVar "UndefinedClass"
 
   toHaskellType = \case
@@ -696,7 +695,7 @@ instance ToHaskellType DistinguishableType where
     DFrozenArray f -> tyConOrVar "FrozenArray" `appTy` toHaskellPrototype f.entry
     DObservableArray o -> tyConOrVar "ObservableArray" `appTy` toHaskellPrototype o.entry
     -- FIXME: Implement below in ghc-wasm-jsobjects
-    DRecord str r -> tyConOrVar "Record" `appTy` toHaskellPrototype str `appTy` toHaskellPrototype r.entry
+    DRecord str r -> tyConOrVar "JSRecord" `appTy` toHaskellPrototype str `appTy` toHaskellPrototype r.entry
     DUndefined -> unitT
 
 instance ToHaskellType UnionType where
