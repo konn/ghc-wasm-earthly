@@ -679,9 +679,7 @@ instance ToHaskellType DistinguishableType where
     DObject -> tyConOrVar "AnyClass"
     DSymbol -> tyConOrVar "JSSymbolClass"
     DBuffer b -> toHaskellPrototype b
-    -- FIXME: Implement below in ghc-wasm-jsobjects
     DFrozenArray f -> tyConOrVar "FrozenArrayClass" `appTy` toHaskellPrototype f.entry
-    -- FIXME: Implement below in ghc-wasm-jsobjects
     DObservableArray o -> tyConOrVar "ObservableArrayClass" `appTy` toHaskellPrototype o.entry
     -- FIXME: Implement below in ghc-wasm-jsobjects
     DRecord str r -> tyConOrVar "RecordClass" `appTy` toHaskellPrototype str `appTy` toHaskellType r.entry
@@ -695,9 +693,7 @@ instance ToHaskellType DistinguishableType where
     DObject -> tyConOrVar "JSAny"
     DSymbol -> tyConOrVar "JSSymbol"
     DBuffer b -> toHaskellType b
-    -- FIXME: Implement below in ghc-wasm-jsobjects
     DFrozenArray f -> tyConOrVar "FrozenArray" `appTy` toHaskellPrototype f.entry
-    -- FIXME: Implement below in ghc-wasm-jsobjects
     DObservableArray o -> tyConOrVar "ObservableArray" `appTy` toHaskellPrototype o.entry
     -- FIXME: Implement below in ghc-wasm-jsobjects
     DRecord str r -> tyConOrVar "Record" `appTy` toHaskellPrototype str `appTy` toHaskellPrototype r.entry

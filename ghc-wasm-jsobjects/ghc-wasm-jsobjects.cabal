@@ -45,6 +45,7 @@ library
   -- cabal-gild: discover src
   exposed-modules:
     GHC.Wasm.Object.Builtins
+    GHC.Wasm.Object.Builtins.Array
     GHC.Wasm.Object.Builtins.BigInt
     GHC.Wasm.Object.Builtins.Buffer
     GHC.Wasm.Object.Builtins.Iterator
@@ -56,6 +57,7 @@ library
   build-depends:
     bytestring,
     ghc-wasm-compat,
+    primitive,
     streaming,
     text,
     total,
