@@ -314,7 +314,7 @@ generateInterfaceMainModule (normaliseTypeName -> name) Attributed {entry = ifs}
                   pprint $
                     mkNormalFunTy
                       (tyConOrVar (toTypeName name))
-                      (ioTy `appTy` toHaskellType (Nullable ty.entry))
+                      (ioTy `appTy` toHaskellType ty.entry)
               reader =
                 "foreign import javascript unsafe \"$1." <> att <> "\" " <> readerName <> " :: " <> readerSig
           Writer.tell
@@ -327,9 +327,9 @@ generateInterfaceMainModule (normaliseTypeName -> name) Attributed {entry = ifs}
                 writerSig =
                   T.pack $
                     pprint $
-                      mkNormalFunTy
-                        (tyConOrVar (toTypeName name))
-                        (toHaskellType ty.entry `mkNormalFunTy` (ioTy `appTy` unitT))
+                      foldr1
+                        mkNormalFunTy
+                        [tyConOrVar (toTypeName name), toHaskellType ty.entry, ioTy `appTy` unitT]
                 writer =
                   "foreign import javascript unsafe \"$1." <> att <> " = $2\" " <> writerName <> " :: " <> writerSig
             Writer.tell
