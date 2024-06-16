@@ -124,20 +124,19 @@ generateWasmBindingWith opts = do
           <=< Eff.readFile . fromAbsFile
       )
       =<< listWebIDLs opts'
-  !defs <- either throwIO pure $ desugar idls
-  let !unknownTypes = fromMaybe mempty $ getUnknownIdentifiers defs
+  !definitions <- either throwIO pure $ desugar idls
+  let !unknownTypes = fromMaybe mempty $ getUnknownIdentifiers definitions
   runFileTreeIOIn opts'.outputDir
     $ runReader
       CodeGenEnv {modulePrefix = opts.modulePrefix, ..}
-    $ generateWasmBinding defs
+    $ generateWasmBinding
 
 generateWasmBinding ::
   (FileTree :> es, Reader CodeGenEnv :> es) =>
-  Definitions ->
   Eff es ()
-generateWasmBinding defs = do
-  generateCoreModules defs
-  generateMainModules defs
+generateWasmBinding = do
+  generateCoreModules
+  generateMainModules
 
 data Module = Module
   { moduleName :: Text
@@ -174,6 +173,7 @@ renderModule Module {..} = do
 data CodeGenEnv = CodeGenEnv
   { modulePrefix :: !(Maybe T.Text)
   , unknownTypes :: !(Set Identifier)
+  , definitions :: !Definitions
   }
   deriving (Generic)
 
@@ -198,18 +198,18 @@ generateCoreModules ::
   ( FileTree :> es
   , Reader CodeGenEnv :> es
   ) =>
-  Definitions ->
   Eff es ()
-generateCoreModules defns = do
+generateCoreModules = do
+  defns <- EffR.asks @CodeGenEnv (.definitions)
   imapM_ generateInterfaceCoreModule defns.interfaces
 
 generateMainModules ::
   ( FileTree :> es
   , Reader CodeGenEnv :> es
   ) =>
-  Definitions ->
   Eff es ()
-generateMainModules defns = do
+generateMainModules = do
+  defns <- EffR.asks @CodeGenEnv (.definitions)
   imapM_ generateInterfaceMainModule defns.interfaces
 
 generateInterfaceCoreModule ::
@@ -288,12 +288,15 @@ generateInterfaceMainModule (normaliseTypeName -> name) Attributed {entry = ifs}
       genStaticOperations
     -- FIXME: Is this correct? We must be aware of 'Namespace'.
     genConstructors = V.forM_ ifs.constructors \Attributed {entry = args} -> skipIfContainsUnknown args do
-      let funName = toConstructorName name args
-          retName = ioTy `appTy` tyConOrVar (toTypeName name)
-          ffiDec = renderJSFFIImport $ toJSFFIImport funName args retName
+      let hsFunName
+            | V.length ifs.constructors /= 1 = toConstructorName name args
+            | otherwise = "js_cons_" <> name
+          jsFun = name
+          returnType = ioTy `appTy` tyConOrVar (toTypeName name)
+          ffiDec = renderJSFFIImport $ toJSFFIImport JSFFIImportSeed {..}
       Writer.tell
         MainModuleFragments
-          { mainExports = DL.singleton (varName, funName)
+          { mainExports = DL.singleton (varName, hsFunName)
           , decs = DL.singleton ffiDec
           }
 
@@ -352,11 +355,19 @@ renderJSFFIImport JSFFIImport {..} =
   let sig = T.pack $ pprint signature
    in Left
         [trimming|
-          foreign import javascript safe "${funName}(${jsArgs})" ${funName} :: ${sig}
+          foreign import javascript safe "${jsFun}(${jsArgs})" ${hsFunName} :: ${sig}
         |]
 
-toJSFFIImport :: T.Text -> ArgumentList -> HsType GhcPs -> JSFFIImport
-toJSFFIImport funName args retType =
+data JSFFIImportSeed = JSFFIImportSeed
+  { hsFunName :: !Text
+  , jsFun :: !Text
+  , args :: !ArgumentList
+  , returnType :: !(HsType GhcPs)
+  }
+  deriving (Generic)
+
+toJSFFIImport :: JSFFIImportSeed -> JSFFIImport
+toJSFFIImport JSFFIImportSeed {..} =
   let reqArgNum = V.length args.requiredArgs
       optArgNum = V.length args.optionalArgs
       ellipsNum = if isNothing args.ellipsis then 0 else 1
@@ -372,7 +383,7 @@ toJSFFIImport funName args retType =
                         Attributed mempty ty
               )
               (Compose args.ellipsis)
-      signature = foldr mkNormalFunTy retType argsHs
+      signature = foldr mkNormalFunTy returnType argsHs
       jsArgs =
         T.intercalate ", " $
           V.toList $
@@ -386,7 +397,8 @@ toJSFFIImport funName args retType =
    in JSFFIImport {..}
 
 data JSFFIImport = JSFFIImport
-  { funName :: !Text
+  { hsFunName :: !Text
+  , jsFun :: !Text
   , signature :: !(HsType GhcPs)
   , jsArgs :: !Text
   }
