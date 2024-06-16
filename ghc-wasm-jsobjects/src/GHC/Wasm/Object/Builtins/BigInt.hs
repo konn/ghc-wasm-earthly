@@ -14,7 +14,7 @@ module GHC.Wasm.Object.Builtins.BigInt (
 import GHC.Wasm.Object.Core
 import GHC.Wasm.Prim
 
--- | A WebIDL @DOMString@ class, which corresponds to a JavaScript string.
+-- | A WebIDL @BigInt@ class, which corresponds to a multi-precision integers.
 type data BigIntClass :: Prototype
 
 type instance SuperclassOf BigIntClass = 'Nothing

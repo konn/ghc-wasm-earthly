@@ -25,7 +25,7 @@ import GHC.Wasm.Object.Core
 import qualified Streaming.Prelude as S
 import qualified Wasm.Data.Array.Destination.JSVal as JSD
 
--- | A WebIDL @DOMString@ class, which corresponds to a JavaScript string.
+-- | A WebIDL @Sequence@, which corresponds to a JavaScript array of the same type.
 type data SequenceClass :: Prototype -> Prototype
 
 type instance SuperclassOf (SequenceClass a) = 'Nothing
