@@ -21,9 +21,12 @@ module Language.Haskell.Parser.Ex.Helper (
   promotedListTy,
   ioTy,
   unitT,
+  symbolLitTy,
+  promotedTupleT,
 ) where
 
 import Data.Function (on, (&))
+import Data.String (IsString (..))
 import qualified Data.Text as T
 import GHC.Core.TyCo.Ppr (appPrec)
 import GHC.Driver.DynFlags
@@ -34,6 +37,7 @@ import GHC.Parser.Lexer (PState (..), ParseResult (..))
 import GHC.Real ()
 import GHC.Types.Name.Occurrence
 import GHC.Types.Name.Reader (RdrName (..))
+import GHC.Types.SourceText (SourceText (NoSourceText))
 import GHC.Types.SrcLoc
 import GHC.Utils.Outputable
 import qualified Language.Haskell.GhclibParserEx.GHC.Parser as P
@@ -114,6 +118,12 @@ appTy l r = HsAppTy noExtField (L noAnn l) (parenthesizeHsType appPrec $ L noAnn
 
 promotedListTy :: [HsType GhcPs] -> HsType GhcPs
 promotedListTy = HsExplicitListTy [] IsPromoted . map (L noAnn)
+
+symbolLitTy :: T.Text -> HsType GhcPs
+symbolLitTy = HsTyLit noExtField . HsStrTy NoSourceText . fromString . T.unpack
+
+promotedTupleT :: HsType GhcPs -> HsType GhcPs -> HsType GhcPs
+promotedTupleT l r = HsExplicitTupleTy [] [L noAnn l, L noAnn r]
 
 ioTy :: HsType GhcPs
 ioTy = tyConOrVar $ T.pack "IO"

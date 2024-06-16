@@ -30,6 +30,7 @@ import Control.Arrow ((>>>))
 import Control.Exception.Safe (throwIO, throwString)
 import Control.Foldl qualified as L
 import Control.Lens (imapM_, ix, (%~))
+import Control.Lens.Indexed (iforM_)
 import Control.Monad (when, (<=<))
 import Data.Bifunctor qualified as Bi
 import Data.Char qualified as C
@@ -151,6 +152,7 @@ generateWasmBinding ::
   (FileTree :> es, Reader CodeGenEnv :> es) =>
   Eff es ()
 generateWasmBinding = do
+  generateDictionaryModules
   generateCoreModules
   generateMainModules
 
@@ -265,6 +267,51 @@ data MainModuleFragments = MainModuleFragments
   }
   deriving (Generic)
   deriving (Semigroup, Monoid) via Generically MainModuleFragments
+
+generateDictionaryModules ::
+  ( FileTree :> es
+  , Reader CodeGenEnv :> es
+  ) =>
+  Eff es ()
+generateDictionaryModules = do
+  defns <- EffR.asks @CodeGenEnv (.definitions)
+  iforM_ defns.dictionaries \(normaliseTypeName -> name) Attributed {entry = dict} -> do
+    coreModuleName <- toCoreModuleName name
+    mainModuleName <- toMainModuleName name
+    let parents = L.foldOver namedTypeIdentifiers L.nub dict
+    imps <- mapM toCoreModuleName parents
+    let proto = toPrototypeName name
+        coreDest = fromJust (parseRelDir $ T.unpack name) </> [relfile|Core.hs|]
+        dest = fromJust (parseRelFile $ T.unpack name <> ".hs")
+        imports = Set.toList $ Set.fromList imps <> Set.fromList presetImports
+        fieldTy =
+          promotedListTy $
+            map (uncurry promotedTupleT . Bi.first symbolLitTy) $
+              Map.toList $
+                (toHaskellType . (.entry) <$> dict.requiredMembers)
+                  <> (appTy (tyConOrVar "Nullable") . toHaskellPrototype . fst . (.entry) <$> dict.optionalMembers)
+        fieldTyStr = T.pack $ pprint fieldTy
+        protoDef =
+          [trimming|
+              type ${proto} = JSDictionaryClass ${fieldTyStr}
+            |]
+        alias =
+          [trimming|
+              type ${name} = JSObject ${proto}
+            |]
+
+        exports = Just [(tvName, proto), (tvName, name)]
+        decls = map Left [protoDef, alias]
+    either throwString (putFile coreDest) $
+      renderModule Module {moduleName = coreModuleName, ..}
+    either throwString (putFile dest) $
+      renderModule
+        Module
+          { moduleName = mainModuleName
+          , imports = [coreModuleName]
+          , exports = exports
+          , decls = []
+          }
 
 generateInterfaceMainModule ::
   forall es.
