@@ -291,9 +291,9 @@ generateInterfaceMainModule (normaliseTypeName -> name) Attributed {entry = ifs}
       let hsFunName
             | V.length ifs.constructors /= 1 = toConstructorName name args
             | otherwise = "js_cons_" <> name
-          jsFun = name
+          jsFun = Call name
           returnType = ioTy `appTy` tyConOrVar (toTypeName name)
-          ffiDec = renderJSFFIImport $ toJSFFIImport JSFFIImportSeed {..}
+          ffiDec = renderJSFFIImport $ toJSFFIImport JSFFIImportSeed {async = False, ..}
       Writer.tell
         MainModuleFragments
           { mainExports = DL.singleton (varName, hsFunName)
@@ -303,8 +303,27 @@ generateInterfaceMainModule (normaliseTypeName -> name) Attributed {entry = ifs}
     -- FIXME: Implement this
     genConstants = pure ()
     -- FIXME: Implement this
-    genOperations = pure ()
-    -- FIXME: Implement this
+    genOperations = do
+      V.forM_ ifs.operations \Attributed {entry = op@(Operation msp reg)} -> do
+        skipIfContainsUnknown op do
+          case msp of
+            Just {} -> do
+              -- FIXME: Implement special operations!
+              pure ()
+            Nothing | RegularOperation retTy (Just jsFunName) args <- reg -> do
+              let hsFunName = "js_fun_" <> toHaskellIdentifier jsFunName
+                  jsFun =
+                    MethodOf
+                      (tyConOrVar (toTypeName name))
+                      (toHaskellIdentifier jsFunName)
+                  returnType = ioTy `appTy` toHaskellType retTy
+                  ffiDec = renderJSFFIImport $ toJSFFIImport JSFFIImportSeed {async = isAsyncJSType retTy, ..}
+              Writer.tell
+                MainModuleFragments
+                  { mainExports = DL.singleton (varName, hsFunName)
+                  , decs = DL.singleton ffiDec
+                  }
+            _ -> pure ()
     genStringifiers = pure ()
     genAttributes = do
       let atts = ifs.attributes <> V.map (fmap (ReadWrite,)) ifs.inheritedAttributes
@@ -353,16 +372,23 @@ generateInterfaceMainModule (normaliseTypeName -> name) Attributed {entry = ifs}
 renderJSFFIImport :: JSFFIImport -> Either Text (HsDecl GhcPs)
 renderJSFFIImport JSFFIImport {..} =
   let sig = T.pack $ pprint signature
+      safety
+        | async = "safe"
+        | otherwise = "unsafe"
    in Left
         [trimming|
-          foreign import javascript safe "${jsFun}(${jsArgs})" ${hsFunName} :: ${sig}
+          foreign import javascript ${safety} "${jsCode}" ${hsFunName} :: ${sig}
         |]
+
+data JSFun = Call !Text | MethodOf !(HsType GhcPs) !Text
+  deriving (Generic)
 
 data JSFFIImportSeed = JSFFIImportSeed
   { hsFunName :: !Text
-  , jsFun :: !Text
+  , jsFun :: !JSFun
   , args :: !ArgumentList
   , returnType :: !(HsType GhcPs)
+  , async :: !Bool
   }
   deriving (Generic)
 
@@ -371,7 +397,7 @@ toJSFFIImport JSFFIImportSeed {..} =
   let reqArgNum = V.length args.requiredArgs
       optArgNum = V.length args.optionalArgs
       ellipsNum = if isNothing args.ellipsis then 0 else 1
-      argsHs =
+      argsHs0 =
         V.toList $
           V.map (toHaskellType . (\(Argument a _) -> a) . (.entry)) args.requiredArgs
             <> V.map (toHaskellType . Nullable . (\(OptionalArgument a _ _) -> a.entry) . (.entry)) args.optionalArgs
@@ -385,22 +411,25 @@ toJSFFIImport JSFFIImportSeed {..} =
               (Compose args.ellipsis)
       signature = foldr mkNormalFunTy returnType argsHs
       jsArgs =
-        T.intercalate ", " $
+        T.intercalate "," $
           V.toList $
             V.generate
               (reqArgNum + optArgNum + ellipsNum)
               ( \i ->
                   if i < reqArgNum + optArgNum
-                    then T.pack $ '$' : show (i + 1)
-                    else T.pack $ "... $" ++ show (i + 1)
+                    then T.pack $ '$' : show (i + 1 + offset)
+                    else T.pack $ "... $" ++ show (i + 1 + offset)
               )
+      (argsHs, offset, jsCode) = case jsFun of
+        Call m -> (argsHs0, 0, m <> "(" <> jsArgs <> ")")
+        MethodOf ty mth -> (ty : argsHs0, 1, "$1." <> mth <> "(" <> jsArgs <> ")")
    in JSFFIImport {..}
 
 data JSFFIImport = JSFFIImport
   { hsFunName :: !Text
-  , jsFun :: !Text
+  , jsCode :: !Text
   , signature :: !(HsType GhcPs)
-  , jsArgs :: !Text
+  , async :: !Bool
   }
   deriving (Generic)
 
@@ -429,6 +458,11 @@ toConstructorName name args =
 
 class ToHaskellIdentifier a where
   toHaskellIdentifier :: a -> T.Text
+
+instance ToHaskellIdentifier OperationName where
+  toHaskellIdentifier = \case
+    IncludesOperation -> "includes"
+    OperationNamed s -> s
 
 instance ToHaskellIdentifier AttributeName where
   toHaskellIdentifier = \case
@@ -514,9 +548,13 @@ presetImports = ["GHC.Wasm.Object.Builtins", "Foreign.C.Types", "Data.Int", "Dat
 
 class ToHaskellType a where
   toHaskellType :: a -> HsType GhcPs
+  isAsyncJSType :: a -> Bool
   toHaskellPrototype :: a -> HsType GhcPs
 
 instance (ToHaskellType a) => ToHaskellType (WithNullarity a) where
+  isAsyncJSType = \case
+    Plain a -> isAsyncJSType a
+    Nullable a -> isAsyncJSType a
   toHaskellType = \case
     Plain a -> toHaskellType a
     Nullable a -> tyConOrVar "Nullable" `appTy` toHaskellPrototype a
@@ -525,6 +563,7 @@ instance (ToHaskellType a) => ToHaskellType (WithNullarity a) where
     Nullable a -> tyConOrVar "NullableClass" `appTy` toHaskellPrototype a
 
 instance ToHaskellType StringType where
+  isAsyncJSType = const False
   toHaskellType = \case
     DOMString -> tyConOrVar "DOMString"
     ByteString -> tyConOrVar "JSByteString"
@@ -535,6 +574,7 @@ instance ToHaskellType StringType where
     USVString -> tyConOrVar "USVStringClass"
 
 instance ToHaskellType PrimType where
+  isAsyncJSType = const False
   toHaskellType = \case
     Short Signed -> tyConOrVar "Int16"
     Short Unsigned -> tyConOrVar "Word16"
@@ -570,6 +610,7 @@ instance ToHaskellType PrimType where
       Bigint {} -> tyConOrVar "BigintClass"
 
 instance ToHaskellType BufferType where
+  isAsyncJSType = const False
   toHaskellType = \case
     -- FIXME: implement below in ghc-wasm-jsobjects
     ArrayBuffer -> tyConOrVar "ArrayBuffer"
@@ -609,6 +650,18 @@ instance ToHaskellType BufferType where
     BigUint64Array -> primCls `appTy` (tyConOrVar "Ptr" `appTy` tyConOrVar "Word64")
 
 instance ToHaskellType DistinguishableType where
+  isAsyncJSType = \case
+    DPrim p -> isAsyncJSType p
+    DString s -> isAsyncJSType s
+    DNamed _ -> False
+    DSequence {} -> False
+    DObject -> False
+    DSymbol -> False
+    DBuffer b -> isAsyncJSType b
+    DFrozenArray {} -> False
+    DObservableArray {} -> False
+    DRecord {} -> False
+    DUndefined -> False
   toHaskellPrototype = \case
     DPrim p -> toHaskellPrototype p
     DString s -> toHaskellPrototype s
@@ -617,7 +670,7 @@ instance ToHaskellType DistinguishableType where
     DSequence s -> tyConOrVar "JSSequenceClass" `appTy` toHaskellPrototype s.entry
     DObject -> tyConOrVar "AnyClass"
     -- FIXME: Implement below in ghc-wasm-jsobjects
-    DSymbol -> tyConOrVar "SymbolClass"
+    DSymbol -> tyConOrVar "JSSymbolClass"
     DBuffer b -> toHaskellPrototype b
     -- FIXME: Implement below in ghc-wasm-jsobjects
     DFrozenArray f -> tyConOrVar "FrozenArrayClass" `appTy` toHaskellPrototype f.entry
@@ -632,20 +685,24 @@ instance ToHaskellType DistinguishableType where
     DString s -> toHaskellType s
     DNamed s -> tyConOrVar $ toTypeName s
     -- FIXME: Implement below in ghc-wasm-jsobjects
-    DSequence s -> tyConOrVar "JSSequenceClass" `appTy` toHaskellType s.entry
-    DObject -> tyConOrVar "AnyClass"
+    DSequence s -> tyConOrVar "JSSequence" `appTy` toHaskellPrototype s.entry
+    DObject -> tyConOrVar "JSAny"
     -- FIXME: Implement below in ghc-wasm-jsobjects
-    DSymbol -> tyConOrVar "SymbolClass"
+    DSymbol -> tyConOrVar "JSSymbol"
     DBuffer b -> toHaskellType b
     -- FIXME: Implement below in ghc-wasm-jsobjects
-    DFrozenArray f -> tyConOrVar "FrozenArrayClass" `appTy` toHaskellType f.entry
+    DFrozenArray f -> tyConOrVar "FrozenArray" `appTy` toHaskellPrototype f.entry
     -- FIXME: Implement below in ghc-wasm-jsobjects
-    DObservableArray o -> tyConOrVar "ObservableArrayClass" `appTy` toHaskellType o.entry
+    DObservableArray o -> tyConOrVar "ObservableArray" `appTy` toHaskellPrototype o.entry
     -- FIXME: Implement below in ghc-wasm-jsobjects
-    DRecord str r -> tyConOrVar "RecordClass" `appTy` toHaskellType str `appTy` toHaskellType r.entry
-    DUndefined -> tyConOrVar "UndefinedClass"
+    DRecord str r -> tyConOrVar "Record" `appTy` toHaskellPrototype str `appTy` toHaskellPrototype r.entry
+    DUndefined -> unitT
 
 instance ToHaskellType UnionType where
+  isAsyncJSType = \case
+    MkUnionType comps ->
+      all (all $ either (all isAsyncJSType) isAsyncJSType) $
+        NE.toList comps
   toHaskellPrototype (MkUnionType comps) =
     let comps' =
           map
@@ -659,6 +716,11 @@ instance ToHaskellType UnionType where
   toHaskellType = appTy (tyConOrVar "JSObject") . toHaskellPrototype
 
 instance ToHaskellType IDLType where
+  isAsyncJSType = \case
+    Distinguishable dt -> isAsyncJSType dt
+    AnyType -> False
+    PromiseType {} -> True
+    UnionType u -> isAsyncJSType u
   toHaskellPrototype = \case
     Distinguishable dt -> toHaskellPrototype dt
     AnyType -> tyConOrVar "AnyClass"
@@ -667,7 +729,7 @@ instance ToHaskellType IDLType where
   toHaskellType = \case
     Distinguishable dt -> toHaskellType dt
     AnyType -> tyConOrVar "JSAny"
-    PromiseType p -> tyConOrVar "Promise" `appTy` toHaskellType p
+    PromiseType p -> tyConOrVar "Promise" `appTy` toHaskellPrototype p
     UnionType u -> toHaskellType u
 
 primCls :: HsType GhcPs

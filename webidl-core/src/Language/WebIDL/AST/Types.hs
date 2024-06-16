@@ -346,7 +346,7 @@ data CallbackFunction = CallbackFunction IDLType ArgumentList
 data WithNullarity a
   = Plain a
   | Nullable a
-  deriving (Data, Show, Eq, Ord, Generic, Functor)
+  deriving (Data, Show, Eq, Ord, Generic, Functor, Foldable, Traversable)
 
 data StringType = ByteString | DOMString | USVString
   deriving (Data, Show, Eq, Ord, Generic)
