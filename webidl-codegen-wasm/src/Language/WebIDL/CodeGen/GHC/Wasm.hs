@@ -626,7 +626,6 @@ instance ToHaskellType PrimType where
 instance ToHaskellType BufferType where
   isAsyncJSType = const False
   toHaskellType = \case
-    -- FIXME: implement below in ghc-wasm-jsobjects
     ArrayBuffer -> tyConOrVar "ArrayBuffer"
     DataView -> tyConOrVar "DataView"
     Int8Array -> tyConOrVar "JSByteArray" `appTy` tyConOrVar "Int8"
@@ -639,14 +638,11 @@ instance ToHaskellType BufferType where
     Uint32Array -> tyConOrVar "JSByteArray" `appTy` tyConOrVar "Word32"
     Float32Array -> tyConOrVar "JSByteArray" `appTy` tyConOrVar "Float"
     Float64Array -> tyConOrVar "JSByteArray" `appTy` tyConOrVar "Double"
-    -- FIXME: implement below in ghc-wasm-jsobjects
     SharedArrayBuffer -> tyConOrVar "SharedArrayBuffer"
     BigInt64Array -> tyConOrVar "JSByteArray" `appTy` tyConOrVar "Int64"
     BigUint64Array -> tyConOrVar "JSByteArray" `appTy` tyConOrVar "Word64"
   toHaskellPrototype = \case
-    -- FIXME: implement below in ghc-wasm-jsobjects
     ArrayBuffer -> tyConOrVar "ArrayBufferClass"
-    -- FIXME: implement below in ghc-wasm-jsobjects
     DataView -> tyConOrVar "DataViewClass"
     Int8Array -> tyConOrVar "JSByteArrayClass" `appTy` tyConOrVar "Int8"
     Uint8Array -> tyConOrVar "JSByteArrayClass" `appTy` tyConOrVar "Word8"
