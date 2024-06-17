@@ -156,6 +156,7 @@ generateWasmBinding = do
   generateEnumModules
   generateTypedefModules
   generateCallbackFunctionModules
+  generateCallbackInterfaceModules
   generateInterfaceCoreModules
   generateInterfaceMainModules
 
@@ -374,6 +375,80 @@ generateEnumModules = do
           , decls = []
           }
 
+generateCallbackInterfaceModules ::
+  ( FileTree :> es
+  , Reader CodeGenEnv :> es
+  ) =>
+  Eff es ()
+generateCallbackInterfaceModules = do
+  defns <- EffR.asks @CodeGenEnv (.definitions)
+  iforM_ defns.callbackInterfaces \(normaliseTypeName -> name) Attributed {entry = callback} -> skipIfContainsUnknown callback do
+    coreModuleName <- toCoreModuleName name
+    mainModuleName <- toMainModuleName name
+    let parents = L.foldOver namedTypeIdentifiers L.nub callback
+    imps <- mapM toCoreModuleName parents
+    MainModuleFragments {mainExports = constExports, decs = constDefs} <-
+      Writer.execWriter $
+        V.mapM (generateConstantFragments name . (.entry)) callback.callbackConsts
+    let proto = toPrototypeName name
+        coreDest = fromJust (parseRelDir $ T.unpack name) </> [relfile|Core.hs|]
+        dest = fromJust (parseRelFile $ T.unpack name <> ".hs")
+        imports = Set.toList $ Set.fromList imps <> Set.fromList presetImports
+        protoDef =
+          [trimming|
+            type data ${proto} :: Prototype
+          |]
+        superDef =
+          [trimming|type instance SuperClassOf ${proto} = 'Nothing|]
+        alias =
+          [trimming|
+            type ${name} = JSObject ${proto}
+          |]
+        argTys = argumentHsTypes callback.callbackOperation.args
+        pureName = "js_mk_callback_" <> name <> "_pure"
+        pureArgTy =
+          foldr mkNormalFunTy (toHaskellType callback.callbackOperation.returnType) argTys
+        pureTy = T.pack $ pprint $ pureArgTy `mkNormalFunTy` tyConOrVar name
+        pureFFI =
+          [trimming|
+            foreign import javascript unsafe "wrapper"
+              ${pureName} :: ${pureTy}
+          |]
+        impureName = "js_mk_callback_" <> name <> "_impure"
+        impureArgTy =
+          foldr mkNormalFunTy (ioTy `appTy` toHaskellType callback.callbackOperation.returnType) argTys
+        impureTy = T.pack $ pprint $ impureArgTy `mkNormalFunTy` tyConOrVar name
+        impureFFI =
+          [trimming|
+            foreign import javascript unsafe "wrapper"
+              ${pureName} :: ${impureTy}
+          |]
+
+        exports =
+          Just $
+            (tvName, proto)
+              : (tvName, name)
+              : (varName, pureName)
+              : (varName, impureName)
+              : DL.toList constExports
+        decls =
+          Left protoDef
+            : Left superDef
+            : Left alias
+            : Left pureFFI
+            : Left impureFFI
+            : DL.toList constDefs
+    either throwString (putFile coreDest) $
+      renderModule Module {moduleName = coreModuleName, ..}
+    either throwString (putFile dest) $
+      renderModule
+        Module
+          { moduleName = mainModuleName
+          , imports = [coreModuleName]
+          , exports = exports
+          , decls = []
+          }
+
 generateCallbackFunctionModules ::
   ( FileTree :> es
   , Reader CodeGenEnv :> es
@@ -524,18 +599,7 @@ generateInterfaceMainModule name Attributed {entry = ifs} = do
           , decs = DL.singleton ffiDec
           }
 
-    genConstants = V.forM_ ifs.constants \Attributed {entry = Const ty kname val} ->
-      skipIfContainsUnknown ty do
-        let funName = "js_const_" <> hsTyName <> "_" <> kname
-            tyStr = T.pack $ pprint $ toHaskellType ty
-            valStr = T.pack $ pprint $ toHaskellValue val
-            sig = [trimming|${funName} :: ${tyStr}|]
-            def = [trimming|${funName} = ${valStr}|]
-        Writer.tell
-          MainModuleFragments
-            { mainExports = DL.singleton (varName, funName)
-            , decs = DL.fromList $ map Left [sig, def]
-            }
+    genConstants = V.forM_ ifs.constants $ generateConstantFragments hsTyName . (.entry)
     genOperations = do
       V.forM_ ifs.operations \Attributed {entry = op@(Operation msp reg)} -> do
         skipIfContainsUnknown op do
@@ -605,6 +669,26 @@ generateInterfaceMainModule name Attributed {entry = ifs} = do
     genStaticAttributes = pure ()
     -- FIXME: Implement this
     genStaticOperations = pure ()
+
+generateConstantFragments ::
+  ( Reader CodeGenEnv :> es
+  , Writer.Writer MainModuleFragments :> es
+  ) =>
+  Identifier ->
+  Const ->
+  Eff es ()
+generateConstantFragments hsTyName (Const ty kname val) =
+  skipIfContainsUnknown ty do
+    let funName = "js_const_" <> hsTyName <> "_" <> kname
+        tyStr = T.pack $ pprint $ toHaskellType ty
+        valStr = T.pack $ pprint $ toHaskellValue val
+        sig = [trimming|${funName} :: ${tyStr}|]
+        def = [trimming|${funName} = ${valStr}|]
+    Writer.tell
+      MainModuleFragments
+        { mainExports = DL.singleton (varName, funName)
+        , decs = DL.fromList $ map Left [sig, def]
+        }
 
 renderJSFFIImport :: JSFFIImport -> Either Text (HsDecl GhcPs)
 renderJSFFIImport JSFFIImport {..} =

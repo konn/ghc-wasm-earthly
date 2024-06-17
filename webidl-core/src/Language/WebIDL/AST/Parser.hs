@@ -1,6 +1,9 @@
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Language.WebIDL.AST.Parser (
   parseIDLFragment,
@@ -11,6 +14,7 @@ module Language.WebIDL.AST.Parser (
 import Control.Applicative hiding (Const)
 import Control.Applicative.Combinators.NonEmpty qualified as PNE
 import Data.Char qualified as C
+import Data.Either (partitionEithers)
 import Data.Functor.Identity
 import Data.HashSet qualified as HS
 import Data.Scientific
@@ -366,8 +370,19 @@ callbackRestP =
     <*> (CallbackFunction <$> idlTypeP <*> parens argumentListP <* semi)
 
 callbackInterfaceP :: Parser CallbackInterface
-callbackInterfaceP = do
-  CallbackInterface . V.fromList <$> many (attributedP callbackInterfaceMemberP)
+callbackInterfaceP = P.try $ do
+  (ifs, V.fromList -> callbackConsts) <-
+    partitionEithers
+      . map
+        ( traverse
+            \case
+              CallbackInterfaceConst c -> Right c
+              CallbackInterfaceRegularOperation o -> Left o
+        )
+      <$> many (attributedP callbackInterfaceMemberP)
+  case ifs of
+    [fun] -> pure CallbackInterface {callbackOperation = fun, ..}
+    _ -> fail "Callback interface must have exactly one operation member."
 
 callbackInterfaceMemberP :: Parser CallbackInterfaceMember
 callbackInterfaceMemberP =

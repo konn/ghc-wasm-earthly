@@ -259,8 +259,11 @@ data MixinMember
       !Attribute
   deriving (Data, Show, Eq, Ord, Generic)
 
-newtype CallbackInterface
-  = CallbackInterface (V.Vector (Attributed CallbackInterfaceMember))
+data CallbackInterface
+  = CallbackInterface
+  { callbackOperation :: RegularOperation
+  , callbackConsts :: V.Vector (Attributed Const)
+  }
   deriving (Data, Show, Eq, Ord, Generic)
 
 data CallbackInterfaceMember
@@ -268,7 +271,11 @@ data CallbackInterfaceMember
   | CallbackInterfaceRegularOperation RegularOperation
   deriving (Data, Show, Eq, Ord, Generic)
 
-data RegularOperation = RegularOperation !IDLType !(Maybe OperationName) !ArgumentList
+data RegularOperation = RegularOperation
+  { returnType :: !IDLType
+  , operationName :: !(Maybe OperationName)
+  , args :: !ArgumentList
+  }
   deriving (Data, Show, Eq, Ord, Generic)
 
 data OperationName = IncludesOperation | OperationNamed !Identifier
