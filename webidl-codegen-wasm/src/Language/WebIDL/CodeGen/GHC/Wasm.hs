@@ -384,7 +384,7 @@ generateCallbackInterfaceModules ::
   Eff es ()
 generateCallbackInterfaceModules = do
   defns <- EffR.asks @CodeGenEnv (.definitions)
-  iforM_ defns.callbackInterfaces \(normaliseTypeName -> name) Attributed {entry = callback} -> skipIfContainsUnknown callback do
+  iforM_ defns.callbackInterfaces \(normaliseTypeName -> name) Attributed {entry = callback} -> do
     coreModuleName <- toCoreModuleName name
     mainModuleName <- toMainModuleName name
     let parents = L.foldOver namedTypeIdentifiers L.nub callback
@@ -458,7 +458,7 @@ generateCallbackFunctionModules ::
   Eff es ()
 generateCallbackFunctionModules = do
   defns <- EffR.asks @CodeGenEnv (.definitions)
-  iforM_ defns.callbackFunctions \(normaliseTypeName -> name) Attributed {entry = callback} -> skipIfContainsUnknown callback do
+  iforM_ defns.callbackFunctions \(normaliseTypeName -> name) Attributed {entry = callback} -> do
     coreModuleName <- toCoreModuleName name
     mainModuleName <- toMainModuleName name
     let parents = L.foldOver namedTypeIdentifiers L.nub callback
@@ -517,7 +517,7 @@ generateTypedefModules ::
   Eff es ()
 generateTypedefModules = do
   defns <- EffR.asks @CodeGenEnv (.definitions)
-  iforM_ defns.typedefs \(normaliseTypeName -> name) Attributed {entry = typedef} -> skipIfContainsUnknown typedef do
+  iforM_ defns.typedefs \(normaliseTypeName -> name) Attributed {entry = typedef} -> do
     coreModuleName <- toCoreModuleName name
     mainModuleName <- toMainModuleName name
     let parents = L.foldOver namedTypeIdentifiers L.nub typedef
@@ -588,7 +588,7 @@ generateInterfaceMainModule name Attributed {entry = ifs} = do
       genStaticAttributes
       genStaticOperations
     -- FIXME: Is this correct? We must be aware of 'Namespace'.
-    genConstructors = V.forM_ ifs.constructors \Attributed {entry = args} -> skipIfContainsUnknown args do
+    genConstructors = V.forM_ ifs.constructors \Attributed {entry = args} -> do
       let hsFunName
             | V.length ifs.constructors /= 1 = toConstructorName hsTyName args
             | otherwise = "js_cons_" <> hsTyName
@@ -604,7 +604,7 @@ generateInterfaceMainModule name Attributed {entry = ifs} = do
     genConstants = V.forM_ ifs.constants $ generateConstantFragments hsTyName . (.entry)
     genOperations = do
       V.forM_ ifs.operations \Attributed {entry = op@(Operation msp reg)} -> do
-        skipIfContainsUnknown op do
+        do
           case msp of
             Just {} -> do
               -- FIXME: Implement special operations!
@@ -628,7 +628,7 @@ generateInterfaceMainModule name Attributed {entry = ifs} = do
     genAttributes = do
       let atts = ifs.attributes <> V.map (fmap (ReadWrite,)) ifs.inheritedAttributes
       V.forM_ atts \Attributed {entry = (rw, attrib@(Attribute ty attName))} ->
-        skipIfContainsUnknown attrib do
+        do
           let readerName = "js_get_" <> att
               att = toHaskellIdentifier attName
               readerSig =
@@ -679,18 +679,17 @@ generateConstantFragments ::
   Identifier ->
   Const ->
   Eff es ()
-generateConstantFragments hsTyName (Const ty kname val) =
-  skipIfContainsUnknown ty do
-    let funName = "js_const_" <> hsTyName <> "_" <> kname
-        tyStr = T.pack $ pprint $ toHaskellType ty
-        valStr = T.pack $ pprint $ toHaskellValue val
-        sig = [trimming|${funName} :: ${tyStr}|]
-        def = [trimming|${funName} = ${valStr}|]
-    Writer.tell
-      MainModuleFragments
-        { mainExports = DL.singleton (varName, funName)
-        , decs = DL.fromList $ map Left [sig, def]
-        }
+generateConstantFragments hsTyName (Const ty kname val) = do
+  let funName = "js_const_" <> hsTyName <> "_" <> kname
+      tyStr = T.pack $ pprint $ toHaskellType ty
+      valStr = T.pack $ pprint $ toHaskellValue val
+      sig = [trimming|${funName} :: ${tyStr}|]
+      def = [trimming|${funName} = ${valStr}|]
+  Writer.tell
+    MainModuleFragments
+      { mainExports = DL.singleton (varName, funName)
+      , decs = DL.fromList $ map Left [sig, def]
+      }
 
 renderJSFFIImport :: JSFFIImport -> Either Text (HsDecl GhcPs)
 renderJSFFIImport JSFFIImport {..} =
@@ -1009,7 +1008,7 @@ instance ToHaskellType DistinguishableType where
     DPrim p -> toHaskellPrototype p
     DString s -> toHaskellPrototype s
     DNamed s -> tyConOrVar $ toPrototypeName s
-    DSequence s -> tyConOrVar "JSSequenceClass" `appTy` toHaskellPrototype s.entry
+    DSequence s -> tyConOrVar "SequenceClass" `appTy` toHaskellPrototype s.entry
     DObject -> tyConOrVar "AnyClass"
     DSymbol -> tyConOrVar "JSSymbolClass"
     DBuffer b -> toHaskellPrototype b
@@ -1022,7 +1021,7 @@ instance ToHaskellType DistinguishableType where
     DPrim p -> toHaskellType p
     DString s -> toHaskellType s
     DNamed s -> tyConOrVar $ toTypeName s
-    DSequence s -> tyConOrVar "JSSequence" `appTy` toHaskellPrototype s.entry
+    DSequence s -> tyConOrVar "Sequence" `appTy` toHaskellPrototype s.entry
     DObject -> tyConOrVar "JSAny"
     DSymbol -> tyConOrVar "JSSymbol"
     DBuffer b -> toHaskellType b
