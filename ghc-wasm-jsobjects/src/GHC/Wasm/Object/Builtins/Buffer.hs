@@ -14,6 +14,12 @@ module GHC.Wasm.Object.Builtins.Buffer (
   fromArrayBuffer,
   newArrayBuffer,
 
+  -- ** Common definitions
+  BufferSourceClass,
+  BufferSource,
+  ArrayBufferViewClass,
+  ArrayBufferView,
+
   -- * Byte array of various types.
   JSByteArrayClass,
   JSByteArray,
@@ -94,6 +100,27 @@ type data SharedArrayBufferClass :: Prototype
 type instance SuperclassOf SharedArrayBufferClass = 'Nothing
 
 type SharedArrayBuffer = JSObject SharedArrayBufferClass
+
+type ArrayBufferViewClass =
+  UnionClass
+    '[ JSByteArrayClass Int8
+     , JSByteArrayClass Int16
+     , JSByteArrayClass Int32
+     , JSByteArrayClass Int64
+     , JSByteArrayClass Word8
+     , JSByteArrayClass Word16
+     , JSByteArrayClass Word32
+     , JSByteArrayClass Word64
+     , JSByteArrayClass Float
+     , JSByteArrayClass Double
+     , DataViewClass
+     ]
+
+type ArrayBufferView = JSObject ArrayBufferViewClass
+
+type BufferSourceClass = UnionClass '[ArrayBufferClass, ArrayBufferViewClass]
+
+type BufferSource = JSObject BufferSourceClass
 
 fromArrayBuffer :: (JSByteArrayElement a) => ArrayBuffer -> IO (JSByteArray a)
 fromArrayBuffer = fromArrayBuffer_
