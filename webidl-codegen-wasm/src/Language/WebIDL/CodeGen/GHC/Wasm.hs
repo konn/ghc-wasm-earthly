@@ -154,8 +154,9 @@ generateWasmBinding ::
 generateWasmBinding = do
   generateDictionaryModules
   generateEnumModules
-  generateCoreModules
-  generateMainModules
+  generateTypedefModules
+  generateInterfaceCoreModules
+  generateInterfaceMainModules
 
 data Module = Module
   { moduleName :: Text
@@ -213,21 +214,21 @@ toMainModuleName name = withModulePrefix $ NE.singleton $ normaliseTypeName name
 toCoreModuleName :: (Reader CodeGenEnv :> es) => Identifier -> Eff es T.Text
 toCoreModuleName names = withModulePrefix $ normaliseTypeName names NE.:| ["Core"]
 
-generateCoreModules ::
+generateInterfaceCoreModules ::
   ( FileTree :> es
   , Reader CodeGenEnv :> es
   ) =>
   Eff es ()
-generateCoreModules = do
+generateInterfaceCoreModules = do
   defns <- EffR.asks @CodeGenEnv (.definitions)
   imapM_ generateInterfaceCoreModule defns.interfaces
 
-generateMainModules ::
+generateInterfaceMainModules ::
   ( FileTree :> es
   , Reader CodeGenEnv :> es
   ) =>
   Eff es ()
-generateMainModules = do
+generateInterfaceMainModules = do
   defns <- EffR.asks @CodeGenEnv (.definitions)
   imapM_ generateInterfaceMainModule defns.interfaces
 
@@ -361,6 +362,46 @@ generateEnumModules = do
 
         exports = Just [(tvName, field), (tvName, proto), (tvName, name)]
         decls = map Left [fieldsDef, protoDef, alias]
+    either throwString (putFile coreDest) $
+      renderModule Module {moduleName = coreModuleName, ..}
+    either throwString (putFile dest) $
+      renderModule
+        Module
+          { moduleName = mainModuleName
+          , imports = [coreModuleName]
+          , exports = exports
+          , decls = []
+          }
+
+generateTypedefModules ::
+  ( FileTree :> es
+  , Reader CodeGenEnv :> es
+  ) =>
+  Eff es ()
+generateTypedefModules = do
+  defns <- EffR.asks @CodeGenEnv (.definitions)
+  iforM_ defns.typedefs \(normaliseTypeName -> name) Attributed {entry = typedef} -> do
+    coreModuleName <- toCoreModuleName name
+    mainModuleName <- toMainModuleName name
+    let parents = L.foldOver namedTypeIdentifiers L.nub typedef
+    imps <- mapM toCoreModuleName parents
+    let proto = toPrototypeName name
+        coreDest = fromJust (parseRelDir $ T.unpack name) </> [relfile|Core.hs|]
+        dest = fromJust (parseRelFile $ T.unpack name <> ".hs")
+        imports = Set.toList $ Set.fromList imps <> Set.fromList presetImports
+        protoTy = T.pack $ pprint $ toHaskellPrototype typedef.entry
+        aliasTy = T.pack $ pprint $ toHaskellType typedef.entry
+        protoDef =
+          [trimming|
+            type ${proto} = ${protoTy}
+          |]
+        alias =
+          [trimming|
+            type ${name} = ${aliasTy}
+          |]
+
+        exports = Just [(tvName, proto), (tvName, name)]
+        decls = map Left [protoDef, alias]
     either throwString (putFile coreDest) $
       renderModule Module {moduleName = coreModuleName, ..}
     either throwString (putFile dest) $
