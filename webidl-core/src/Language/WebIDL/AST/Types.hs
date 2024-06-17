@@ -340,7 +340,7 @@ data Definition
   | IncludesStatementD !Identifier IncludesStatement
   deriving (Show, Eq, Ord, Generic)
 
-data CallbackFunction = CallbackFunction IDLType ArgumentList
+data CallbackFunction = CallbackFunction {returnType :: IDLType, argTypes :: ArgumentList}
   deriving (Data, Show, Eq, Ord, Generic)
 
 data WithNullarity a

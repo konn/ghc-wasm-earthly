@@ -27,13 +27,13 @@ module Language.Haskell.Parser.Ex.Helper (
   integerE,
 ) where
 
-import Data.Function (on, (&))
+import Data.Function ((&))
 import Data.Ratio ((%))
 import Data.Scientific (Scientific)
 import qualified Data.Scientific as S
 import Data.String (IsString (..))
 import qualified Data.Text as T
-import GHC.Core.TyCo.Ppr (appPrec)
+import GHC.Core.TyCo.Ppr (appPrec, funPrec)
 import GHC.Driver.DynFlags
 import GHC.Driver.Ppr (showSDoc)
 import GHC.Hs
@@ -116,7 +116,12 @@ tyConOrVar =
     . T.unpack
 
 mkNormalFunTy :: HsType GhcPs -> HsType GhcPs -> HsType GhcPs
-mkNormalFunTy = HsFunTy noExtField (HsUnrestrictedArrow NoEpUniTok) `on` L noAnn
+mkNormalFunTy l r =
+  HsFunTy
+    noExtField
+    (HsUnrestrictedArrow NoEpUniTok)
+    (parenthesizeHsType funPrec (L noAnn l))
+    (parenthesizeHsType appPrec (L noAnn r))
 
 appTy :: HsType GhcPs -> HsType GhcPs -> HsType GhcPs
 appTy l r = HsAppTy noExtField (L noAnn l) (parenthesizeHsType appPrec $ L noAnn r)

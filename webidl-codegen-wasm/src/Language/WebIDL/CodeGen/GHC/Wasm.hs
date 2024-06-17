@@ -155,6 +155,7 @@ generateWasmBinding = do
   generateDictionaryModules
   generateEnumModules
   generateTypedefModules
+  generateCallbackFunctionModules
   generateInterfaceCoreModules
   generateInterfaceMainModules
 
@@ -373,6 +374,65 @@ generateEnumModules = do
           , decls = []
           }
 
+generateCallbackFunctionModules ::
+  ( FileTree :> es
+  , Reader CodeGenEnv :> es
+  ) =>
+  Eff es ()
+generateCallbackFunctionModules = do
+  defns <- EffR.asks @CodeGenEnv (.definitions)
+  iforM_ defns.callbackFunctions \(normaliseTypeName -> name) Attributed {entry = callback} -> skipIfContainsUnknown callback do
+    coreModuleName <- toCoreModuleName name
+    mainModuleName <- toMainModuleName name
+    let parents = L.foldOver namedTypeIdentifiers L.nub callback
+    imps <- mapM toCoreModuleName parents
+    let proto = toPrototypeName name
+        coreDest = fromJust (parseRelDir $ T.unpack name) </> [relfile|Core.hs|]
+        dest = fromJust (parseRelFile $ T.unpack name <> ".hs")
+        imports = Set.toList $ Set.fromList imps <> Set.fromList presetImports
+        protoDef =
+          [trimming|
+            type data ${proto} :: Prototype
+          |]
+        superDef =
+          [trimming|type instance SuperClassOf ${proto} = 'Nothing|]
+        alias =
+          [trimming|
+            type ${name} = JSObject ${proto}
+          |]
+        argTys = argumentHsTypes callback.argTypes
+        pureName = "js_mk_callback_" <> name <> "_pure"
+        pureArgTy =
+          foldr mkNormalFunTy (toHaskellType callback.returnType) argTys
+        pureTy = T.pack $ pprint $ pureArgTy `mkNormalFunTy` tyConOrVar name
+        pureFFI =
+          [trimming|
+            foreign import javascript unsafe "wrapper"
+              ${pureName} :: ${pureTy}
+          |]
+        impureName = "js_mk_callback_" <> name <> "_impure"
+        impureArgTy =
+          foldr mkNormalFunTy (ioTy `appTy` toHaskellType callback.returnType) argTys
+        impureTy = T.pack $ pprint $ impureArgTy `mkNormalFunTy` tyConOrVar name
+        impureFFI =
+          [trimming|
+            foreign import javascript unsafe "wrapper"
+              ${pureName} :: ${impureTy}
+          |]
+
+        exports = Just [(tvName, proto), (tvName, name), (varName, pureName), (varName, impureName)]
+        decls = map Left [protoDef, superDef, alias, pureFFI, impureFFI]
+    either throwString (putFile coreDest) $
+      renderModule Module {moduleName = coreModuleName, ..}
+    either throwString (putFile dest) $
+      renderModule
+        Module
+          { moduleName = mainModuleName
+          , imports = [coreModuleName]
+          , exports = exports
+          , decls = []
+          }
+
 generateTypedefModules ::
   ( FileTree :> es
   , Reader CodeGenEnv :> es
@@ -380,7 +440,7 @@ generateTypedefModules ::
   Eff es ()
 generateTypedefModules = do
   defns <- EffR.asks @CodeGenEnv (.definitions)
-  iforM_ defns.typedefs \(normaliseTypeName -> name) Attributed {entry = typedef} -> do
+  iforM_ defns.typedefs \(normaliseTypeName -> name) Attributed {entry = typedef} -> skipIfContainsUnknown typedef do
     coreModuleName <- toCoreModuleName name
     mainModuleName <- toMainModuleName name
     let parents = L.foldOver namedTypeIdentifiers L.nub typedef
@@ -582,23 +642,26 @@ instance ToHaskellValue ConstValue where
     NaN -> either error unLoc $ parseExpr "0.0 / 0.0"
     Integer i -> integerE i
 
+argumentHsTypes :: ArgumentList -> [HsType GhcPs]
+argumentHsTypes ArgumentList {..} =
+  V.toList $
+    V.map (toHaskellType . (\(Argument a _) -> a) . (.entry)) requiredArgs
+      <> V.map (toHaskellType . Nullable . (\(OptionalArgument a _ _) -> a.entry) . (.entry)) optionalArgs
+      <> foldMap
+        ( \(Ellipsis ty _) ->
+            V.singleton $
+              toHaskellType $
+                DFrozenArray $
+                  Attributed mempty ty
+        )
+        (Compose ellipsis)
+
 toJSFFIImport :: JSFFIImportSeed -> JSFFIImport
 toJSFFIImport JSFFIImportSeed {..} =
   let reqArgNum = V.length args.requiredArgs
       optArgNum = V.length args.optionalArgs
       ellipsNum = if isNothing args.ellipsis then 0 else 1
-      argsHs0 =
-        V.toList $
-          V.map (toHaskellType . (\(Argument a _) -> a) . (.entry)) args.requiredArgs
-            <> V.map (toHaskellType . Nullable . (\(OptionalArgument a _ _) -> a.entry) . (.entry)) args.optionalArgs
-            <> foldMap
-              ( \(Ellipsis ty _) ->
-                  V.singleton $
-                    toHaskellType $
-                      DFrozenArray $
-                        Attributed mempty ty
-              )
-              (Compose args.ellipsis)
+      argsHs0 = argumentHsTypes args
       signature = foldr mkNormalFunTy returnType argsHs
       jsArgs =
         T.intercalate "," $
