@@ -46,6 +46,7 @@ library
   exposed-modules:
     Language.Haskell.Parser.Ex.Helper
     Language.WebIDL.CodeGen.GHC.Wasm
+    Language.WebIDL.CodeGen.GHC.Wasm.App
 
   hs-source-dirs: src
   build-depends:
@@ -78,7 +79,7 @@ library
     webidl-core,
     yaml,
 
-executable webidl-codegen-wasm-exe
+executable webidl-codegen-wasm
   import: defaults
   main-is: Main.hs
   hs-source-dirs: app

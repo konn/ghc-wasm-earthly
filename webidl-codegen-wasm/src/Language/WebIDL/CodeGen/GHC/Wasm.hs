@@ -32,6 +32,7 @@ import Control.Foldl qualified as L
 import Control.Lens (imapM_, ix, (%~))
 import Control.Lens.Indexed (iforM_)
 import Control.Monad (when, (<=<))
+import Data.Aeson (FromJSON, ToJSON)
 import Data.Bifunctor qualified as Bi
 import Data.Char qualified as C
 import Data.DList (DList)
@@ -84,6 +85,7 @@ data GHCWasmOptions' fp = GHCWasmOptions
   , modulePrefix :: !(Maybe T.Text)
   }
   deriving (Show, Eq, Ord, Generic, Functor, Foldable, Traversable)
+  deriving anyclass (FromJSON, ToJSON)
 
 resolveOptions :: (FileSystem :> es) => GHCWasmOptions' FilePath -> Eff es GHCWasmOptions
 resolveOptions = traverse (unsafeEff_ . resolveDir')
