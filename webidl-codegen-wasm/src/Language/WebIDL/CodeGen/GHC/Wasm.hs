@@ -294,8 +294,8 @@ generateDictionaryModules = do
           promotedListTy $
             map (uncurry promotedTupleT . Bi.first symbolLitTy) $
               Map.toList $
-                (toHaskellType . (.entry) <$> dict.requiredMembers)
-                  <> (appTy (tyConOrVar "Nullable") . toHaskellPrototype . fst . (.entry) <$> dict.optionalMembers)
+                (toHaskellPrototype . (.entry) <$> dict.requiredMembers)
+                  <> (appTy (tyConOrVar "NullableClass") . toHaskellPrototype . fst . (.entry) <$> dict.optionalMembers)
         fieldTyStr = T.pack $ pprint fieldTy
         reifiedName = "Reified" <> name
         field = name <> "Fields"

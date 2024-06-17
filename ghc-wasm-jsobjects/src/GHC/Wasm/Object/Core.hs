@@ -142,7 +142,7 @@ type family sub <:? super where
   _ <:? AnyClass = 'True
   AnyClass <:? _ = 'False
   NullClass <:? NullableClass a = 'True
-  b <:? NullableClass (JSObject a) = b <:? a
+  b <:? NullableClass a = b <:? a
   UnionClass '[] <:? c = 'True
   UnionClass (x ': xs) <:? c = x <:? c && UnionClass xs <:? c
   _ <:? EnumClass '[] = 'False
@@ -244,7 +244,7 @@ instance
 onEnum :: ((() -> Either () Void) -> s -> Either () r) -> o -> (r -> o) -> s -> o
 onEnum p = on p . const
 
-type NullableClass :: Type -> Prototype
+type NullableClass :: Prototype -> Prototype
 type data NullableClass a
 
 type instance SuperclassOf (NullableClass a) = 'Nothing
