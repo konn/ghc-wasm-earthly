@@ -1,8 +1,10 @@
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -57,7 +59,8 @@ import Algebra.Graph.AdjacencyMap qualified as AM
 import Barbies
 import Control.Exception (Exception)
 import Control.Foldl qualified as L
-import Control.Lens (Traversal', folded)
+import Control.Lens (folded)
+import Control.Lens qualified as Lens
 import Control.Monad.State (MonadState)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State.Strict
@@ -85,7 +88,9 @@ import Language.WebIDL.AST.Types (
   Attributed (..),
   CallbackFunction (..),
   CallbackInterface (..),
+  Complete,
   Const (..),
+  ConstType (..),
   DefaultValue (..),
   DistinguishableType,
   Ellipsis (..),
@@ -93,6 +98,7 @@ import Language.WebIDL.AST.Types (
   IDLFragment,
   IDLType (..),
   Identifier,
+  Inheritance (..),
   Iterable (..),
   Maplike (..),
   Operation (..),
@@ -311,5 +317,14 @@ getUnknownIdentifiers defns =
         then Nothing
         else Just unknowns
 
-namedTypeIdentifiers :: (Data a) => Traversal' a Identifier
-namedTypeIdentifiers = biplate @_ @DistinguishableType . #_DNamed
+namedTypeIdentifiers :: (Data a) => Lens.Fold a Identifier
+namedTypeIdentifiers =
+  Lens.runFold $
+    mconcat
+      [ Lens.Fold $ biplate @_ @DistinguishableType . #_DNamed
+      , Lens.Fold $ biplate @_ @ConstType . #_IdentConstType
+      , Lens.Fold $
+          biplate @_ @(Inheritance Complete)
+            . Lens.to \case Inherits p -> Just p; NoInheritance -> Nothing
+            . folded
+      ]

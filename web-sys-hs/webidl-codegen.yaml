@@ -1,0 +1,3 @@
+modulePrefix: "GHC.Wasm.Web.Generated"
+outputDir: "./src/GHC/Wasm/Web/Generated"
+inputDir: "./webidls/enabled"
