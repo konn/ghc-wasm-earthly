@@ -153,6 +153,7 @@ generateWasmBinding ::
   Eff es ()
 generateWasmBinding = do
   generateDictionaryModules
+  generateEnumModules
   generateCoreModules
   generateMainModules
 
@@ -312,6 +313,54 @@ generateDictionaryModules = do
 
         exports = Just [(tvName, field), (tvName, proto), (tvName, name), (tvName, reifiedName)]
         decls = map Left [fieldsDef, protoDef, alias, reified]
+    either throwString (putFile coreDest) $
+      renderModule Module {moduleName = coreModuleName, ..}
+    either throwString (putFile dest) $
+      renderModule
+        Module
+          { moduleName = mainModuleName
+          , imports = [coreModuleName]
+          , exports = exports
+          , decls = []
+          }
+
+generateEnumModules ::
+  ( FileTree :> es
+  , Reader CodeGenEnv :> es
+  ) =>
+  Eff es ()
+generateEnumModules = do
+  defns <- EffR.asks @CodeGenEnv (.definitions)
+  iforM_ defns.enums \(normaliseTypeName -> name) Attributed {entry = enum} -> do
+    coreModuleName <- toCoreModuleName name
+    mainModuleName <- toMainModuleName name
+    let parents = L.foldOver namedTypeIdentifiers L.nub enum
+    imps <- mapM toCoreModuleName parents
+    let proto = toPrototypeName name
+        coreDest = fromJust (parseRelDir $ T.unpack name) </> [relfile|Core.hs|]
+        dest = fromJust (parseRelFile $ T.unpack name <> ".hs")
+        imports = Set.toList $ Set.fromList imps <> Set.fromList presetImports
+        tagsTy =
+          promotedListTy $
+            map symbolLitTy $
+              NE.toList enum.enumTags
+        tagsTyStr = T.pack $ pprint tagsTy
+        field = name <> "Tags"
+        fieldsDef =
+          [trimming|
+            type ${field} = ${tagsTyStr}
+          |]
+        protoDef =
+          [trimming|
+            type ${proto} = EnumClass ${field}
+          |]
+        alias =
+          [trimming|
+            type ${name} = JSObject ${proto}
+          |]
+
+        exports = Just [(tvName, field), (tvName, proto), (tvName, name)]
+        decls = map Left [fieldsDef, protoDef, alias]
     either throwString (putFile coreDest) $
       renderModule Module {moduleName = coreModuleName, ..}
     either throwString (putFile dest) $

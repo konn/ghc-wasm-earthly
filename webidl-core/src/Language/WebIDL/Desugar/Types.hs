@@ -200,7 +200,7 @@ deriving via
   instance
     Monoid (Mixin' DList)
 
-newtype Enumeration = Enumeration (NonEmpty Text)
+newtype Enumeration = Enumeration {enumTags :: NonEmpty Text}
   deriving (Show, Eq, Ord, Generic, Data)
 
 data Dictionary = Dictionary
