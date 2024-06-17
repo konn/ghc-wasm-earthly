@@ -494,7 +494,7 @@ generateCallbackFunctionModules = do
         impureFFI =
           [trimming|
             foreign import javascript unsafe "wrapper"
-              ${pureName} :: ${impureTy}
+              ${impureName} :: ${impureTy}
           |]
 
         exports = Just [(tvName, proto), (tvName, name), (varName, pureName), (varName, impureName)]
