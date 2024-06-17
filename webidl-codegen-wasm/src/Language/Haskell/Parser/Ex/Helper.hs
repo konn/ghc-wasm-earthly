@@ -103,7 +103,8 @@ parseImport src =
 formatModule :: HsModule GhcPs -> String
 formatModule m =
   unlines $
-    "{-# LANGUAGE GHC2021 #-}"
+    "{-# OPTIONS_GHC -Wno-unused-imports #-}"
+      : "{-# LANGUAGE GHC2021 #-}"
       : map (("{-# LANGUAGE " ++) . (++ " #-}") . pprint) defaultExtensions
       ++ [pprint m]
 
