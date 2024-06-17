@@ -69,6 +69,7 @@ library
     path,
     path-io,
     safe-exceptions,
+    scientific,
     syb,
     text,
     transformers,

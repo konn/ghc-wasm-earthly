@@ -69,7 +69,7 @@ import GHC.Types.Name.Reader (RdrName (..))
 import GHC.Types.SrcLoc
 import Language.Haskell.Parser.Ex.Helper
 import Language.WebIDL.AST.Parser (parseIDLFragment)
-import Language.WebIDL.AST.Types (Attribute (..), AttributeName (..), BufferType (..), DistinguishableType (..), IDLFragment, PrimType (..), Sign (..), StringType (..), UnionType (..), WithNullarity (..))
+import Language.WebIDL.AST.Types (Attribute (..), AttributeName (..), BufferType (..), ConstType (..), ConstValue (..), DistinguishableType (..), IDLFragment, PrimType (..), Sign (..), StringType (..), UnionType (..), WithNullarity (..))
 import Language.WebIDL.Desugar hiding (throw)
 import NeatInterpolation (trimming)
 import Path
@@ -380,24 +380,25 @@ generateInterfaceMainModule ::
   Text ->
   Attributed Interface ->
   Eff es ()
-generateInterfaceMainModule (normaliseTypeName -> name) Attributed {entry = ifs} = do
-  moduleName <- toMainModuleName name
-  let dest = fromJust (parseRelFile $ T.unpack name <> ".hs")
+generateInterfaceMainModule name Attributed {entry = ifs} = do
+  moduleName <- toMainModuleName hsTyName
+  let dest = fromJust (parseRelFile $ T.unpack hsTyName <> ".hs")
   unknowns <- EffR.asks @CodeGenEnv (.unknownTypes)
   let idents = Set.toList $ L.foldOver namedTypeIdentifiers L.set ifs Set.\\ unknowns
   parentMods <- mapM toCoreModuleName idents
   MainModuleFragments {..} <- execWriter go
   let imports = presetImports ++ parentMods
-      proto = toPrototypeName name
+      proto = toPrototypeName hsTyName
       exports =
         Just $
-          (tvName, name)
+          (tvName, hsTyName)
             : (tvName, proto)
             : DL.toList mainExports
       decls = DL.toList decs
   either throwString (putFile dest) $
     renderModule Module {..}
   where
+    hsTyName = normaliseTypeName name
     go = do
       genConstructors
       genConstants
@@ -411,10 +412,10 @@ generateInterfaceMainModule (normaliseTypeName -> name) Attributed {entry = ifs}
     -- FIXME: Is this correct? We must be aware of 'Namespace'.
     genConstructors = V.forM_ ifs.constructors \Attributed {entry = args} -> skipIfContainsUnknown args do
       let hsFunName
-            | V.length ifs.constructors /= 1 = toConstructorName name args
-            | otherwise = "js_cons_" <> name
-          jsFun = Call name
-          returnType = ioTy `appTy` tyConOrVar (toTypeName name)
+            | V.length ifs.constructors /= 1 = toConstructorName hsTyName args
+            | otherwise = "js_cons_" <> hsTyName
+          jsFun = Call hsTyName
+          returnType = ioTy `appTy` tyConOrVar (toTypeName hsTyName)
           ffiDec = renderJSFFIImport $ toJSFFIImport JSFFIImportSeed {async = False, ..}
       Writer.tell
         MainModuleFragments
@@ -422,8 +423,18 @@ generateInterfaceMainModule (normaliseTypeName -> name) Attributed {entry = ifs}
           , decs = DL.singleton ffiDec
           }
 
-    -- FIXME: Implement this
-    genConstants = pure ()
+    genConstants = V.forM_ ifs.constants \Attributed {entry = Const ty kname val} ->
+      skipIfContainsUnknown ty do
+        let funName = "js_const_" <> hsTyName <> "_" <> kname
+            tyStr = T.pack $ pprint $ toHaskellType ty
+            valStr = T.pack $ pprint $ toHaskellValue val
+            sig = [trimming|${funName} :: ${tyStr}|]
+            def = [trimming|${funName} = ${valStr}|]
+        Writer.tell
+          MainModuleFragments
+            { mainExports = DL.singleton (varName, funName)
+            , decs = DL.fromList $ map Left [sig, def]
+            }
     genOperations = do
       V.forM_ ifs.operations \Attributed {entry = op@(Operation msp reg)} -> do
         skipIfContainsUnknown op do
@@ -435,7 +446,7 @@ generateInterfaceMainModule (normaliseTypeName -> name) Attributed {entry = ifs}
               let hsFunName = "js_fun_" <> toHaskellIdentifier jsFunName
                   jsFun =
                     MethodOf
-                      (tyConOrVar (toTypeName name))
+                      (tyConOrVar (toTypeName hsTyName))
                       (toHaskellIdentifier jsFunName)
                   returnType = ioTy `appTy` toHaskellType retTy
                   ffiDec = renderJSFFIImport $ toJSFFIImport JSFFIImportSeed {async = isAsyncJSType retTy, ..}
@@ -457,10 +468,13 @@ generateInterfaceMainModule (normaliseTypeName -> name) Attributed {entry = ifs}
                 T.pack $
                   pprint $
                     mkNormalFunTy
-                      (tyConOrVar (toTypeName name))
+                      (tyConOrVar (toTypeName hsTyName))
                       (ioTy `appTy` toHaskellType ty.entry)
               reader =
-                "foreign import javascript unsafe \"$1." <> att <> "\" " <> readerName <> " :: " <> readerSig
+                [trimming|
+                  foreign import javascript unsafe "$$1.${att}"
+                    ${readerName} :: ${readerSig}
+                |]
           Writer.tell
             MainModuleFragments
               { mainExports = DL.singleton (varName, readerName)
@@ -473,7 +487,7 @@ generateInterfaceMainModule (normaliseTypeName -> name) Attributed {entry = ifs}
                     pprint $
                       foldr1
                         mkNormalFunTy
-                        [tyConOrVar (toTypeName name), toHaskellType ty.entry, ioTy `appTy` unitT]
+                        [tyConOrVar (toTypeName hsTyName), toHaskellType ty.entry, ioTy `appTy` unitT]
                 writer =
                   "foreign import javascript unsafe \"$1." <> att <> " = $2\" " <> writerName <> " :: " <> writerSig
             Writer.tell
@@ -513,6 +527,19 @@ data JSFFIImportSeed = JSFFIImportSeed
   , async :: !Bool
   }
   deriving (Generic)
+
+class ToHaskellValue a where
+  toHaskellValue :: a -> HsExpr GhcPs
+
+instance ToHaskellValue ConstValue where
+  toHaskellValue = \case
+    Bool p ->
+      HsVar noExtField $ L noAnn $ Unqual $ mkOccName dataName $ fromString $ show p
+    Decimal p -> floatE p
+    Infinity -> either error unLoc $ parseExpr "1.0 / 0.0"
+    MinusInfinity -> either error unLoc $ parseExpr "-1.0 / 0.0"
+    NaN -> either error unLoc $ parseExpr "0.0 / 0.0"
+    Integer i -> integerE i
 
 toJSFFIImport :: JSFFIImportSeed -> JSFFIImport
 toJSFFIImport JSFFIImportSeed {..} =
@@ -672,6 +699,17 @@ class ToHaskellType a where
   toHaskellType :: a -> HsType GhcPs
   isAsyncJSType :: a -> Bool
   toHaskellPrototype :: a -> HsType GhcPs
+
+instance ToHaskellType ConstType where
+  isAsyncJSType = \case
+    PrimConstType p -> isAsyncJSType p
+    IdentConstType _ -> False -- FIXME: should we lookup?
+  toHaskellType = \case
+    PrimConstType p -> toHaskellType p
+    IdentConstType i -> tyConOrVar $ toTypeName i
+  toHaskellPrototype = \case
+    PrimConstType p -> toHaskellPrototype p
+    IdentConstType i -> tyConOrVar $ toPrototypeName i
 
 instance (ToHaskellType a) => ToHaskellType (WithNullarity a) where
   isAsyncJSType = \case

@@ -23,9 +23,14 @@ module Language.Haskell.Parser.Ex.Helper (
   unitT,
   symbolLitTy,
   promotedTupleT,
+  floatE,
+  integerE,
 ) where
 
 import Data.Function (on, (&))
+import Data.Ratio ((%))
+import Data.Scientific (Scientific)
+import qualified Data.Scientific as S
 import Data.String (IsString (..))
 import qualified Data.Text as T
 import GHC.Core.TyCo.Ppr (appPrec)
@@ -37,7 +42,7 @@ import GHC.Parser.Lexer (PState (..), ParseResult (..))
 import GHC.Real ()
 import GHC.Types.Name.Occurrence
 import GHC.Types.Name.Reader (RdrName (..))
-import GHC.Types.SourceText (SourceText (NoSourceText))
+import GHC.Types.SourceText (FractionalExponentBase (Base10), FractionalLit (..), IntegralLit (..), SourceText (NoSourceText))
 import GHC.Types.SrcLoc
 import GHC.Utils.Outputable
 import qualified Language.Haskell.GhclibParserEx.GHC.Parser as P
@@ -130,3 +135,27 @@ ioTy = tyConOrVar $ T.pack "IO"
 
 unitT :: HsType GhcPs
 unitT = HsTupleTy (AnnParen AnnParens noAnn noAnn) HsBoxedOrConstraintTuple []
+
+floatE :: Scientific -> HsExpr GhcPs
+floatE d =
+  HsOverLit noExtField $
+    OverLit
+      { ol_val =
+          HsFractional $
+            FL
+              { fl_text = NoSourceText
+              , fl_signi = S.coefficient d % 1
+              , fl_neg = False
+              , fl_exp_base = Base10
+              , fl_exp = fromIntegral $ S.base10Exponent d
+              }
+      , ol_ext = noExtField
+      }
+
+integerE :: Integer -> HsExpr GhcPs
+integerE i =
+  HsOverLit noExtField $
+    OverLit
+      { ol_val = HsIntegral $ IL {il_value = i, il_text = NoSourceText, il_neg = False}
+      , ol_ext = noExtField
+      }
