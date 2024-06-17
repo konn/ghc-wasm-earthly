@@ -423,7 +423,7 @@ generateCallbackInterfaceModules = do
         impureFFI =
           [trimming|
             foreign import javascript unsafe "wrapper"
-              ${pureName} :: ${impureTy}
+              ${impureName} :: ${impureTy}
           |]
 
         exports =
