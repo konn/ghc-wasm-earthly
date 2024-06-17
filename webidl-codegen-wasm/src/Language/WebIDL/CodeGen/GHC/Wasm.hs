@@ -19,6 +19,7 @@
 {-# OPTIONS_GHC -Wno-redundant-constraints #-}
 
 module Language.WebIDL.CodeGen.GHC.Wasm (
+  GHCWasmOptions' (..),
   generateWasmBinding,
   generateWasmBindingPure,
   generateWasmBindingWith,
@@ -83,6 +84,7 @@ data GHCWasmOptions' fp = GHCWasmOptions
   { inputDir :: !fp
   , outputDir :: !fp
   , modulePrefix :: !(Maybe T.Text)
+  , targets :: Maybe [Text]
   }
   deriving (Show, Eq, Ord, Generic, Functor, Foldable, Traversable)
   deriving anyclass (FromJSON, ToJSON)
@@ -150,6 +152,14 @@ generateWasmBindingPure modulePrefix idls = do
       CodeGenEnv {modulePrefix = modulePrefix, ..}
       generateWasmBinding
 
+data CoreModule = CoreModule
+  { exports :: [Text]
+  , decls :: [Either Text (HsDecl GhcPs)]
+  }
+  deriving (Generic)
+
+-- FIXME: Create just single one Core module to host all prototypes,
+-- and import them in all other generated modules.
 generateWasmBinding ::
   (FileTree :> es, Reader CodeGenEnv :> es) =>
   Eff es ()
@@ -561,11 +571,11 @@ generateInterfaceMainModule ::
 generateInterfaceMainModule name Attributed {entry = ifs} = do
   moduleName <- toMainModuleName hsTyName
   let dest = fromJust (parseRelFile $ T.unpack hsTyName <> ".hs")
-  unknowns <- EffR.asks @CodeGenEnv (.unknownTypes)
-  let idents = Set.toList $ L.foldOver namedTypeIdentifiers L.set ifs Set.\\ unknowns
+  let idents = Set.toList $ L.foldOver namedTypeIdentifiers L.set ifs
+  coreMod <- toCoreModuleName hsTyName
   parentMods <- mapM toCoreModuleName idents
   MainModuleFragments {..} <- execWriter go
-  let imports = presetImports ++ parentMods
+  let imports = coreMod : presetImports ++ parentMods
       proto = toPrototypeName hsTyName
       exports =
         Just $
