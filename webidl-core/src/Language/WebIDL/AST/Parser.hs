@@ -633,6 +633,7 @@ keywords =
     [ "ArrayBuffer"
     , "async"
     , "attribute"
+    , "any"
     , "bigint"
     , "BigInt64Array"
     , "BigUint64Array"
