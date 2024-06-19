@@ -96,6 +96,7 @@ data GHCWasmOptions' fp = GHCWasmOptions
   , outputDir :: !fp
   , modulePrefix :: !(Maybe T.Text)
   , targets :: Maybe [Text]
+  , predefinedTypes :: Maybe [Text]
   }
   deriving (Show, Eq, Ord, Generic, Functor, Foldable, Traversable)
   deriving anyclass (FromJSON, ToJSON)
@@ -170,6 +171,7 @@ buildCodeGenEnv opts definitions =
       !targets =
         opts.targets <&> \ts ->
           L.fold L.hashSet $ foldMap (`AM.postSet` dependencies) ts
+      !predefinedTypes = foldMap Set.fromList opts.predefinedTypes
    in CodeGenEnv {..}
 
 skipNonTarget :: (Reader CodeGenEnv :> es, Message :> es) => Identifier -> Eff es () -> Eff es ()
@@ -187,43 +189,43 @@ getDependencies defs =
         [ ifoldMap
             ( \f ->
                 foldMap (AM.edge f)
-                  . L.foldOver namedTypeIdentifiers L.set
+                  . L.foldOver namedTypeIdentifiers L.nub
             )
             defs.interfaces
         , ifoldMap
             ( \f ->
                 foldMap (AM.edge f)
-                  . L.foldOver namedTypeIdentifiers L.set
+                  . L.foldOver namedTypeIdentifiers L.nub
             )
             defs.mixins
         , ifoldMap
             ( \f ->
                 foldMap (AM.edge f)
-                  . L.foldOver namedTypeIdentifiers L.set
+                  . L.foldOver namedTypeIdentifiers L.nub
             )
             defs.typedefs
         , ifoldMap
             ( \f ->
                 foldMap (AM.edge f)
-                  . L.foldOver namedTypeIdentifiers L.set
+                  . L.foldOver namedTypeIdentifiers L.nub
             )
             defs.enums
         , ifoldMap
             ( \f ->
                 foldMap (AM.edge f)
-                  . L.foldOver namedTypeIdentifiers L.set
+                  . L.foldOver namedTypeIdentifiers L.nub
             )
             defs.dictionaries
         , ifoldMap
             ( \f ->
                 foldMap (AM.edge f)
-                  . L.foldOver namedTypeIdentifiers L.set
+                  . L.foldOver namedTypeIdentifiers L.nub
             )
             defs.callbackFunctions
         , ifoldMap
             ( \f ->
                 foldMap (AM.edge f)
-                  . L.foldOver namedTypeIdentifiers L.set
+                  . L.foldOver namedTypeIdentifiers L.nub
             )
             defs.callbackInterfaces
         ]
@@ -318,6 +320,7 @@ data CodeGenEnv = CodeGenEnv
   , dependencies :: !(AM.AdjacencyMap Identifier)
   , definitions :: !Definitions
   , targets :: !(Maybe (HashSet Identifier))
+  , predefinedTypes :: Set Text
   }
   deriving (Generic)
 
@@ -388,17 +391,17 @@ generateInterfaceCoreModule (normaliseTypeName -> name) Attributed {entry = ifs}
 
   either throwString (putFile dest) $ renderModule Module {..}
 
-skipIfContainsUnknown :: (Data a, Reader CodeGenEnv :> es) => a -> Eff es () -> Eff es ()
-skipIfContainsUnknown inp act = do
-  unknowns <- EffR.asks @CodeGenEnv (.unknownTypes)
-  when (Set.null $ unknowns `Set.intersection` L.foldOver namedTypeIdentifiers L.set inp) act
-
 data MainModuleFragments = MainModuleFragments
   { mainExports :: DList (NameSpace, Text)
   , decs :: DList (Either Text (HsDecl GhcPs))
   }
   deriving (Generic)
   deriving (Semigroup, Monoid) via Generically MainModuleFragments
+
+getParents :: (Data a, Reader CodeGenEnv :> es) => a -> Eff es (Set Identifier)
+getParents x = do
+  predefs <- EffR.asks @CodeGenEnv (.predefinedTypes)
+  pure $ L.foldOver namedTypeIdentifiers L.set x Set.\\ predefs
 
 generateDictionaryModules ::
   ( FileTree :> es
@@ -413,8 +416,8 @@ generateDictionaryModules = do
     coreModuleName <- toCoreModuleName name
     mainModuleName <- toMainModuleName name
     putLog $ "Generating: " <> T.pack (show (coreModuleName, mainModuleName))
-    let parents = L.foldOver namedTypeIdentifiers L.nub dict
-    imps <- mapM toCoreModuleName parents
+    parents <- getParents dict
+    imps <- mapM toCoreModuleName $ Set.toList parents
     let proto = toPrototypeName name
         coreDest = fromJust (parseRelDir $ T.unpack name) </> [relfile|Core.hs|]
         dest = fromJust (parseRelFile $ T.unpack name <> ".hs")
@@ -471,8 +474,8 @@ generateEnumModules = do
     coreModuleName <- toCoreModuleName name
     mainModuleName <- toMainModuleName name
     putLog $ "Generating: " <> T.pack (show (coreModuleName, mainModuleName))
-    let parents = L.foldOver namedTypeIdentifiers L.nub enum
-    imps <- mapM toCoreModuleName parents
+    parents <- getParents enum
+    imps <- mapM toCoreModuleName $ Set.toList parents
     let proto = toPrototypeName name
         coreDest = fromJust (parseRelDir $ T.unpack name) </> [relfile|Core.hs|]
         dest = fromJust (parseRelFile $ T.unpack name <> ".hs")
@@ -522,7 +525,7 @@ generateCallbackInterfaceModules = do
     coreModuleName <- toCoreModuleName name
     mainModuleName <- toMainModuleName name
     putLog $ "Generating: " <> T.pack (show (coreModuleName, mainModuleName))
-    let parents = L.foldOver namedTypeIdentifiers L.nub callback
+    parents <- Set.toList <$> getParents callback
     imps <- mapM toCoreModuleName parents
     MainModuleFragments {mainExports = constExports, decs = constDefs} <-
       Writer.execWriter $
@@ -599,7 +602,7 @@ generateCallbackFunctionModules = do
     coreModuleName <- toCoreModuleName name
     mainModuleName <- toMainModuleName name
     putLog $ "Generating: " <> T.pack (show (coreModuleName, mainModuleName))
-    let parents = L.foldOver namedTypeIdentifiers L.nub callback
+    parents <- Set.toList <$> getParents callback
     imps <- mapM toCoreModuleName parents
     let proto = toPrototypeName name
         coreDest = fromJust (parseRelDir $ T.unpack name) </> [relfile|Core.hs|]
@@ -661,7 +664,7 @@ generateTypedefModules = do
     coreModuleName <- toCoreModuleName name
     mainModuleName <- toMainModuleName name
     putLog $ "Generating: " <> T.pack (show (coreModuleName, mainModuleName))
-    let parents = L.foldOver namedTypeIdentifiers L.nub typedef
+    parents <- Set.toList <$> getParents typedef
     imps <- mapM toCoreModuleName parents
     let proto = toPrototypeName name
         coreDest = fromJust (parseRelDir $ T.unpack name) </> [relfile|Core.hs|]
@@ -704,7 +707,7 @@ generateInterfaceMainModule name Attributed {entry = ifs} = skipNonTarget name d
   moduleName <- toMainModuleName hsTyName
   putLog $ "Generating: " <> moduleName
   let dest = fromJust (parseRelFile $ T.unpack hsTyName <> ".hs")
-  let idents = Set.toList $ L.foldOver namedTypeIdentifiers L.set ifs
+  idents <- Set.toList <$> getParents ifs
   coreMod <- toCoreModuleName hsTyName
   parentMods <- mapM toCoreModuleName idents
   MainModuleFragments {..} <- execWriter go
@@ -770,7 +773,7 @@ generateInterfaceMainModule name Attributed {entry = ifs} = skipNonTarget name d
     genStringifiers = pure ()
     genAttributes = do
       let atts = ifs.attributes <> V.map (fmap (ReadWrite,)) ifs.inheritedAttributes
-      V.forM_ atts \Attributed {entry = (rw, (Attribute ty attName))} ->
+      V.forM_ atts \Attributed {entry = (rw, Attribute ty attName)} ->
         do
           let readerName = "js_get_" <> att
               att = toHaskellIdentifier attName
