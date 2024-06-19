@@ -14,6 +14,7 @@ import Effectful (runEff)
 import Effectful.Environment (runEnvironment)
 import Effectful.FileSystem (runFileSystem, withCurrentDirectory)
 import qualified Effectful.FileSystem as Eff
+import Effectful.Time (runClock)
 import GHC.Generics (Generic)
 import Language.WebIDL.CodeGen.GHC.Wasm
 import qualified Options.Applicative as Opts
@@ -58,4 +59,5 @@ defaultMain = do
           else (</> defaultYaml) <$> resolveDir' cliOpts.config
       cfg <- Y.decodeFileThrow $ fromAbsFile cfgPath
       withCurrentDirectory (fromAbsDir $ parent cfgPath) $
-        generateWasmBindingWith cfg
+        runClock $
+          generateWasmBindingWith cfg

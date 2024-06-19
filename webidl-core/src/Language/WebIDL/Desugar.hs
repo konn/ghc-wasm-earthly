@@ -316,7 +316,7 @@ desugarInterface ::
 desugarInterface i =
   let parent = case i of
         NoInheritance -> First Nothing
-        Inherits p -> First $ Just p
+        Inherits p -> First $ Just $ TypeName p
    in L.fold do
         constructors <- case sPartiality @p of
           SComplete -> L.handles (attributedL AST._Constructor) dlistL

@@ -27,20 +27,25 @@ module Language.WebIDL.CodeGen.GHC.Wasm (
   execFileTreePure,
 ) where
 
+import Algebra.Graph.AdjacencyMap qualified as AM
 import Control.Arrow ((>>>))
 import Control.Exception.Safe (throwIO, throwString)
 import Control.Foldl qualified as L
-import Control.Lens (imapM_, ix, (%~))
+import Control.Lens (ifoldMap, imapM_, ix, (%~))
 import Control.Lens.Indexed (iforM_)
 import Control.Monad (when, (<=<))
 import Data.Aeson (FromJSON, ToJSON)
 import Data.Bifunctor qualified as Bi
+import Data.ByteString qualified as BS
 import Data.Char qualified as C
 import Data.DList (DList)
 import Data.DList qualified as DL
 import Data.Data (Data)
 import Data.Foldable1 (intercalate1)
+import Data.Functor ((<&>))
 import Data.Functor.Compose (Compose (..))
+import Data.HashSet (HashSet)
+import Data.HashSet qualified as HS
 import Data.List.NonEmpty (NonEmpty)
 import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict (Map)
@@ -53,15 +58,21 @@ import Data.String (fromString)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
+import Data.Time.Format (defaultTimeLocale, formatTime)
 import Data.Vector qualified as V
 import Effectful
+import Effectful.Console.ByteString (Console)
+import Effectful.Console.ByteString qualified as Console
 import Effectful.Dispatch.Dynamic
 import Effectful.Dispatch.Static (unsafeEff_)
 import Effectful.FileSystem (FileSystem, createDirectoryIfMissing)
+import Effectful.FileSystem.IO (hFlush, stderr, stdout)
+import Effectful.FileSystem.IO.ByteString (hPutStrLn)
 import Effectful.FileSystem.IO.ByteString qualified as Eff
 import Effectful.FileSystem.IO.File (writeBinaryFile)
 import Effectful.Reader.Static (Reader, runReader)
 import Effectful.Reader.Static qualified as EffR
+import Effectful.Time (Clock, getZonedTime)
 import Effectful.Writer.Static.Local (execWriter)
 import Effectful.Writer.Static.Local qualified as Writer
 import Effectful.Writer.Static.Shared qualified as SWriter
@@ -88,6 +99,34 @@ data GHCWasmOptions' fp = GHCWasmOptions
   }
   deriving (Show, Eq, Ord, Generic, Functor, Foldable, Traversable)
   deriving anyclass (FromJSON, ToJSON)
+
+data Message :: Effect where
+  PutLog :: Text -> Message m ()
+
+type instance DispatchOf Message = Dynamic
+
+putLog :: (Message :> es) => Text -> Eff es ()
+putLog = send . PutLog
+
+ignoreMessages :: Eff (Message ': es) a -> Eff es a
+ignoreMessages = interpret \cases
+  _ PutLog {} -> pure ()
+
+runMessageStdout :: (Console :> es, Clock :> es) => Eff (Message ': es) a -> Eff es a
+runMessageStdout = interpret \cases
+  _ (PutLog msg) -> Console.putStrLn =<< formatMsg msg
+
+runMessageStderr :: (FileSystem :> es, Clock :> es) => Eff (Message ': es) a -> Eff es a
+runMessageStderr = interpret \cases
+  _ (PutLog msg) -> do
+    hPutStrLn stderr =<< formatMsg msg
+    hFlush stderr
+
+formatMsg :: (Clock :> es) => Text -> Eff es BS.ByteString
+formatMsg msg = do
+  now <- getZonedTime
+  let time = T.pack $ formatTime defaultTimeLocale "[%Y-%m-%d %H:%M:%S] " now
+  pure $ TE.encodeUtf8 $ time <> msg
 
 resolveOptions :: (FileSystem :> es) => GHCWasmOptions' FilePath -> Eff es GHCWasmOptions
 resolveOptions = traverse (unsafeEff_ . resolveDir')
@@ -120,8 +159,77 @@ runFileTreePure = reinterpret SWriter.runWriter \cases
 execFileTreePure :: Eff (FileTree ': es) a -> Eff es (Map (Path Rel File) String)
 execFileTreePure = fmap snd . runFileTreePure
 
+buildCodeGenEnv ::
+  GHCWasmOptions' fp ->
+  Definitions ->
+  CodeGenEnv
+buildCodeGenEnv opts definitions =
+  let !unknownTypes = fromMaybe mempty $ getUnknownIdentifiers definitions
+      !dependencies = getDependencies definitions
+      !modulePrefix = opts.modulePrefix
+      !targets =
+        opts.targets <&> \ts ->
+          L.fold L.hashSet $ foldMap (`AM.postSet` dependencies) ts
+   in CodeGenEnv {..}
+
+skipNonTarget :: (Reader CodeGenEnv :> es, Message :> es) => Identifier -> Eff es () -> Eff es ()
+skipNonTarget name act = do
+  targets <- EffR.asks @CodeGenEnv (.targets)
+  case targets of
+    Just ts | not $ HS.member name ts -> pure () -- putLog $ "Skipping: " <> name
+    _ -> act
+
+getDependencies :: Definitions -> AM.AdjacencyMap Identifier
+getDependencies defs =
+  AM.reflexiveClosure $
+    AM.transitiveClosure $
+      mconcat
+        [ ifoldMap
+            ( \f ->
+                foldMap (AM.edge f)
+                  . L.foldOver namedTypeIdentifiers L.set
+            )
+            defs.interfaces
+        , ifoldMap
+            ( \f ->
+                foldMap (AM.edge f)
+                  . L.foldOver namedTypeIdentifiers L.set
+            )
+            defs.mixins
+        , ifoldMap
+            ( \f ->
+                foldMap (AM.edge f)
+                  . L.foldOver namedTypeIdentifiers L.set
+            )
+            defs.typedefs
+        , ifoldMap
+            ( \f ->
+                foldMap (AM.edge f)
+                  . L.foldOver namedTypeIdentifiers L.set
+            )
+            defs.enums
+        , ifoldMap
+            ( \f ->
+                foldMap (AM.edge f)
+                  . L.foldOver namedTypeIdentifiers L.set
+            )
+            defs.dictionaries
+        , ifoldMap
+            ( \f ->
+                foldMap (AM.edge f)
+                  . L.foldOver namedTypeIdentifiers L.set
+            )
+            defs.callbackFunctions
+        , ifoldMap
+            ( \f ->
+                foldMap (AM.edge f)
+                  . L.foldOver namedTypeIdentifiers L.set
+            )
+            defs.callbackInterfaces
+        ]
+
 generateWasmBindingWith ::
-  (FileSystem :> es) =>
+  (FileSystem :> es, Clock :> es) =>
   GHCWasmOptions' FilePath ->
   Eff es ()
 generateWasmBindingWith opts = do
@@ -132,25 +240,21 @@ generateWasmBindingWith opts = do
           <=< Eff.readFile . fromAbsFile
       )
       =<< listWebIDLs opts'
-  !definitions <- either throwIO pure $ desugar idls
-  let !unknownTypes = fromMaybe mempty $ getUnknownIdentifiers definitions
-  runFileTreeIOIn opts'.outputDir $
-    runReader
-      CodeGenEnv {modulePrefix = opts.modulePrefix, ..}
-      generateWasmBinding
+  !defs <- either throwIO pure $ desugar idls
+  runMessageStderr $
+    runFileTreeIOIn opts'.outputDir $
+      runReader (buildCodeGenEnv opts' defs) generateWasmBinding
 
 generateWasmBindingPure ::
   (Foldable t, FileSystem :> es) =>
-  Maybe Text ->
+  GHCWasmOptions' fp ->
   t IDLFragment ->
   Eff es (Map (Path Rel File) String)
-generateWasmBindingPure modulePrefix idls = do
-  !definitions <- either throwIO pure $ desugar idls
-  let !unknownTypes = fromMaybe mempty $ getUnknownIdentifiers definitions
+generateWasmBindingPure opts idls = do
+  !defs <- either throwIO pure $ desugar idls
   execFileTreePure $
-    runReader
-      CodeGenEnv {modulePrefix = modulePrefix, ..}
-      generateWasmBinding
+    ignoreMessages $
+      runReader (buildCodeGenEnv opts defs) generateWasmBinding
 
 data CoreModule = CoreModule
   { exports :: [Text]
@@ -161,9 +265,13 @@ data CoreModule = CoreModule
 -- FIXME: Create just single one Core module to host all prototypes,
 -- and import them in all other generated modules.
 generateWasmBinding ::
-  (FileTree :> es, Reader CodeGenEnv :> es) =>
+  (FileTree :> es, Reader CodeGenEnv :> es, Message :> es) =>
   Eff es ()
 generateWasmBinding = do
+  CodeGenEnv {..} <- EffR.ask
+  case targets of
+    Just ts -> putLog $ "Generating WebIDL bindings for " <> T.pack (show ts)
+    Nothing -> putLog "Generating WebIDL bindings for all types"
   generateDictionaryModules
   generateEnumModules
   generateTypedefModules
@@ -207,7 +315,9 @@ renderModule Module {..} = do
 data CodeGenEnv = CodeGenEnv
   { modulePrefix :: !(Maybe T.Text)
   , unknownTypes :: !(Set Identifier)
+  , dependencies :: !(AM.AdjacencyMap Identifier)
   , definitions :: !Definitions
+  , targets :: !(Maybe (HashSet Identifier))
   }
   deriving (Generic)
 
@@ -231,40 +341,46 @@ toCoreModuleName names = withModulePrefix $ normaliseTypeName names NE.:| ["Core
 generateInterfaceCoreModules ::
   ( FileTree :> es
   , Reader CodeGenEnv :> es
+  , Message :> es
   ) =>
   Eff es ()
 generateInterfaceCoreModules = do
+  putLog "* Generating interface core modules..."
   defns <- EffR.asks @CodeGenEnv (.definitions)
   imapM_ generateInterfaceCoreModule defns.interfaces
 
 generateInterfaceMainModules ::
   ( FileTree :> es
   , Reader CodeGenEnv :> es
+  , Message :> es
   ) =>
   Eff es ()
 generateInterfaceMainModules = do
+  putLog "* Generating interface Main modules..."
   defns <- EffR.asks @CodeGenEnv (.definitions)
   imapM_ generateInterfaceMainModule defns.interfaces
 
 generateInterfaceCoreModule ::
   ( FileTree :> es
   , Reader CodeGenEnv :> es
+  , Message :> es
   ) =>
   Text ->
   Attributed Interface ->
   Eff es ()
-generateInterfaceCoreModule (normaliseTypeName -> name) Attributed {entry = ifs} = do
+generateInterfaceCoreModule (normaliseTypeName -> name) Attributed {entry = ifs} = skipNonTarget name do
   moduleName <- toCoreModuleName name
-  parentMod <- mapM toCoreModuleName $ getFirst ifs.parent
+  putLog $ "Generating: " <> moduleName
+  parentMod <- mapM (toCoreModuleName . (.typeName)) ifs.parent.getFirst
   let dest = fromJust (parseRelDir $ T.unpack name) </> [relfile|Core.hs|]
       imports = presetImports ++ maybeToList parentMod
       proto = toPrototypeName name
       protoDef =
         [trimming|type data ${proto} :: Prototype|]
       aliasDef = [trimming|type ${name} = JSObject ${proto}|]
-      superDef = case getFirst ifs.parent of
+      superDef = case ifs.parent.getFirst of
         Just p ->
-          let super = toPrototypeName p
+          let super = toPrototypeName p.typeName
            in [trimming|type instance SuperclassOf ${proto} = 'Just ${super}|]
         Nothing -> [trimming|type instance SuperclassOf ${proto} = 'Nothing|]
       decls = map Left [protoDef, aliasDef, superDef]
@@ -287,13 +403,16 @@ data MainModuleFragments = MainModuleFragments
 generateDictionaryModules ::
   ( FileTree :> es
   , Reader CodeGenEnv :> es
+  , Message :> es
   ) =>
   Eff es ()
 generateDictionaryModules = do
+  putLog "* Generating dictionary modules..."
   defns <- EffR.asks @CodeGenEnv (.definitions)
-  iforM_ defns.dictionaries \(normaliseTypeName -> name) Attributed {entry = dict} -> do
+  iforM_ defns.dictionaries \(normaliseTypeName -> name) Attributed {entry = dict} -> skipNonTarget name do
     coreModuleName <- toCoreModuleName name
     mainModuleName <- toMainModuleName name
+    putLog $ "Generating: " <> T.pack (show (coreModuleName, mainModuleName))
     let parents = L.foldOver namedTypeIdentifiers L.nub dict
     imps <- mapM toCoreModuleName parents
     let proto = toPrototypeName name
@@ -342,13 +461,16 @@ generateDictionaryModules = do
 generateEnumModules ::
   ( FileTree :> es
   , Reader CodeGenEnv :> es
+  , Message :> es
   ) =>
   Eff es ()
 generateEnumModules = do
+  putLog "* Generating enum modules..."
   defns <- EffR.asks @CodeGenEnv (.definitions)
-  iforM_ defns.enums \(normaliseTypeName -> name) Attributed {entry = enum} -> do
+  iforM_ defns.enums \(normaliseTypeName -> name) Attributed {entry = enum} -> skipNonTarget name do
     coreModuleName <- toCoreModuleName name
     mainModuleName <- toMainModuleName name
+    putLog $ "Generating: " <> T.pack (show (coreModuleName, mainModuleName))
     let parents = L.foldOver namedTypeIdentifiers L.nub enum
     imps <- mapM toCoreModuleName parents
     let proto = toPrototypeName name
@@ -390,13 +512,16 @@ generateEnumModules = do
 generateCallbackInterfaceModules ::
   ( FileTree :> es
   , Reader CodeGenEnv :> es
+  , Message :> es
   ) =>
   Eff es ()
 generateCallbackInterfaceModules = do
+  putLog "* Generating callback interface modules..."
   defns <- EffR.asks @CodeGenEnv (.definitions)
-  iforM_ defns.callbackInterfaces \(normaliseTypeName -> name) Attributed {entry = callback} -> do
+  iforM_ defns.callbackInterfaces \(normaliseTypeName -> name) Attributed {entry = callback} -> skipNonTarget name do
     coreModuleName <- toCoreModuleName name
     mainModuleName <- toMainModuleName name
+    putLog $ "Generating: " <> T.pack (show (coreModuleName, mainModuleName))
     let parents = L.foldOver namedTypeIdentifiers L.nub callback
     imps <- mapM toCoreModuleName parents
     MainModuleFragments {mainExports = constExports, decs = constDefs} <-
@@ -464,13 +589,16 @@ generateCallbackInterfaceModules = do
 generateCallbackFunctionModules ::
   ( FileTree :> es
   , Reader CodeGenEnv :> es
+  , Message :> es
   ) =>
   Eff es ()
 generateCallbackFunctionModules = do
+  putLog "* Generating callback function modules..."
   defns <- EffR.asks @CodeGenEnv (.definitions)
-  iforM_ defns.callbackFunctions \(normaliseTypeName -> name) Attributed {entry = callback} -> do
+  iforM_ defns.callbackFunctions \(normaliseTypeName -> name) Attributed {entry = callback} -> skipNonTarget name do
     coreModuleName <- toCoreModuleName name
     mainModuleName <- toMainModuleName name
+    putLog $ "Generating: " <> T.pack (show (coreModuleName, mainModuleName))
     let parents = L.foldOver namedTypeIdentifiers L.nub callback
     imps <- mapM toCoreModuleName parents
     let proto = toPrototypeName name
@@ -523,13 +651,16 @@ generateCallbackFunctionModules = do
 generateTypedefModules ::
   ( FileTree :> es
   , Reader CodeGenEnv :> es
+  , Message :> es
   ) =>
   Eff es ()
 generateTypedefModules = do
+  putLog "* Generating typedef modules..."
   defns <- EffR.asks @CodeGenEnv (.definitions)
-  iforM_ defns.typedefs \(normaliseTypeName -> name) Attributed {entry = typedef} -> do
+  iforM_ defns.typedefs \(normaliseTypeName -> name) Attributed {entry = typedef} -> skipNonTarget name do
     coreModuleName <- toCoreModuleName name
     mainModuleName <- toMainModuleName name
+    putLog $ "Generating: " <> T.pack (show (coreModuleName, mainModuleName))
     let parents = L.foldOver namedTypeIdentifiers L.nub typedef
     imps <- mapM toCoreModuleName parents
     let proto = toPrototypeName name
@@ -564,12 +695,14 @@ generateInterfaceMainModule ::
   forall es.
   ( FileTree :> es
   , Reader CodeGenEnv :> es
+  , Message :> es
   ) =>
   Text ->
   Attributed Interface ->
   Eff es ()
-generateInterfaceMainModule name Attributed {entry = ifs} = do
+generateInterfaceMainModule name Attributed {entry = ifs} = skipNonTarget name do
   moduleName <- toMainModuleName hsTyName
+  putLog $ "Generating: " <> moduleName
   let dest = fromJust (parseRelFile $ T.unpack hsTyName <> ".hs")
   let idents = Set.toList $ L.foldOver namedTypeIdentifiers L.set ifs
   coreMod <- toCoreModuleName hsTyName

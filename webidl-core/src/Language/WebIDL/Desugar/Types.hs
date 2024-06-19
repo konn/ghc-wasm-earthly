@@ -16,6 +16,7 @@
 module Language.WebIDL.Desugar.Types (
   Definitions,
   Definitions' (..),
+  TypeName (..),
   Interface,
   Interface' (..),
   ArgumentList (..),
@@ -76,6 +77,7 @@ import Data.Map.Strict qualified as Map
 import Data.Monoid
 import Data.Set (Set)
 import Data.Set qualified as Set
+import Data.String (IsString)
 import Data.Text (Text)
 import Data.Vector qualified as V
 import GHC.Generics
@@ -113,8 +115,12 @@ import Type.Reflection (Typeable)
 
 type Interface = Interface' V.Vector
 
+newtype TypeName = TypeName {typeName :: Identifier}
+  deriving (Show, Eq, Ord, Generic, Data)
+  deriving newtype (IsString)
+
 data Interface' h = Interface
-  { parent :: !(First Identifier)
+  { parent :: !(First TypeName)
   , constructors :: !(h (Attributed ArgumentList))
   , constants :: !(h (Attributed Const))
   , operations :: !(h (Attributed Operation))
@@ -322,6 +328,7 @@ namedTypeIdentifiers =
   Lens.runFold $
     mconcat
       [ Lens.Fold $ biplate @_ @DistinguishableType . #_DNamed
+      , Lens.Fold $ biplate @_ @TypeName . #_TypeName
       , Lens.Fold $ biplate @_ @ConstType . #_IdentConstType
       , Lens.Fold $
           biplate @_ @(Inheritance Complete)

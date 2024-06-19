@@ -73,6 +73,8 @@ library
     scientific,
     syb,
     text,
+    time,
+    time-effectful,
     transformers,
     unordered-containers,
     vector,
