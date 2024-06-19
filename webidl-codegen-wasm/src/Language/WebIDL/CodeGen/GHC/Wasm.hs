@@ -770,7 +770,11 @@ generateInterfaceMainModule name Attributed {entry = ifs} = skipNonTarget name d
               -- FIXME: Implement special operations!
               pure ()
             Nothing | RegularOperation retTy (Just jsFunName) args <- reg -> do
-              let hsFunName = "js_fun_" <> toHaskellIdentifier jsFunName
+              let hsFunName =
+                    "js_fun_"
+                      <> toHaskellIdentifier jsFunName
+                      <> "_"
+                      <> toHaskellIdentifier args
                   jsFun =
                     MethodOf
                       (tyConOrVar (toTypeName hsTyName))
@@ -943,7 +947,11 @@ toConstructorName name args =
   "js_cons_"
     <> name
     <> "_"
-    <> T.intercalate
+    <> toHaskellIdentifier args
+
+instance ToHaskellIdentifier ArgumentList where
+  toHaskellIdentifier args =
+    T.intercalate
       "_"
       ( V.toList $
           V.map
