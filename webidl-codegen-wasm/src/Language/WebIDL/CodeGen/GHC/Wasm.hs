@@ -1164,7 +1164,7 @@ instance ToHaskellType DistinguishableType where
     DBuffer b -> toHaskellPrototype b
     DFrozenArray f -> tyConOrVar "FrozenArrayClass" `appTy` toHaskellPrototype f.entry
     DObservableArray o -> tyConOrVar "ObservableArrayClass" `appTy` toHaskellPrototype o.entry
-    DRecord str r -> tyConOrVar "JSRecordClass" `appTy` toHaskellPrototype str `appTy` toHaskellType r.entry
+    DRecord str r -> tyConOrVar "JSRecordClass" `appTy` toHaskellPrototype str `appTy` toHaskellPrototype r.entry
     DUndefined -> tyConOrVar "UndefinedClass"
 
   toHaskellType = \case
