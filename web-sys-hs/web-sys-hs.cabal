@@ -99,6 +99,8 @@ library
     GHC.Wasm.Web.Generated.BatteryManager.Core
     GHC.Wasm.Web.Generated.BinaryData
     GHC.Wasm.Web.Generated.BinaryData.Core
+    GHC.Wasm.Web.Generated.BinaryType
+    GHC.Wasm.Web.Generated.BinaryType.Core
     GHC.Wasm.Web.Generated.Blob
     GHC.Wasm.Web.Generated.Blob.Core
     GHC.Wasm.Web.Generated.BlobCallback
@@ -641,6 +643,8 @@ library
     GHC.Wasm.Web.Generated.NsISelectionListener.Core
     GHC.Wasm.Web.Generated.NsISupports
     GHC.Wasm.Web.Generated.NsISupports.Core
+    GHC.Wasm.Web.Generated.NsITransportProvider
+    GHC.Wasm.Web.Generated.NsITransportProvider.Core
     GHC.Wasm.Web.Generated.ObserverCallback
     GHC.Wasm.Web.Generated.ObserverCallback.Core
     GHC.Wasm.Web.Generated.OffscreenCanvas
@@ -1113,6 +1117,8 @@ library
     GHC.Wasm.Web.Generated.WakeLockType.Core
     GHC.Wasm.Web.Generated.WatchAdvertisementsOptions
     GHC.Wasm.Web.Generated.WatchAdvertisementsOptions.Core
+    GHC.Wasm.Web.Generated.WebSocket
+    GHC.Wasm.Web.Generated.WebSocket.Core
     GHC.Wasm.Web.Generated.WellKnownDirectory
     GHC.Wasm.Web.Generated.WellKnownDirectory.Core
     GHC.Wasm.Web.Generated.Window
@@ -1137,10 +1143,13 @@ library
     GHC.Wasm.Web.Generated.XPathNSResolver.Core
     GHC.Wasm.Web.Generated.XPathResult
     GHC.Wasm.Web.Generated.XPathResult.Core
+    GHC.Wasm.Web.JSON
     GHC.Wasm.Web.Types
 
   hs-source-dirs: src
   build-depends:
+    aeson,
+    bytestring,
     ghc-wasm-compat,
     ghc-wasm-jsobjects,
 

@@ -10,3 +10,4 @@ predefinedTypes:
 targets:
 - Request
 - Response
+- WebSocket

@@ -11,3 +11,4 @@ interface PredefinedColorSpace {};
 interface GetNotificationOptions {};
 interface Principal {};
 interface NsISelectionListener {};
+interface NsITransportProvider {};
