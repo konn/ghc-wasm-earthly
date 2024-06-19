@@ -536,7 +536,7 @@ generateCallbackInterfaceModules = do
             type data ${proto} :: Prototype
           |]
         superDef =
-          [trimming|type instance SuperClassOf ${proto} = 'Nothing|]
+          [trimming|type instance SuperclassOf ${proto} = 'Nothing|]
         alias =
           [trimming|
             type ${name} = JSObject ${proto}
@@ -610,7 +610,7 @@ generateCallbackFunctionModules = do
             type data ${proto} :: Prototype
           |]
         superDef =
-          [trimming|type instance SuperClassOf ${proto} = 'Nothing|]
+          [trimming|type instance SuperclassOf ${proto} = 'Nothing|]
         alias =
           [trimming|
             type ${name} = JSObject ${proto}
