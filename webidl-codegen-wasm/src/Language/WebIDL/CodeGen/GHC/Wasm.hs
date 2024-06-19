@@ -381,7 +381,7 @@ generateInterfaceCoreModule (normaliseTypeName -> name) Attributed {entry = ifs}
   parentMod <- mapM (toCoreModuleName . (.typeName)) ifs.parent.getFirst
   extras <- EffR.asks @CodeGenEnv (.extraImports)
   let dest = fromJust (parseRelDir $ T.unpack name) </> [relfile|Core.hs|]
-      imports = Set.toList $ Set.fromList (presetImports ++ maybeToList parentMod) <> extras
+      imports = Set.toList $ Set.delete moduleName $ Set.fromList (presetImports ++ maybeToList parentMod) <> extras
       proto = toPrototypeName name
       protoDef =
         [trimming|type data ${proto} :: Prototype|]
@@ -427,7 +427,7 @@ generateDictionaryModules = do
     let proto = toPrototypeName name
         coreDest = fromJust (parseRelDir $ T.unpack name) </> [relfile|Core.hs|]
         dest = fromJust (parseRelFile $ T.unpack name <> ".hs")
-        imports = Set.toList $ Set.fromList imps <> Set.fromList presetImports <> extras
+        imports = Set.toList $ Set.delete coreModuleName $ Set.fromList imps <> Set.fromList presetImports <> extras
         fieldTy =
           promotedListTy $
             map (uncurry promotedTupleT . Bi.first symbolLitTy) $
@@ -486,7 +486,7 @@ generateEnumModules = do
     let proto = toPrototypeName name
         coreDest = fromJust (parseRelDir $ T.unpack name) </> [relfile|Core.hs|]
         dest = fromJust (parseRelFile $ T.unpack name <> ".hs")
-        imports = Set.toList $ Set.fromList imps <> Set.fromList presetImports <> extras
+        imports = Set.toList $ Set.delete coreModuleName $ Set.fromList imps <> Set.fromList presetImports <> extras
         tagsTy =
           promotedListTy $
             map symbolLitTy $
@@ -541,7 +541,7 @@ generateCallbackInterfaceModules = do
     let proto = toPrototypeName name
         coreDest = fromJust (parseRelDir $ T.unpack name) </> [relfile|Core.hs|]
         dest = fromJust (parseRelFile $ T.unpack name <> ".hs")
-        imports = Set.toList $ Set.fromList imps <> Set.fromList presetImports <> extras
+        imports = Set.toList $ Set.delete coreModuleName $ Set.fromList imps <> Set.fromList presetImports <> extras
         protoDef =
           [trimming|
             type data ${proto} :: Prototype
@@ -616,7 +616,7 @@ generateCallbackFunctionModules = do
     let proto = toPrototypeName name
         coreDest = fromJust (parseRelDir $ T.unpack name) </> [relfile|Core.hs|]
         dest = fromJust (parseRelFile $ T.unpack name <> ".hs")
-        imports = Set.toList $ Set.fromList imps <> Set.fromList presetImports <> extras
+        imports = Set.toList $ Set.delete coreModuleName $ Set.fromList imps <> Set.fromList presetImports <> extras
         protoDef =
           [trimming|
             type data ${proto} :: Prototype
@@ -679,7 +679,7 @@ generateTypedefModules = do
     let proto = toPrototypeName name
         coreDest = fromJust (parseRelDir $ T.unpack name) </> [relfile|Core.hs|]
         dest = fromJust (parseRelFile $ T.unpack name <> ".hs")
-        imports = Set.toList $ Set.fromList imps <> Set.fromList presetImports <> extras
+        imports = Set.toList $ Set.delete coreModuleName $ Set.fromList imps <> Set.fromList presetImports <> extras
         protoTy = T.pack $ pprint $ toHaskellPrototype typedef.entry
         aliasTy = T.pack $ pprint $ toHaskellType typedef.entry
         protoDef =
@@ -724,7 +724,8 @@ generateInterfaceMainModule name Attributed {entry = ifs} = skipNonTarget name d
   MainModuleFragments {..} <- execWriter go
   let imports =
         Set.toList $
-          Set.fromList (coreMod : presetImports ++ parentMods) <> extras
+          Set.delete moduleName $
+            Set.fromList (coreMod : presetImports ++ parentMods) <> extras
       proto = toPrototypeName hsTyName
       exports =
         Just $
