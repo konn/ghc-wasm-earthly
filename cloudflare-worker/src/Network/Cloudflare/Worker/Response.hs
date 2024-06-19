@@ -13,6 +13,7 @@ module Network.Cloudflare.Worker.Response (
   WorkerResponseInitClass,
   getBody,
   setBody,
+  getBodyUsed,
   getHeaders,
   setHeaders,
   getUrl,
@@ -29,7 +30,7 @@ import GHC.Wasm.Prim
 import GHC.Wasm.Web.Generated.Headers
 import GHC.Wasm.Web.Generated.ReadableStream
 import GHC.Wasm.Web.Generated.Response
-import GHC.Wasm.Web.Generated.WebSocket
+import GHC.Wasm.Web.Generated.WebSocket (WebSocketClass)
 import System.IO.Unsafe (unsafePerformIO)
 
 type data WorkerResponseClass :: Prototype
@@ -89,8 +90,8 @@ type WorkerResponseInitFields =
    , '("cf", NullableClass AnyClass)
    ]
 
-type WorkerResponseInitClass = DictionaryClass WorkerResponseInitFields
+type WorkerResponseInitClass = JSDictionaryClass WorkerResponseInitFields
 
-type WorkerResponseInit = Dictionary WorkerResponseInitFields
+type WorkerResponseInit = JSDictionary WorkerResponseInitFields
 
 type ReifiedWorkerResponseInit = ReifiedDictionary WorkerResponseInitFields

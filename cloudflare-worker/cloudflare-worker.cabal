@@ -65,6 +65,7 @@ library
     Language.WASM.JSVal.Utils
     Language.WASM.ReadableStream
     Network.Cloudflare.Worker
+    Network.Cloudflare.Worker.Handler.Fetch
     Network.Cloudflare.Worker.Request
     Network.Cloudflare.Worker.Response
 
