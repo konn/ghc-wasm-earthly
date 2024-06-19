@@ -98,6 +98,7 @@ data GHCWasmOptions' fp = GHCWasmOptions
   , modulePrefix :: !(Maybe T.Text)
   , targets :: Maybe [Text]
   , predefinedTypes :: Maybe [Text]
+  , extraImports :: Maybe [Text]
   }
   deriving (Show, Eq, Ord, Generic, Functor, Foldable, Traversable)
   deriving anyclass (FromJSON, ToJSON)
@@ -173,6 +174,7 @@ buildCodeGenEnv opts definitions =
         opts.targets <&> \ts ->
           L.fold L.hashSet $ foldMap (`AM.postSet` dependencies) ts
       !predefinedTypes = foldMap Set.fromList opts.predefinedTypes
+      !extraImports = foldMap Set.fromList opts.extraImports
    in CodeGenEnv {..}
 
 skipNonTarget :: (Reader CodeGenEnv :> es, Message :> es) => Identifier -> Eff es () -> Eff es ()
@@ -322,6 +324,7 @@ data CodeGenEnv = CodeGenEnv
   , definitions :: !Definitions
   , targets :: !(Maybe (HashSet Identifier))
   , predefinedTypes :: Set Text
+  , extraImports :: Set Text
   }
   deriving (Generic)
 
@@ -376,8 +379,9 @@ generateInterfaceCoreModule (normaliseTypeName -> name) Attributed {entry = ifs}
   moduleName <- toCoreModuleName name
   putLog $ "Generating: " <> moduleName
   parentMod <- mapM (toCoreModuleName . (.typeName)) ifs.parent.getFirst
+  extras <- EffR.asks @CodeGenEnv (.extraImports)
   let dest = fromJust (parseRelDir $ T.unpack name) </> [relfile|Core.hs|]
-      imports = presetImports ++ maybeToList parentMod
+      imports = Set.toList $ Set.fromList (presetImports ++ maybeToList parentMod) <> extras
       proto = toPrototypeName name
       protoDef =
         [trimming|type data ${proto} :: Prototype|]
@@ -419,10 +423,11 @@ generateDictionaryModules = do
     putLog $ "Generating: " <> T.pack (show (coreModuleName, mainModuleName))
     parents <- getParents dict
     imps <- mapM toCoreModuleName $ Set.toList parents
+    extras <- EffR.asks @CodeGenEnv (.extraImports)
     let proto = toPrototypeName name
         coreDest = fromJust (parseRelDir $ T.unpack name) </> [relfile|Core.hs|]
         dest = fromJust (parseRelFile $ T.unpack name <> ".hs")
-        imports = Set.toList $ Set.fromList imps <> Set.fromList presetImports
+        imports = Set.toList $ Set.fromList imps <> Set.fromList presetImports <> extras
         fieldTy =
           promotedListTy $
             map (uncurry promotedTupleT . Bi.first symbolLitTy) $
@@ -457,7 +462,7 @@ generateDictionaryModules = do
       renderModule
         Module
           { moduleName = mainModuleName
-          , imports = [coreModuleName]
+          , imports = coreModuleName : Set.toList extras
           , exports = exports
           , decls = []
           }
@@ -476,11 +481,12 @@ generateEnumModules = do
     mainModuleName <- toMainModuleName name
     putLog $ "Generating: " <> T.pack (show (coreModuleName, mainModuleName))
     parents <- getParents enum
+    extras <- EffR.asks @CodeGenEnv (.extraImports)
     imps <- mapM toCoreModuleName $ Set.toList parents
     let proto = toPrototypeName name
         coreDest = fromJust (parseRelDir $ T.unpack name) </> [relfile|Core.hs|]
         dest = fromJust (parseRelFile $ T.unpack name <> ".hs")
-        imports = Set.toList $ Set.fromList imps <> Set.fromList presetImports
+        imports = Set.toList $ Set.fromList imps <> Set.fromList presetImports <> extras
         tagsTy =
           promotedListTy $
             map symbolLitTy $
@@ -508,7 +514,7 @@ generateEnumModules = do
       renderModule
         Module
           { moduleName = mainModuleName
-          , imports = [coreModuleName]
+          , imports = coreModuleName : Set.toList extras
           , exports = exports
           , decls = []
           }
@@ -528,13 +534,14 @@ generateCallbackInterfaceModules = do
     putLog $ "Generating: " <> T.pack (show (coreModuleName, mainModuleName))
     parents <- Set.toList <$> getParents callback
     imps <- mapM toCoreModuleName parents
+    extras <- EffR.asks @CodeGenEnv (.extraImports)
     MainModuleFragments {mainExports = constExports, decs = constDefs} <-
       Writer.execWriter $
         V.mapM (generateConstantFragments name . (.entry)) callback.callbackConsts
     let proto = toPrototypeName name
         coreDest = fromJust (parseRelDir $ T.unpack name) </> [relfile|Core.hs|]
         dest = fromJust (parseRelFile $ T.unpack name <> ".hs")
-        imports = Set.toList $ Set.fromList imps <> Set.fromList presetImports
+        imports = Set.toList $ Set.fromList imps <> Set.fromList presetImports <> extras
         protoDef =
           [trimming|
             type data ${proto} :: Prototype
@@ -585,7 +592,7 @@ generateCallbackInterfaceModules = do
       renderModule
         Module
           { moduleName = mainModuleName
-          , imports = [coreModuleName]
+          , imports = coreModuleName : Set.toList extras
           , exports = exports
           , decls = []
           }
@@ -605,10 +612,11 @@ generateCallbackFunctionModules = do
     putLog $ "Generating: " <> T.pack (show (coreModuleName, mainModuleName))
     parents <- Set.toList <$> getParents callback
     imps <- mapM toCoreModuleName parents
+    extras <- EffR.asks @CodeGenEnv (.extraImports)
     let proto = toPrototypeName name
         coreDest = fromJust (parseRelDir $ T.unpack name) </> [relfile|Core.hs|]
         dest = fromJust (parseRelFile $ T.unpack name <> ".hs")
-        imports = Set.toList $ Set.fromList imps <> Set.fromList presetImports
+        imports = Set.toList $ Set.fromList imps <> Set.fromList presetImports <> extras
         protoDef =
           [trimming|
             type data ${proto} :: Prototype
@@ -647,7 +655,7 @@ generateCallbackFunctionModules = do
       renderModule
         Module
           { moduleName = mainModuleName
-          , imports = [coreModuleName]
+          , imports = coreModuleName : Set.toList extras
           , exports = exports
           , decls = []
           }
@@ -667,10 +675,11 @@ generateTypedefModules = do
     putLog $ "Generating: " <> T.pack (show (coreModuleName, mainModuleName))
     parents <- Set.toList <$> getParents typedef
     imps <- mapM toCoreModuleName parents
+    extras <- EffR.asks @CodeGenEnv (.extraImports)
     let proto = toPrototypeName name
         coreDest = fromJust (parseRelDir $ T.unpack name) </> [relfile|Core.hs|]
         dest = fromJust (parseRelFile $ T.unpack name <> ".hs")
-        imports = Set.toList $ Set.fromList imps <> Set.fromList presetImports
+        imports = Set.toList $ Set.fromList imps <> Set.fromList presetImports <> extras
         protoTy = T.pack $ pprint $ toHaskellPrototype typedef.entry
         aliasTy = T.pack $ pprint $ toHaskellType typedef.entry
         protoDef =
@@ -690,7 +699,7 @@ generateTypedefModules = do
       renderModule
         Module
           { moduleName = mainModuleName
-          , imports = [coreModuleName]
+          , imports = coreModuleName : Set.toList extras
           , exports = exports
           , decls = []
           }
@@ -711,8 +720,11 @@ generateInterfaceMainModule name Attributed {entry = ifs} = skipNonTarget name d
   idents <- Set.toList <$> getParents ifs
   coreMod <- toCoreModuleName hsTyName
   parentMods <- mapM toCoreModuleName idents
+  extras <- EffR.asks @CodeGenEnv (.extraImports)
   MainModuleFragments {..} <- execWriter go
-  let imports = coreMod : presetImports ++ parentMods
+  let imports =
+        Set.toList $
+          Set.fromList (coreMod : presetImports ++ parentMods) <> extras
       proto = toPrototypeName hsTyName
       exports =
         Just $
