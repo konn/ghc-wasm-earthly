@@ -52,6 +52,7 @@ import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (fromJust, fromMaybe, isNothing, maybeToList)
 import Data.Monoid (First (getFirst))
+import Data.Scientific (floatingOrInteger)
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.String (fromString)
@@ -867,7 +868,10 @@ instance ToHaskellValue ConstValue where
   toHaskellValue = \case
     Bool p ->
       HsVar noExtField $ L noAnn $ Unqual $ mkOccName dataName $ fromString $ show p
-    Decimal p -> floatE p
+    Decimal p ->
+      case floatingOrInteger @Double p of
+        Right i -> integerE i
+        Left {} -> floatE p
     Infinity -> either error unLoc $ parseExpr "1.0 / 0.0"
     MinusInfinity -> either error unLoc $ parseExpr "-1.0 / 0.0"
     NaN -> either error unLoc $ parseExpr "0.0 / 0.0"

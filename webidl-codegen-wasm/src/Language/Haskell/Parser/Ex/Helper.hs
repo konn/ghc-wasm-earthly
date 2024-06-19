@@ -33,6 +33,7 @@ import Data.Scientific (Scientific)
 import qualified Data.Scientific as S
 import Data.String (IsString (..))
 import qualified Data.Text as T
+import qualified Debug.Trace as DT
 import GHC.Core.TyCo.Ppr (appPrec, funPrec)
 import GHC.Driver.DynFlags
 import GHC.Driver.Ppr (showSDoc)
@@ -145,23 +146,17 @@ unitT = HsTupleTy (AnnParen AnnParens noAnn noAnn) HsBoxedOrConstraintTuple []
 floatE :: Scientific -> HsExpr GhcPs
 floatE d =
   HsOverLit noExtField $
-    OverLit
-      { ol_val =
-          HsFractional $
-            FL
-              { fl_text = NoSourceText
-              , fl_signi = S.coefficient d % 1
-              , fl_neg = False
-              , fl_exp_base = Base10
-              , fl_exp = fromIntegral $ S.base10Exponent d
-              }
-      , ol_ext = noExtField
-      }
+    mkHsFractional
+      FL
+        { fl_text = NoSourceText
+        , fl_signi = S.coefficient d % 1
+        , fl_neg = d < 0
+        , fl_exp_base = Base10
+        , fl_exp = fromIntegral $ S.base10Exponent d
+        }
 
 integerE :: Integer -> HsExpr GhcPs
 integerE i =
   HsOverLit noExtField $
-    OverLit
-      { ol_val = HsIntegral $ IL {il_value = i, il_text = NoSourceText, il_neg = False}
-      , ol_ext = noExtField
-      }
+    mkHsIntegral $
+      IL {il_value = i, il_text = NoSourceText, il_neg = False}
