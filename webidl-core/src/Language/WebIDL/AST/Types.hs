@@ -1,5 +1,6 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE LambdaCase #-}
@@ -77,7 +78,7 @@ module Language.WebIDL.AST.Types (
   KnownPartiality (..),
 ) where
 
-import Control.Lens (Prism, Prism', prism)
+import Control.Lens (Plated, Prism, Prism', prism)
 import Data.Data (Data)
 import Data.List.NonEmpty (NonEmpty)
 import Data.Scientific (Scientific)
@@ -286,6 +287,7 @@ data Const = Const !ConstType !Identifier !ConstValue
 
 data ConstType = PrimConstType PrimType | IdentConstType Identifier
   deriving (Data, Show, Eq, Ord, Generic)
+  deriving anyclass (Plated)
 
 data Restriction = Unrestricted | Restricted
   deriving (Data, Show, Eq, Ord, Generic)
@@ -388,6 +390,7 @@ data DistinguishableType
   | DRecord !StringType !(Attributed IDLType)
   | DUndefined
   deriving (Data, Show, Eq, Ord, Generic)
+  deriving anyclass (Plated)
 
 data IDLType
   = Distinguishable !(WithNullarity DistinguishableType)

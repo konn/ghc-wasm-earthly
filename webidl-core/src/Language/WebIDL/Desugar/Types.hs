@@ -327,9 +327,9 @@ namedTypeIdentifiers :: (Data a) => Lens.Fold a Identifier
 namedTypeIdentifiers =
   Lens.runFold $
     mconcat
-      [ Lens.Fold $ biplate @_ @DistinguishableType . #_DNamed
+      [ Lens.Fold $ biplate @_ @DistinguishableType . Lens.cosmos . #_DNamed
       , Lens.Fold $ biplate @_ @TypeName . #_TypeName
-      , Lens.Fold $ biplate @_ @ConstType . #_IdentConstType
+      , Lens.Fold $ biplate @_ @ConstType . Lens.cosmos . #_IdentConstType
       , Lens.Fold $
           biplate @_ @(Inheritance Complete)
             . Lens.to \case Inherits p -> Just p; NoInheritance -> Nothing
