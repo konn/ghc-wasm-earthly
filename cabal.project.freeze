@@ -4,3 +4,11 @@ constraints:
   ghc-exactprint ==1.8.0.0,
   ghc-lib-parser == 9.10.1.20240511,
   ghc-lib-parser-ex == 9.10.0.0,
+
+source-repository-package
+  type: git
+  location: https://github.com/deepflowinc/effectful-extras.git
+  subdir:
+    path-tagged-effectful
+    effectful-lens
+    time-effectful

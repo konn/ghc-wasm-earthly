@@ -66,7 +66,7 @@ import Effectful.Console.ByteString qualified as Console
 import Effectful.Dispatch.Dynamic
 import Effectful.Dispatch.Static (unsafeEff_)
 import Effectful.FileSystem (FileSystem, createDirectoryIfMissing)
-import Effectful.FileSystem.IO (hFlush, stderr, stdout)
+import Effectful.FileSystem.IO (hFlush, stderr)
 import Effectful.FileSystem.IO.ByteString (hPutStrLn)
 import Effectful.FileSystem.IO.ByteString qualified as Eff
 import Effectful.FileSystem.IO.File (writeBinaryFile)
@@ -746,7 +746,7 @@ generateInterfaceMainModule name Attributed {entry = ifs} = skipNonTarget name d
 
     genConstants = V.forM_ ifs.constants $ generateConstantFragments hsTyName . (.entry)
     genOperations = do
-      V.forM_ ifs.operations \Attributed {entry = op@(Operation msp reg)} -> do
+      V.forM_ ifs.operations \Attributed {entry = (Operation msp reg)} -> do
         do
           case msp of
             Just {} -> do
@@ -770,7 +770,7 @@ generateInterfaceMainModule name Attributed {entry = ifs} = skipNonTarget name d
     genStringifiers = pure ()
     genAttributes = do
       let atts = ifs.attributes <> V.map (fmap (ReadWrite,)) ifs.inheritedAttributes
-      V.forM_ atts \Attributed {entry = (rw, attrib@(Attribute ty attName))} ->
+      V.forM_ atts \Attributed {entry = (rw, (Attribute ty attName))} ->
         do
           let readerName = "js_get_" <> att
               att = toHaskellIdentifier attName
@@ -1200,12 +1200,12 @@ instance ToHaskellType IDLType where
   toHaskellPrototype = \case
     Distinguishable dt -> toHaskellPrototype dt
     AnyType -> tyConOrVar "AnyClass"
-    PromiseType p -> tyConOrVar "PromiseClass" `appTy` toHaskellType p
+    PromiseType p -> tyConOrVar "PromiseClass" `appTy` toHaskellPrototype p
     UnionType u -> toHaskellPrototype u
   toHaskellType = \case
     Distinguishable dt -> toHaskellType dt
     AnyType -> tyConOrVar "JSAny"
-    PromiseType p -> tyConOrVar "Promise" `appTy` toHaskellType p
+    PromiseType p -> tyConOrVar "Promise" `appTy` toHaskellPrototype p
     UnionType u -> toHaskellType u
 
 primCls :: HsType GhcPs
