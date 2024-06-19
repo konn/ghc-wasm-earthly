@@ -172,7 +172,7 @@ buildCodeGenEnv opts definitions =
       !modulePrefix = opts.modulePrefix
       !targets =
         opts.targets <&> \ts ->
-          L.fold L.hashSet $ foldMap (`AM.postSet` dependencies) ts
+          L.fold (L.premap normaliseTypeName L.hashSet) $ foldMap (`AM.postSet` dependencies) ts
       !predefinedTypes = foldMap Set.fromList opts.predefinedTypes
       !extraImports = foldMap Set.fromList opts.extraImports
    in CodeGenEnv {..}
