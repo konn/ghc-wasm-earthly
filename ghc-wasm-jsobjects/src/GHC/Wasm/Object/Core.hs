@@ -41,6 +41,8 @@ module GHC.Wasm.Object.Core (
   -- * Nullable
   NullableClass,
   Nullable,
+  toNullable,
+  fromNullable,
 
   -- * Unions
   UnionClass,
@@ -138,11 +140,11 @@ instance HasJSRep UndefinedClass where
 
 type (<:?) :: Prototype -> Prototype -> Bool
 type family sub <:? super where
+  a <:? NullableClass a = 'True
+  NullClass <:? NullableClass a = 'True
   sub <:? sub = 'True
   _ <:? AnyClass = 'True
   AnyClass <:? _ = 'False
-  NullClass <:? NullableClass a = 'True
-  b <:? NullableClass a = b <:? a
   UnionClass '[] <:? c = 'True
   UnionClass (x ': xs) <:? c = x <:? c && UnionClass xs <:? c
   _ <:? EnumClass '[] = 'False
@@ -257,6 +259,20 @@ type instance SuperclassOf NullClass = 'Nothing
 
 type JSNull = JSObject NullClass
 
+toNullable :: Maybe (JSObject c) -> Nullable c
+toNullable = maybe (unsafeCast js_null) upcast
+
+fromNullable :: Nullable c -> Maybe (JSObject c)
+fromNullable n
+  | js_is_null n = Nothing
+  | otherwise = Just $ unsafeCast n
+
+foreign import javascript safe "null"
+  js_null :: JSNull
+
+foreign import javascript safe "$1 === null"
+  js_is_null :: Nullable a -> Bool
+
 type JSPrimClass :: Type -> Prototype
 type data JSPrimClass a :: Prototype
 
@@ -265,6 +281,16 @@ type JSPrim a = JSObject (JSPrimClass a)
 class (Storable a) => JSPrimitive a where
   toJSPrim :: a -> JSPrim a
   fromJSPrim :: JSPrim a -> a
+
+foreign import javascript unsafe "$1"
+  toJSPrim_Bool :: Bool -> JSPrim Bool
+
+foreign import javascript unsafe "$1"
+  fromJSPrim_Bool :: JSPrim Bool -> Bool
+
+instance JSPrimitive Bool where
+  toJSPrim = toJSPrim_Bool
+  fromJSPrim = fromJSPrim_Bool
 
 foreign import javascript unsafe "$1"
   toJSPrim_Int8 :: Int8 -> JSPrim Int8

@@ -1,81 +1,86 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE LinearTypes #-}
 {-# LANGUAGE QualifiedDo #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Language.WASM.JSVal.Convert (
-  FromJSVal (..),
-  ToJSVal (..),
+  FromWasmJSON (..),
+  ToWasmJSON (..),
 
   -- * Deriving Modifiers
   ViaJSON (..),
-  GenericToJSVal,
+  GenericToWasmJSON,
 ) where
 
-import Data.Aeson.Micro (ToJSON, Value, toJSON)
+import Data.Aeson (ToJSON, Value, toJSON)
+import Data.Coerce (coerce)
 import Data.Void (Void)
 import GHC.Generics
+import GHC.Wasm.Object.Builtins
 import GHC.Wasm.Prim
-import Language.WASM.JSVal.JSON qualified as JSON
+import GHC.Wasm.Web.JSON (JSON)
+import GHC.Wasm.Web.JSON qualified as JSON
 import Wasm.Control.Functor.Linear qualified as Control
 import Wasm.Data.Array.Destination.JSVal (DJSArray)
 import Wasm.Data.Array.Destination.JSVal qualified as DJSArray
 import Wasm.Prelude.Linear qualified as PL
 import Wasm.System.IO.Linear qualified as LIO
+import Wasm.Unsafe.Linear qualified as Unsafe
 
--- | Convert a value to/from JSVal via JSON de/serialisation with side-effect.
+-- | Convert a value to/from JSON via JSON de/serialisation with side-effect.
 newtype ViaJSON a = ViaJSON {runViaJSON :: a}
 
-instance ToJSVal Value where
-  toJSVal x = LIO.fromSystemIO (JSON.toJSVal x)
+instance ToWasmJSON Value where
+  toWasmJSON x = LIO.fromSystemIO (JSON.encodeJSON x)
 
-instance FromJSVal Value where
-  fromJSVal = JSON.fromJSVal
+instance FromWasmJSON Value where
+  fromWasmJSON = JSON.decodeJSON
 
-instance (ToJSON a) => ToJSVal (ViaJSON a) where
-  toJSVal = toJSVal . toJSON . runViaJSON
+instance (ToJSON a) => ToWasmJSON (ViaJSON a) where
+  toWasmJSON = toWasmJSON . toJSON . runViaJSON
 
-class FromJSVal a where
-  fromJSVal :: JSVal -> IO (Maybe a)
+class FromWasmJSON a where
+  fromWasmJSON :: JSON -> IO (Maybe a)
 
-class ToJSVal a where
-  toJSVal :: a -> LIO.IO JSVal
+class ToWasmJSON a where
+  toWasmJSON :: a -> LIO.IO JSON
 
-instance FromJSVal JSVal where
-  fromJSVal = pure . Just
-  {-# INLINE fromJSVal #-}
+instance FromWasmJSON JSON where
+  fromWasmJSON = pure . Just
+  {-# INLINE fromWasmJSON #-}
 
 {-
-instance ToJSVal JSVal where
-  toJSVal = Control.pure
-  {-# INLINE toJSVal #-} -}
+instance ToWasmJSON JSON where
+  toWasmJSON = Control.pure
+  {-# INLINE toWasmJSON #-} -}
 
-type GenericToJSVal a = (Generic a, GWriteToObj (Rep a))
+type GenericToWasmJSON a = (Generic a, GWriteToObj (Rep a))
 
-instance (GenericToJSVal a) => ToJSVal (Generically a) where
-  toJSVal (Generically x) = genericToJSVal x
-  {-# INLINE toJSVal #-}
+instance (GenericToWasmJSON a) => ToWasmJSON (Generically a) where
+  toWasmJSON (Generically x) = genericToWasmJSON x
+  {-# INLINE toWasmJSON #-}
 
-genericToJSVal :: forall a. (GenericToJSVal a) => a -> LIO.IO JSVal
-genericToJSVal x = case gwriteToObj @(Rep a) of
-  RecEncoder f -> withPartialJSVal \pobj -> f pobj (from x)
+genericToWasmJSON :: forall a. (GenericToWasmJSON a) => a -> LIO.IO JSON
+genericToWasmJSON x = case gwriteToObj @(Rep a) of
+  RecEncoder f -> withPartialJSON \pobj -> f pobj (from x)
   ProdEncoder n f -> Control.do
     DJSArray.JSArray val <- DJSArray.allocIO n (f (from x))
-    Control.pure val
+    Control.pure (Unsafe.toLinear unsafeAsObject val)
 
-newtype PartialJSVal = PartialJSVal JSVal
-  deriving newtype (PL.ConsumableM LIO.IO)
+newtype PartialJSON = PartialJSON JSON
+  deriving (PL.ConsumableM LIO.IO) via JSVal
 
 foreign import javascript unsafe "Object()"
-  js_new_obj :: IO PartialJSVal
+  js_new_obj :: IO PartialJSON
 
-withPartialJSVal :: (PartialJSVal %1 -> LIO.IO PartialJSVal) %1 -> LIO.IO JSVal
-withPartialJSVal f = Control.do
+withPartialJSON :: (PartialJSON %1 -> LIO.IO PartialJSON) %1 -> LIO.IO JSON
+withPartialJSON f = Control.do
   pobj <- LIO.fromSystemIO js_new_obj
-  PartialJSVal obj <- f pobj
+  PartialJSON obj <- f pobj
   Control.pure obj
 
 data ProdEncode = Prod | Rec
@@ -92,22 +97,22 @@ data ProductEncoder pe f where
     (f Void -> DJSArray %1 -> LIO.IO ()) %1 ->
     ProductEncoder 'Prod f
   RecEncoder ::
-    (PartialJSVal %1 -> f Void -> LIO.IO PartialJSVal) %1 ->
+    (PartialJSON %1 -> f Void -> LIO.IO PartialJSON) %1 ->
     ProductEncoder 'Rec f
 
 class GWriteToObj f where
   gwriteToObj :: ProductEncoder (ProductEncodingOf f) f
 
 foreign import javascript unsafe "$1[$2] = $3; return $1"
-  js_set_prop :: PartialJSVal %1 -> JSString -> JSVal %1 -> PartialJSVal
+  js_set_prop :: PartialJSON %1 -> JSString -> JSON %1 -> PartialJSON
 
 instance
   {-# OVERLAPPING #-}
-  (GToJSVal f, Selector ('MetaSel ('Just _m) _x _y _z)) =>
+  (GToWasmJSON f, Selector ('MetaSel ('Just _m) _x _y _z)) =>
   GWriteToObj (M1 S ('MetaSel ('Just _m) _x _y _z) f)
   where
   gwriteToObj = RecEncoder \pobj (M1 x) -> Control.do
-    x' <- gtoJSVal x
+    x' <- gtoWasmJSON x
     Control.pure
       PL.$ js_set_prop
         pobj
@@ -116,12 +121,12 @@ instance
 
 instance
   {-# OVERLAPPING #-}
-  (GToJSVal f) =>
+  (GToWasmJSON f) =>
   GWriteToObj (M1 S ('MetaSel 'Nothing _x _y _z) f)
   where
   gwriteToObj = ProdEncoder 1 \fx da -> Control.do
-    x' <- gtoJSVal (unM1 fx)
-    () <- Control.pure (DJSArray.fill x' da)
+    x' <- gtoWasmJSON (unM1 fx)
+    () <- Control.pure (DJSArray.fill (Unsafe.toLinear coerce x') da)
     Control.pure ()
 
 instance {-# OVERLAPPABLE #-} (GWriteToObj f) => GWriteToObj (M1 D c f) where
@@ -151,44 +156,44 @@ instance
           ls <- f pobj fx
           g ls gx
 
-class GToJSVal f where
-  gtoJSVal :: f a -> LIO.IO JSVal
+class GToWasmJSON f where
+  gtoWasmJSON :: f a -> LIO.IO JSON
 
-instance (ToJSVal c) => GToJSVal (K1 i c) where
-  gtoJSVal = toJSVal . unK1
+instance (ToWasmJSON c) => GToWasmJSON (K1 i c) where
+  gtoWasmJSON = toWasmJSON . unK1
 
-instance (GToJSVal f) => GToJSVal (M1 i c f) where
-  gtoJSVal = gtoJSVal . unM1
+instance (GToWasmJSON f) => GToWasmJSON (M1 i c f) where
+  gtoWasmJSON = gtoWasmJSON . unM1
 
-class GFromJSVal f where
-  gfromJSVal :: JSVal -> IO (Maybe (f a))
+class GFromWasmJSON f where
+  gfromWasmJSON :: JSON -> IO (Maybe (f a))
 
-instance (FromJSVal c) => GFromJSVal (K1 i c) where
-  gfromJSVal = fmap (fmap K1) . fromJSVal
+instance (FromWasmJSON c) => GFromWasmJSON (K1 i c) where
+  gfromWasmJSON = fmap (fmap K1) . fromWasmJSON
 
 instance
-  (GFromJSVal f, GFromJSVal g) =>
-  GFromJSVal (f :*: g)
+  (GFromWasmJSON f, GFromWasmJSON g) =>
+  GFromWasmJSON (f :*: g)
   where
-  gfromJSVal = liftA2 (liftA2 (:*:)) <$> gfromJSVal <*> gfromJSVal
+  gfromWasmJSON = liftA2 (liftA2 (:*:)) <$> gfromWasmJSON <*> gfromWasmJSON
 
 foreign import javascript unsafe "$1[$2]"
-  js_get_prop :: JSVal -> JSString -> IO JSVal
+  js_get_prop :: JSON -> JSString -> IO JSON
 
 instance
   {-# OVERLAPPING #-}
-  (Selector sel, GFromJSVal f) =>
-  GFromJSVal (M1 S sel f)
+  (Selector sel, GFromWasmJSON f) =>
+  GFromWasmJSON (M1 S sel f)
   where
-  gfromJSVal val = do
+  gfromWasmJSON val = do
     let name = selName (undefined :: M1 S sel f p)
-    jsVal <- js_get_prop val $ toJSString name
-    fmap M1 <$> gfromJSVal jsVal
+    jsval <- js_get_prop val $ toJSString name
+    fmap M1 <$> gfromWasmJSON jsval
 
 instance
   {-# OVERLAPPABLE #-}
-  ( GFromJSVal f
+  ( GFromWasmJSON f
   ) =>
-  GFromJSVal (M1 i c f)
+  GFromWasmJSON (M1 i c f)
   where
-  gfromJSVal = fmap (fmap M1) . gfromJSVal
+  gfromWasmJSON = fmap (fmap M1) . gfromWasmJSON

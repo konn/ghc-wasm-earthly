@@ -43,11 +43,10 @@ common defaults
 library
   import: defaults
   build-depends:
+    aeson,
     bytestring,
     containers,
     ghc-wasm-jsobjects,
-    microaeson,
-    microaeson-generics,
     streaming,
     streaming-bytestring,
     text,
@@ -63,13 +62,11 @@ library
     Language.WASM.JSVal.Convert
     Language.WASM.JSVal.Iterator
     Language.WASM.JSVal.Iterator.Linear
-    Language.WASM.JSVal.JSON
     Language.WASM.JSVal.Utils
     Language.WASM.ReadableStream
     Network.Cloudflare.Worker
-    Network.Cloudflare.Worker.Http
-    Network.Cloudflare.Worker.Http.Headers
-    Network.Cloudflare.Worker.Http.Request
+    Network.Cloudflare.Worker.Request
+    Network.Cloudflare.Worker.Response
 
 executable hello-worker
   import: defaults
