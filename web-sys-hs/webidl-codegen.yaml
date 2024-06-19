@@ -1,3 +1,12 @@
 modulePrefix: "GHC.Wasm.Web.Generated"
 outputDir: "./src/GHC/Wasm/Web/Generated"
-inputDir: "./webidls/enabled"
+inputDir: "./webidls"
+extraImports:
+- "GHC.Wasm.Web.Types"
+predefinedTypes:
+- ArrayBufferView
+- BufferSource
+- DOMTimeStamp
+targets:
+- Request
+- Response

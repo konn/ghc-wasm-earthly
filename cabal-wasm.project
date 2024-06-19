@@ -1,5 +1,6 @@
 with-compiler: wasm32-wasi-ghc-9.10.0.20240412
 packages: **/*.cabal
+
 import: cabal-common.project
 optimization: False
 index-state: hackage.haskell.org 2024-04-28T21:10:00Z
@@ -28,3 +29,11 @@ package reflection
 
 packages: https://ghc.gitlab.haskell.org/head.hackage/package/text-short-0.1.5.tar.gz
 packages: https://ghc.gitlab.haskell.org/head.hackage/package/lens-5.2.3.tar.gz
+
+source-repository-package
+  type: git
+  location: https://github.com/deepflowinc/effectful-extras.git
+  subdir:
+    path-tagged-effectful
+    effectful-lens
+    time-effectful
