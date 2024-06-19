@@ -775,6 +775,8 @@ generateInterfaceMainModule name Attributed {entry = ifs} = skipNonTarget name d
                       <> toHaskellIdentifier jsFunName
                       <> "_"
                       <> toHaskellIdentifier args
+                      <> "_"
+                      <> toHaskellIdentifier retTy
                   jsFun =
                     MethodOf
                       (tyConOrVar (toTypeName hsTyName))
