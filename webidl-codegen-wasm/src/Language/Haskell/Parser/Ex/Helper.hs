@@ -33,7 +33,6 @@ import Data.Scientific (Scientific)
 import qualified Data.Scientific as S
 import Data.String (IsString (..))
 import qualified Data.Text as T
-import qualified Debug.Trace as DT
 import GHC.Core.TyCo.Ppr (appPrec, funPrec)
 import GHC.Driver.DynFlags
 import GHC.Driver.Ppr (showSDoc)
