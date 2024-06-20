@@ -16,6 +16,9 @@ module Network.Cloudflare.Worker.Handler (
   JSHandlersFields,
   JSHandlersClass,
   JSHandlers,
+
+  -- * Re-exports (for ffi exports)
+  JSObject (..),
 ) where
 
 import GHC.Generics (Generic)

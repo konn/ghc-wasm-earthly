@@ -15,8 +15,7 @@ hello:
   RUN wasm32-wasi-ghc --make hello.hs
   SAVE ARTIFACT hello.wasm AS LOCAL _build/hello.wasm
 
-BUILD:
-  FUNCTION
+build:
   ARG target
   ARG outdir=$(echo ${target} | cut -d: -f3)
   ARG wasm=${outdir}.wasm
@@ -34,20 +33,30 @@ BUILD:
   LET WASM_LIB=$(wasm32-wasi-ghc --print-libdir)
   LET DEST=dist/${wasm}
   RUN mkdir -p dist
-  RUN --mount ${MOUNT_DIST_NEWSTYLE} ${WASM_LIB}/post-link.mjs --input ${HS_WASM_PATH} --output ghc_wasm_jsffi.js
-  RUN --mount ${MOUNT_DIST_NEWSTYLE} wizer --allow-wasi --wasm-bulk-memory true --init-func _initialize -o dist/${wasm} "${HS_WASM_PATH}"
+  RUN --mount ${MOUNT_DIST_NEWSTYLE} cp ${HS_WASM_PATH} ./dist/${wasm}
+  RUN --mount ${MOUNT_DIST_NEWSTYLE} ${WASM_LIB}/post-link.mjs --input ${HS_WASM_PATH} --output ./dist/ghc_wasm_jsffi.js
+  SAVE ARTIFACT dist
+
+optimised-wasm:
+  ARG target
+  ARG outdir=$(echo ${target} | cut -d: -f3)
+  ARG wasm=${outdir}.wasm
+  RUN mkdir -p dist/
+  COPY (+build/dist/${wasm}.orig --target=${target} --outdir=${outdir} --wasm=${wasm}.orig) ./dist/
+  RUN wizer --allow-wasi --wasm-bulk-memory true --init-func _initialize -o dist/${wasm} dist/${wasm}.orig
   RUN wasm-opt -Oz dist/${wasm} -o dist/${wasm}
   RUN wasm-tools strip -o dist/${wasm} dist/${wasm}
-  RUN cp wasm-jsffi-ghc-demo/data/run.ts dist/run.ts
-  RUN cp *.js dist/
-
-  # Use deno to run the console-log demo
-  RUN cd dist && deno run --allow-read ./run.ts ./${wasm}
-
-  SAVE ARTIFACT ./dist/ AS LOCAL _build/${outdir}/
-
-hello-js:
-  DO +BUILD --target=wasm-jsffi-ghc-demo:exe:console-log
+  COPY (+build/dist/ghc_wasm_jsffi.js --target=${target} --outdir=${outdir} --wasm=${wasm}.orig) ./dist/
+  SAVE ARTIFACT dist
 
 hello-cf:
-  DO +BUILD --target=cloudflare-worker:exe:hello-worker
+  COPY (+optimised-wasm/dist --target=cloudflare-worker:exe:hello-worker --wasm=handlers.wasm) ./dist
+  COPY cloudflare-worker/data/worker.js dist/worker.js
+  SAVE ARTIFACT ./dist AS LOCAL _build/hello-cf
+
+hello-js:
+  COPY (+optimised-wasm/dist --target=wasm-jsffi-ghc-demo:exe:console-log) ./dist
+  # Use deno to run the console-log demo
+  COPY ./wasm-jsffi-ghc-demo/data/run.ts dist/run.ts
+  RUN cd dist && deno run --allow-read ./run.ts ./console-log.wasm
+  SAVE ARTIFACT ./dist AS LOCAL _build/hello-js
