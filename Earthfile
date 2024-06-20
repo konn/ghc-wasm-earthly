@@ -47,11 +47,13 @@ optimised-wasm:
   RUN wasm-opt -Oz dist/${wasm} -o dist/${wasm}
   RUN wasm-tools strip -o dist/${wasm} dist/${wasm}
   COPY (+build/dist/ghc_wasm_jsffi.js --target=${target} --outdir=${outdir} --wasm=${wasm}.orig) ./dist/
+  RUN rm ./dist/${wasm}.orig
   SAVE ARTIFACT dist
 
 hello-cf:
-  COPY (+optimised-wasm/dist --target=cloudflare-worker:exe:hello-worker --wasm=handlers.wasm) ./dist
-  COPY cloudflare-worker/data/worker.js dist/worker.js
+  COPY cloudflare-worker/data/worker-template/ ./dist/
+  COPY (+optimised-wasm/dist --target=cloudflare-worker:exe:hello-worker --wasm=handlers.wasm) ./dist/src
+  RUN cd ./dist && npm i
   SAVE ARTIFACT ./dist AS LOCAL _build/hello-cf
 
 hello-js:
