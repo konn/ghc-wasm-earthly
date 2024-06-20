@@ -732,7 +732,7 @@ generateInterfaceMainModule name Attributed {entry = ifs} = skipNonTarget name d
       let hsFunName
             | V.length ifs.constructors /= 1 = toConstructorName hsTyName args
             | otherwise = "js_cons_" <> hsTyName
-          jsFun = Call hsTyName
+          jsFun = Call $ "new " <> hsTyName
           returnType = ioTy `appTy` tyConOrVar (toTypeName hsTyName)
           ffiDec = renderJSFFIImport $ toJSFFIImport JSFFIImportSeed {async = False, ..}
       Writer.tell
