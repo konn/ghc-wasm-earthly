@@ -71,22 +71,24 @@ buildResponseBody req = do
         Nothing -> p_ "N/A"
         Just (J.Array xs) -> ul_ $ mapM_ (li_ . toHtml . J.encode) xs
         Just (J.Object dic) -> table_ do
+          thead_ do
+            tr_ do
+              th_ [scope_ "col"] "Property"
+              th_ [scope_ "col"] "Value"
           let dic' =
                 AKM.toList $
                   AKM.delete "tlsExportedAuthenticator" $
                     AKM.delete "tlsClientExtensionsSha1" $
                       AKM.delete "tlsClientRandom" $
-                        AKM.delete "tlcClientAuth" $
+                        AKM.delete "tlsClientAuth" $
                           AKM.delete "botManagement" dic
-          tbody_ $ forM_
-            dic'
-            \(k, v) -> do
-              tr_ do
-                th_ [scope_ "row"] $ toHtml $ AK.toText k
-                td_ $
-                  code_ $
-                    toHtml $
-                      J.encode v
+          tbody_ $ forM_ dic' \(k, v) -> do
+            tr_ do
+              th_ [scope_ "row"] $ toHtml $ AK.toText k
+              td_ $
+                code_ $
+                  toHtml $
+                    J.encode v
         Just v -> pre_ $ code_ $ toHtml $ J.encode v
 
 toStr :: (IsJavaScriptString a) => JSObject a -> String
