@@ -2,7 +2,7 @@ with-compiler: wasm32-wasi-ghc-9.10.0.20240412
 packages: **/*.cabal
 import: cabal-common.project
 optimization: False
-index-state: hackage.haskell.org 2024-04-28T21:10:00Z
+index-state: hackage.haskell.org 2024-06-10T20:40:29Z
 active-repositories: hackage.haskell.org
 allow-newer:
   base,

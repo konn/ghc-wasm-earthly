@@ -28,8 +28,14 @@ common defaults
     -Wredundant-constraints
 
   build-depends:
+    aeson,
     base >=4.7 && <5,
+    bytestring,
+    containers,
     ghc-wasm-compat,
+    ghc-wasm-jsobjects,
+    lucid2,
+    text,
 
   default-language: GHC2021
   autogen-modules: Paths_cloudflare_worker
@@ -58,6 +64,7 @@ library
   hs-source-dirs: src
   -- cabal-gild: discover src
   exposed-modules:
+    Language.WASM.JSVal.Convert
     Network.Cloudflare.Worker
     Network.Cloudflare.Worker.Handler
     Network.Cloudflare.Worker.Handler.Fetch

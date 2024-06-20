@@ -87,6 +87,7 @@ constraints:
   libyaml ==0.1.4,
   libyaml -no-unicode -system-libyaml,
   libyaml-clib ==0.2.5,
+  lucid2 ==0.0.20240424,
   megaparsec ==9.6.1,
   megaparsec -dev,
   microaeson ==0.1.0.1,

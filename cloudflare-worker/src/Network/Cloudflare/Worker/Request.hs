@@ -15,6 +15,7 @@ module Network.Cloudflare.Worker.Request (
   getMethod,
   getRedirect,
   getCloudflare,
+  getCloudflareJSON,
   decodeWorkerRequest,
   WorkerRequestInitField,
   WorkerRequestClass,
@@ -117,8 +118,8 @@ type MinifyInitClass = JSDictionaryClass MinifyInitFields
 
 type MinifyInit = JSDictionary MinifyInitFields
 
-getUrl :: WorkerRequest -> IO JSString
-getUrl = fmap convertToJSString . js_get_url . upcast
+getUrl :: WorkerRequest -> JSString
+getUrl = unsafePerformIO . fmap convertToJSString . js_get_url . upcast
 
 type WorkerIncomingRequestCfFields =
   '[ '("asn", JSPrimClass Word32)
@@ -149,6 +150,9 @@ type WorkerIncomingRequestCfFields =
 type WorkerIncomingRequestCfClass = JSDictionaryClass WorkerIncomingRequestCfFields
 
 type WorkerIncomingRequestCf = JSDictionary WorkerIncomingRequestCfFields
+
+getCloudflareJSON :: WorkerRequest -> IO (Maybe J.Value)
+getCloudflareJSON = decodeJSON . unsafeCast . js_get_cf
 
 getCloudflare :: WorkerRequest -> WorkerIncomingRequestCf
 getCloudflare = js_get_cf
