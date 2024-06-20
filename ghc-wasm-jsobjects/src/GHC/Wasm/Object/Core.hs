@@ -133,7 +133,7 @@ type instance SuperclassOf UndefinedClass = 'Nothing
 
 type JSUndefined = JSObject UndefinedClass
 
-foreign import javascript safe "undefined"
+foreign import javascript unsafe "undefined"
   js_undefined :: JSUndefined
 
 instance HasJSRep UndefinedClass where
@@ -181,7 +181,7 @@ unsafeCast = coerce
 unsafeAsObject :: JSVal -> JSObject c
 unsafeAsObject = coerce
 
-foreign import javascript safe "typeof $1 === 'string'"
+foreign import javascript unsafe "typeof $1 === 'string'"
   js_is_string :: JSVal -> Bool
 
 instance (KnownEnum xs) => HasJSRep (EnumClass xs) where
@@ -271,10 +271,10 @@ fromNullable n
   | js_is_null n = Nothing
   | otherwise = Just $ unsafeCast n
 
-foreign import javascript safe "null"
+foreign import javascript unsafe "null"
   js_null :: JSNull
 
-foreign import javascript safe "$1 === null"
+foreign import javascript unsafe "$1 === null"
   js_is_null :: Nullable a -> Bool
 
 type JSPrimClass :: Type -> Prototype

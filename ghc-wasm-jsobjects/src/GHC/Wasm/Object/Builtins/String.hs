@@ -55,7 +55,7 @@ fromDOMString = coerce . unJSObject
 -- | A WebIDL @DOMString@ value, which corresponds to a JavaScript string.
 type DOMString = JSObject DOMStringClass
 
-foreign import javascript safe "if ($1 === null) { return \"\"; } else { return $1; }"
+foreign import javascript unsafe "if ($1 === null) { return \"\"; } else { return $1; }"
   js_null_to_empty :: JSString -> JSString
 
 toDOMString ::
@@ -81,7 +81,7 @@ toJSByteString jsstr
   | js_is_bytestring jsstr = Just $ unsafeAsObject $ coerce jsstr
   | otherwise = Nothing
 
-foreign import javascript safe "for (var i = 0; i < $1.length; i++) { if ($1.charCodeAt(i) > 255) { return false; } }  return true;"
+foreign import javascript unsafe "for (var i = 0; i < $1.length; i++) { if ($1.charCodeAt(i) > 255) { return false; } }  return true;"
   js_is_bytestring :: JSString -> Bool
 
 foreign import javascript unsafe "$1.length"

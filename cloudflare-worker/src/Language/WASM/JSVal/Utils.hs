@@ -34,11 +34,11 @@ maybeJSVal val
 isUndefined :: JSVal -> Bool
 isUndefined = js_is_undefined
 
-foreign import javascript safe "$1 === undefined"
+foreign import javascript unsafe "$1 === undefined"
   js_is_undefined :: JSVal -> Bool
 
 isNull :: JSVal -> Bool
 isNull = js_is_null
 
-foreign import javascript safe "$2 === null"
+foreign import javascript unsafe "$2 === null"
   js_is_null :: JSVal -> Bool

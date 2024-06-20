@@ -20,7 +20,7 @@ foreign import javascript unsafe "$1.freeze()"
 freeze :: JSVal %1 -> LIO.IO FrozenJSVal
 freeze = Unsafe.coerce . js_freeze
 
-foreign import javascript safe "$1[$2]"
+foreign import javascript unsafe "$1[$2]"
   js_get :: FrozenJSVal -> JSString -> FrozenJSVal
 
 get :: FrozenJSVal %1 -> String -> (Maybe FrozenJSVal, FrozenJSVal)
