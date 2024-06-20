@@ -50,9 +50,19 @@ optimised-wasm:
   RUN rm ./dist/${wasm}.orig
   SAVE ARTIFACT dist
 
+patch-jsffi-for-cf:
+  ARG target
+  ARG outdir=$(echo ${target} | cut -d: -f3)
+  ARG wasm=${outdir}.wasm
+  COPY  (+optimised-wasm/dist --target=${target} --outdir=${outdir} --wasm=${wasm}) ./dist
+  LET PATCHER=./js-ffi-patcher.mjs
+  COPY ./cloudflare-worker/data/jsffi-patcher.mjs ${PATCHER}
+  RUN node ${PATCHER} ./dist/ghc_wasm_jsffi.js
+  SAVE ARTIFACT ./dist
+
 hello-cf:
   COPY cloudflare-worker/data/worker-template/ ./dist/
-  COPY (+optimised-wasm/dist --target=cloudflare-worker:exe:hello-worker --wasm=handlers.wasm) ./dist/src
+  COPY (+patch-jsffi-for-cf/dist --target=cloudflare-worker:exe:hello-worker --wasm=handlers.wasm) ./dist/src
   RUN cd ./dist && npm i
   SAVE ARTIFACT ./dist AS LOCAL _build/hello-cf
 
