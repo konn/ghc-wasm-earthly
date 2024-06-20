@@ -18,8 +18,8 @@ handlers = toJSHandlers Handlers {fetch}
 
 fetch :: FetchHandler
 fetch req _ _ = do
-  -- url <- Req.getUrl req
-  let body = "Hello, World! " -- <> fromString (fromJSString url)
+  url <- Req.getUrl req
+  let body = "Hello, World! " <> fromString (fromJSString url)
   newResponse
     SimpleResponseInit
       { statusText = "Ok"

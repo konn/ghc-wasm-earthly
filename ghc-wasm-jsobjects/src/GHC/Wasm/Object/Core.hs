@@ -17,6 +17,7 @@ module GHC.Wasm.Object.Core (
 
   -- * Basic Objects and its hierarchy
   JSObject (..),
+  emptyObject,
   upcast,
   unsafeCast,
   unJSObject,
@@ -421,3 +422,6 @@ data JSSymbolClass :: Prototype
 type instance SuperclassOf JSSymbolClass = 'Nothing
 
 type JSSymbol = JSObject JSSymbolClass
+
+foreign import javascript unsafe "Object()"
+  emptyObject :: IO JSAny

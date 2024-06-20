@@ -97,6 +97,7 @@ getUrl = T.pack . fromJSString . convertToJSString . unsafePerformIO . js_get_ur
 newResponse :: SimpleResponseInit -> IO WorkerResponse
 newResponse resp = do
   headers <- toHeaders resp.headers
+  empty <- emptyObject
   newResponse' (Just resp.body) . Just
     =<< reflectDictionary do
       newDictionary @WorkerResponseInitFields
@@ -105,7 +106,7 @@ newResponse resp = do
             PL.. setPartialField @"statusText"
               (fromJust $ toJSByteString $ toJSString $ BS8.unpack resp.statusText)
             PL.. setPartialField @"headers" (inject headers)
-            PL.. setPartialField @"cf" (toNullable Nothing)
+            PL.. setPartialField @"cf" empty
             PL.. setPartialField @"websocket" (toNullable Nothing)
             PL.. setPartialField @"encodeBody" (fromJust $ toJSByteString $ toJSString "automatic")
         )
@@ -140,7 +141,7 @@ type WorkerResponseInitFields =
    , '("headers", UnionClass '[HeadersClass, JSByteStringClass])
    , '("encodeBody", JSByteStringClass)
    , '("websocket", NullableClass WebSocketClass)
-   , '("cf", NullableClass AnyClass)
+   , '("cf", AnyClass)
    ]
 
 type WorkerResponseInitClass = JSDictionaryClass WorkerResponseInitFields
