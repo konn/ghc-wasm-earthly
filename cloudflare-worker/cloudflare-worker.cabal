@@ -65,6 +65,7 @@ library
     Language.WASM.JSVal.Utils
     Language.WASM.ReadableStream
     Network.Cloudflare.Worker
+    Network.Cloudflare.Worker.Handler
     Network.Cloudflare.Worker.Handler.Fetch
     Network.Cloudflare.Worker.Request
     Network.Cloudflare.Worker.Response
@@ -80,4 +81,4 @@ executable hello-worker
     ghc-options:
       -no-hs-main
       -optl-mexec-model=reactor
-      "-optl-Wl,--export=hs_start"
+      "-optl-Wl,--export=handlers"

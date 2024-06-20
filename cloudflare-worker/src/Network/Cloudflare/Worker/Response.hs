@@ -1,9 +1,13 @@
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DerivingVia #-}
+{-# LANGUAGE LinearTypes #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE TypeData #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UnliftedDatatypes #-}
+{-# LANGUAGE NoFieldSelectors #-}
 
 module Network.Cloudflare.Worker.Response (
   WorkerResponseClass,
@@ -11,6 +15,7 @@ module Network.Cloudflare.Worker.Response (
   WorkerResponseInit,
   ReifiedWorkerResponseInit,
   WorkerResponseInitClass,
+  SimpleResponseInit (..),
   getBody,
   setBody,
   getBodyUsed,
@@ -21,10 +26,17 @@ module Network.Cloudflare.Worker.Response (
   setStatus,
   getStatusText,
   setStatusText,
+  newResponse',
+  newResponse,
 ) where
 
+import Data.ByteString.Char8 qualified as BS
+import Data.ByteString.Char8 qualified as BS8
+import Data.Map.Strict (Map)
+import Data.Maybe (fromJust)
 import Data.Text qualified as T
 import Data.Word
+import GHC.Generics (Generic)
 import GHC.Wasm.Object.Builtins
 import GHC.Wasm.Prim
 import GHC.Wasm.Web.Generated.Headers
@@ -32,6 +44,7 @@ import GHC.Wasm.Web.Generated.ReadableStream
 import GHC.Wasm.Web.Generated.Response
 import GHC.Wasm.Web.Generated.WebSocket (WebSocketClass)
 import System.IO.Unsafe (unsafePerformIO)
+import Wasm.Prelude.Linear qualified as PL
 
 type data WorkerResponseClass :: Prototype
 
@@ -80,6 +93,46 @@ foreign import javascript unsafe "$1.statusText = $2"
 
 getUrl :: WorkerResponse -> T.Text
 getUrl = T.pack . fromJSString . convertToJSString . unsafePerformIO . js_get_url . upcast
+
+newResponse :: SimpleResponseInit -> IO WorkerResponse
+newResponse resp = do
+  headers <- toHeaders resp.headers
+  newResponse' (Just resp.body) . Just
+    =<< reflectDictionary do
+      newDictionary @WorkerResponseInitFields
+        ( completeDict
+            PL.. setPartialField @"status" (toJSPrim resp.status)
+            PL.. setPartialField @"statusText"
+              (fromJust $ toJSByteString $ toJSString $ BS8.unpack resp.statusText)
+            PL.. setPartialField @"headers" (inject headers)
+            PL.. setPartialField @"cf" (toNullable Nothing)
+            PL.. setPartialField @"websocket" (toNullable Nothing)
+            PL.. setPartialField @"encodeBody" (fromJust $ toJSByteString $ toJSString "automatic")
+        )
+
+newResponse' :: Maybe T.Text -> Maybe WorkerResponseInit -> IO WorkerResponse
+newResponse' mbody minit =
+  js_new_response
+    (toNullable $ toUSVString . toJSString . T.unpack <$> mbody)
+    (toNullable minit)
+
+toHeaders :: Map T.Text T.Text -> IO Headers
+toHeaders dic = do
+  hdrs0 <-
+    toJSRecord @JSByteStringClass $
+      fromJust . toJSByteString . toJSString . T.unpack <$> dic
+  js_cons_Headers $ toNullable $ Just $ inject hdrs0
+
+foreign import javascript unsafe "new Response($1, $2)"
+  js_new_response :: Nullable USVStringClass -> Nullable WorkerResponseInitClass -> IO WorkerResponse
+
+data SimpleResponseInit = SimpleResponseInit
+  { body :: !T.Text
+  , status :: !Word16
+  , statusText :: !BS.ByteString
+  , headers :: !(Map T.Text T.Text)
+  }
+  deriving (Show, Eq, Ord, Generic)
 
 type WorkerResponseInitFields =
   '[ '("status", JSPrimClass Word16)

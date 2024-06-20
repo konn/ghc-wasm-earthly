@@ -18,6 +18,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE UndecidableSuperClasses #-}
 {-# LANGUAGE UnliftedDatatypes #-}
+{-# OPTIONS_GHC -Wno-redundant-constraints #-}
 
 module GHC.Wasm.Object.Builtins.Dictionary (
   Fields,
@@ -34,8 +35,6 @@ module GHC.Wasm.Object.Builtins.Dictionary (
   emptyDictionary,
   ReifiedDictionary (),
   PartialDictionary (),
-  FieldSetter (),
-  fieldSetter,
   newDictionary,
   completeDict,
   setPartialField,
@@ -55,7 +54,6 @@ import qualified Data.Vector as V
 import qualified Data.Vector.Mutable as MV
 import GHC.Base (Proxy#, proxy#)
 import GHC.Generics
-import GHC.OverloadedLabels (IsLabel (..))
 import GHC.Records
 import GHC.TypeError
 import GHC.TypeLits
@@ -217,26 +215,25 @@ type family Delete k ks where
   Delete k (k ': ks) = ks
   Delete k (j ': ks) = j ': Delete k ks
 
-data FieldSetter f fs = FieldSetter !(Membership f fs) (JSObject (Lookup' f fs))
-
-fieldSetter :: (Member f fs, JSObject (Lookup' f fs) ~ v) => v -> FieldSetter f fs
-fieldSetter = FieldSetter membership
-
 setReifiedDictField ::
-  FieldSetter f fs ->
+  forall f fs x.
+  (Member f fs, x ~~ Lookup' f fs) =>
+  JSObject x ->
   ReifiedDictionary fs ->
   ReifiedDictionary fs
-setReifiedDictField (FieldSetter m x) (ReifiedDictionary v) =
-  ReifiedDictionary $ v & ix (getIndex m) .~ unsafeCast x
+setReifiedDictField x (ReifiedDictionary v) =
+  ReifiedDictionary $ v & ix (getIndex $ membership @f @fs) .~ unsafeCast x
 
 setPartialField ::
-  FieldSetter f fs ->
+  forall f fs gs x.
+  (Member f fs, x ~~ Lookup' f fs) =>
+  JSObject x ->
   PartialDictionary fs gs %1 ->
   PartialDictionary fs (Delete f gs)
 {-# NOINLINE setPartialField #-}
-setPartialField (FieldSetter i x) =
+setPartialField x =
   Unsafe.toLinear \(DB v) -> unsafeDupablePerformIO do
-    () <- MV.write v (getIndex i) (unsafeCast x)
+    () <- MV.write v (getIndex (membership @f @fs)) (unsafeCast x)
     pure $ DB v
 
 emptyDictionary :: ReifiedDictionary '[]
@@ -276,22 +273,16 @@ instance
   where
   given = Membership $ getIndex (given @(Membership f fs)) + 1
 
-instance
-  (Member f fs, v ~ Lookup' f fs) =>
-  IsLabel f (JSObject v -> FieldSetter f fs)
-  where
-  fromLabel = fieldSetter
-
 getDictField :: forall f fs. (Member f fs) => JSDictionary fs -> IO (JSObject (Lookup' f fs))
 getDictField dic = unsafeCast <$> js_get_field dic (toJSString (symbolVal' (proxy# @f)))
 
 setDictField ::
-  forall f fs.
-  (KnownSymbol f) =>
-  FieldSetter f fs ->
+  forall f fs x.
+  (KnownSymbol f, Member f fs, x ~~ Lookup' f fs) =>
+  JSObject x ->
   JSDictionary fs ->
   IO ()
-setDictField (FieldSetter _ v) dic =
+setDictField v dic =
   js_set_field dic (toJSString (symbolVal' (proxy# @f))) (unsafeCast v)
 
 foreign import javascript unsafe "$1[$2]"

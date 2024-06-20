@@ -37,6 +37,7 @@ module GHC.Wasm.Object.Core (
   -- * Null
   NullClass,
   JSNull,
+  jsNull,
 
   -- * Nullable
   NullableClass,
@@ -258,6 +259,9 @@ type data NullClass :: Prototype
 type instance SuperclassOf NullClass = 'Nothing
 
 type JSNull = JSObject NullClass
+
+jsNull :: JSNull
+jsNull = js_null
 
 toNullable :: Maybe (JSObject c) -> Nullable c
 toNullable = maybe (unsafeCast js_null) upcast

@@ -7,26 +7,24 @@
 
 module Network.Cloudflare.Worker.Handler.Fetch (
   FetchHandler,
-  FetchHandlerClass,
-  toFetchHandler,
+  JSFetchHandler,
+  JSFetchHandlerClass,
+  toJSFetchHandler,
   FetchContext,
   FetchContextClass,
   waitUntil,
   passThroughOnException,
 ) where
 
-import Data.Text qualified as T
-import Data.Word
 import GHC.Wasm.Object.Builtins
-import GHC.Wasm.Prim
 import Network.Cloudflare.Worker.Request (WorkerRequest)
 import Network.Cloudflare.Worker.Response (WorkerResponse)
 
-type data FetchHandlerClass :: Prototype
+type data JSFetchHandlerClass :: Prototype
 
-type instance SuperclassOf FetchHandlerClass = 'Nothing
+type instance SuperclassOf JSFetchHandlerClass = 'Nothing
 
-type FetchHandler = JSObject FetchHandlerClass
+type JSFetchHandler = JSObject JSFetchHandlerClass
 
 type data FetchContextClass :: Prototype
 
@@ -40,6 +38,7 @@ foreign import javascript unsafe "$1.waitUntil($2)"
 foreign import javascript unsafe "$1.passThroughOnException()"
   passThroughOnException :: FetchContext -> IO ()
 
+type FetchHandler = WorkerRequest -> JSAny -> FetchContext -> IO WorkerResponse
+
 foreign import javascript unsafe "wrapper"
-  toFetchHandler ::
-    (WorkerRequest -> JSAny -> FetchContext -> IO WorkerResponse) -> FetchHandler
+  toJSFetchHandler :: FetchHandler -> JSFetchHandler
