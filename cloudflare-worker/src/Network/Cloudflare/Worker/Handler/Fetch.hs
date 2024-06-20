@@ -41,4 +41,4 @@ foreign import javascript unsafe "$1.passThroughOnException()"
 type FetchHandler = WorkerRequest -> JSAny -> FetchContext -> IO WorkerResponse
 
 foreign import javascript unsafe "wrapper"
-  toJSFetchHandler :: FetchHandler -> JSFetchHandler
+  toJSFetchHandler :: FetchHandler -> IO JSFetchHandler

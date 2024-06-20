@@ -553,16 +553,7 @@ generateCallbackInterfaceModules = do
             type ${name} = JSObject ${proto}
           |]
         argTys = argumentHsTypes callback.callbackOperation.args
-        pureName = "js_mk_callback_" <> name <> "_pure"
-        pureArgTy =
-          foldr mkNormalFunTy (toHaskellType callback.callbackOperation.returnType) argTys
-        pureTy = T.pack $ pprint $ pureArgTy `mkNormalFunTy` tyConOrVar name
-        pureFFI =
-          [trimming|
-            foreign import javascript unsafe "wrapper"
-              ${pureName} :: ${pureTy}
-          |]
-        impureName = "js_mk_callback_" <> name <> "_impure"
+        impureName = "js_mk_callback_" <> name
         impureArgTy =
           foldr mkNormalFunTy (ioTy `appTy` toHaskellType callback.callbackOperation.returnType) argTys
         impureTy = T.pack $ pprint $ impureArgTy `mkNormalFunTy` tyConOrVar name
@@ -576,14 +567,12 @@ generateCallbackInterfaceModules = do
           Just $
             (tvName, proto)
               : (tvName, name)
-              : (varName, pureName)
               : (varName, impureName)
               : DL.toList constExports
         decls =
           Left protoDef
             : Left superDef
             : Left alias
-            : Left pureFFI
             : Left impureFFI
             : DL.toList constDefs
     either throwString (putFile coreDest) $
@@ -628,15 +617,6 @@ generateCallbackFunctionModules = do
             type ${name} = JSObject ${proto}
           |]
         argTys = argumentHsTypes callback.argTypes
-        pureName = "js_mk_callback_" <> name <> "_pure"
-        pureArgTy =
-          foldr mkNormalFunTy (toHaskellType callback.returnType) argTys
-        pureTy = T.pack $ pprint $ pureArgTy `mkNormalFunTy` tyConOrVar name
-        pureFFI =
-          [trimming|
-            foreign import javascript unsafe "wrapper"
-              ${pureName} :: ${pureTy}
-          |]
         impureName = "js_mk_callback_" <> name <> "_impure"
         impureArgTy =
           foldr mkNormalFunTy (ioTy `appTy` toHaskellType callback.returnType) argTys
@@ -647,8 +627,8 @@ generateCallbackFunctionModules = do
               ${impureName} :: ${impureTy}
           |]
 
-        exports = Just [(tvName, proto), (tvName, name), (varName, pureName), (varName, impureName)]
-        decls = map Left [protoDef, superDef, alias, pureFFI, impureFFI]
+        exports = Just [(tvName, proto), (tvName, name), (varName, impureName)]
+        decls = map Left [protoDef, superDef, alias, impureFFI]
     either throwString (putFile coreDest) $
       renderModule Module {moduleName = coreModuleName, ..}
     either throwString (putFile dest) $

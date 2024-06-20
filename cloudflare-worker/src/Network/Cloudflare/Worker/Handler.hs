@@ -37,7 +37,7 @@ type JSHandlers = JSObject JSHandlersClass
 
 toJSHandlers :: Handlers -> IO JSHandlers
 toJSHandlers Handlers {..} = do
-  let fetch' = toJSFetchHandler fetch
+  fetch' <- toJSFetchHandler fetch
   reflectDictionary $
     newDictionary @JSHandlersFields
       (completeDict PL.. setPartialField @"fetch" fetch')
