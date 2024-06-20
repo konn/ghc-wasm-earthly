@@ -2,6 +2,8 @@ import * as fs from "node:fs";
 import * as process from "node:process";
 
 const code = `
+const setImmediate = (fn) => setTimeout(fn, 0);
+
 class FinalizationRegistry {
   constructor(_callback) {}
   register($1, $2, $3) {
