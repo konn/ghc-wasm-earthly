@@ -58,12 +58,6 @@ library
   hs-source-dirs: src
   -- cabal-gild: discover src
   exposed-modules:
-    Language.WASM.ByteString
-    Language.WASM.JSVal.Convert
-    Language.WASM.JSVal.Iterator
-    Language.WASM.JSVal.Iterator.Linear
-    Language.WASM.JSVal.Utils
-    Language.WASM.ReadableStream
     Network.Cloudflare.Worker
     Network.Cloudflare.Worker.Handler
     Network.Cloudflare.Worker.Handler.Fetch
