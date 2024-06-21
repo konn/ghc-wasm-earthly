@@ -36,6 +36,7 @@ common defaults
     ghc-wasm-jsobjects,
     lucid2,
     text,
+    tomland,
 
   default-language: GHC2021
   autogen-modules: Paths_cloudflare_worker
@@ -66,6 +67,8 @@ library
   exposed-modules:
     Language.WASM.JSVal.Convert
     Network.Cloudflare.Worker
+    Network.Cloudflare.Worker.Binding
+    Network.Cloudflare.Worker.Binding.KV
     Network.Cloudflare.Worker.Handler
     Network.Cloudflare.Worker.Handler.Fetch
     Network.Cloudflare.Worker.Request

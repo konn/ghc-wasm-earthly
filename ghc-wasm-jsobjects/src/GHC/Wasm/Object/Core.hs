@@ -275,7 +275,7 @@ fromNullable n
 foreign import javascript unsafe "null"
   js_null :: JSNull
 
-foreign import javascript unsafe "$1 === null"
+foreign import javascript unsafe "$1 === null || $1 === undefined"
   js_is_null :: Nullable a -> Bool
 
 type JSPrimClass :: Type -> Prototype
