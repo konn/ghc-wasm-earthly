@@ -100,15 +100,16 @@ newResponse resp = do
   empty <- emptyObject
   newResponse' (Just resp.body) . Just
     =<< reflectDictionary do
-      newDictionary @WorkerResponseInitFields
+      newDictionary
         ( completeDict
-            PL.. setPartialField @"status" (toJSPrim resp.status)
-            PL.. setPartialField @"statusText"
+            PL.. setPartialField "status" (toJSPrim resp.status)
+            PL.. setPartialField
+              "statusText"
               (fromJust $ toJSByteString $ toJSString $ BS8.unpack resp.statusText)
-            PL.. setPartialField @"headers" (inject headers)
-            PL.. setPartialField @"cf" empty
-            PL.. setPartialField @"websocket" (toNullable Nothing)
-            PL.. setPartialField @"encodeBody" (fromJust $ toJSByteString $ toJSString "automatic")
+            PL.. setPartialField "headers" (inject headers)
+            PL.. setPartialField "cf" empty
+            PL.. setPartialField "websocket" (toNullable Nothing)
+            PL.. setPartialField "encodeBody" (fromJust $ toJSByteString $ toJSString "automatic")
         )
 
 newResponse' :: Maybe T.Text -> Maybe WorkerResponseInit -> IO WorkerResponse

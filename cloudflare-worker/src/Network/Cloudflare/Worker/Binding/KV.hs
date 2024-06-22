@@ -108,9 +108,9 @@ fromListKey ListKey {..} = unsafePerformIO $ do
   reflectDictionary $
     newDictionary
       ( completeDict
-          PL.. setPartialField @"cursor" (toNullable cursor')
-          PL.. setPartialField @"prefix" (toNullable prefix')
-          PL.. setPartialField @"limit" (toNullable limit')
+          PL.. setPartialField "cursor" (toNullable cursor')
+          PL.. setPartialField "prefix" (toNullable prefix')
+          PL.. setPartialField "limit" (toNullable limit')
       )
 
 foreign import javascript safe "$1.list($2)"

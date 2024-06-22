@@ -1,4 +1,3 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DerivingStrategies #-}
@@ -8,6 +7,7 @@
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE RequiredTypeArguments #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeData #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -53,11 +53,12 @@ type family ListMemberAux (err :: ErrorMessage) (l :: Symbol) (ls :: [Symbol]) :
   ListMemberAux err l (_ ': ls) = ListMemberAux err l ls
 
 getEnv ::
-  forall l envs secrets bindingss.
+  forall envs secrets bindingss.
+  forall l ->
   (KnownSymbol l, ListMember l envs) =>
   Bindings envs secrets bindingss ->
   J.Value
-getEnv b =
+getEnv l b =
   let name = symbolVal' @l proxy#
    in fromJust $
         unsafePerformIO $
@@ -68,11 +69,12 @@ getEnv b =
                   toJSString name
 
 getSecret ::
-  forall l envs secrets bindingss.
+  forall envs secrets bindingss.
+  forall l ->
   (KnownSymbol l, ListMember l secrets) =>
   Bindings envs secrets bindingss ->
   String
-getSecret b =
+getSecret l b =
   let key = symbolVal' @l proxy#
    in maybe (error $ "Secret not found: " <> show key) (fromJSString . convertToJSString) $
         fromNullable $
@@ -80,11 +82,12 @@ getSecret b =
             toJSString key
 
 getBinding ::
-  forall l envs secrets bindings.
+  forall envs secrets bindings.
+  forall l ->
   (KnownSymbol l, Member l bindings) =>
   Bindings envs secrets bindings ->
   JSObject (Lookup' l bindings)
-getBinding b =
+getBinding l b =
   let name = symbolVal' @l proxy#
    in fromMaybe (error $ "Not binding found: " <> name) $
         fromNullable $

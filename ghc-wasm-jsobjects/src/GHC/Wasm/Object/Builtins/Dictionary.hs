@@ -1,4 +1,3 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DataKinds #-}
@@ -10,6 +9,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RequiredTypeArguments #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeData #-}
@@ -216,22 +216,24 @@ type family Delete k ks where
   Delete k (j ': ks) = j ': Delete k ks
 
 setReifiedDictField ::
-  forall f fs x.
+  forall fs x.
+  forall f ->
   (Member f fs, x ~~ Lookup' f fs) =>
   JSObject x ->
   ReifiedDictionary fs ->
   ReifiedDictionary fs
-setReifiedDictField x (ReifiedDictionary v) =
+setReifiedDictField f x (ReifiedDictionary v) =
   ReifiedDictionary $ v & ix (getIndex $ membership @f @fs) .~ unsafeCast x
 
 setPartialField ::
-  forall f fs gs x.
+  forall fs gs x.
+  forall f ->
   (Member f fs, x ~~ Lookup' f fs) =>
   JSObject x ->
   PartialDictionary fs gs %1 ->
   PartialDictionary fs (Delete f gs)
 {-# NOINLINE setPartialField #-}
-setPartialField x =
+setPartialField f x =
   Unsafe.toLinear \(DB v) -> unsafeDupablePerformIO do
     () <- MV.write v (getIndex (membership @f @fs)) (unsafeCast x)
     pure $ DB v
@@ -273,16 +275,17 @@ instance
   where
   given = Membership $ getIndex (given @(Membership f fs)) + 1
 
-getDictField :: forall f fs. (Member f fs) => JSDictionary fs -> IO (JSObject (Lookup' f fs))
-getDictField dic = unsafeCast <$> js_get_field dic (toJSString (symbolVal' (proxy# @f)))
+getDictField :: forall fs. forall f -> (Member f fs) => JSDictionary fs -> IO (JSObject (Lookup' f fs))
+getDictField f dic = unsafeCast <$> js_get_field dic (toJSString (symbolVal' (proxy# @f)))
 
 setDictField ::
-  forall f fs x.
+  forall fs x.
+  forall f ->
   (KnownSymbol f, Member f fs, x ~~ Lookup' f fs) =>
   JSObject x ->
   JSDictionary fs ->
   IO ()
-setDictField v dic =
+setDictField f v dic =
   js_set_field dic (toJSString (symbolVal' (proxy# @f))) (unsafeCast v)
 
 foreign import javascript unsafe "$1[$2]"
