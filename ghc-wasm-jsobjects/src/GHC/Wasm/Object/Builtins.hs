@@ -43,5 +43,5 @@ upcastPromise = unsafeAsObject . unJSObject
 await :: Promise a -> IO (JSObject a)
 await = js_await
 
-foreign import javascript unsafe "return await $1;"
+foreign import javascript safe "await $1"
   js_await :: Promise a -> IO (JSObject a)
