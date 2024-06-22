@@ -38,7 +38,7 @@ foreign import javascript unsafe "$1.waitUntil($2)"
 foreign import javascript unsafe "$1.passThroughOnException()"
   passThroughOnException :: FetchContext -> IO ()
 
-type FetchHandler = WorkerRequest -> JSAny -> FetchContext -> IO WorkerResponse
+type FetchHandler env = WorkerRequest -> JSObject env -> FetchContext -> IO WorkerResponse
 
 foreign import javascript unsafe "wrapper"
-  toJSFetchHandler :: FetchHandler -> IO JSFetchHandler
+  toJSFetchHandler :: FetchHandler env -> IO JSFetchHandler

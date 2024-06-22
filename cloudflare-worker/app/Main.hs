@@ -25,7 +25,7 @@ foreign export javascript "handlers" handlers :: IO JSHandlers
 handlers :: IO JSHandlers
 handlers = toJSHandlers Handlers {fetch}
 
-fetch :: FetchHandler
+fetch :: FetchHandler AnyClass
 fetch req _ _ = do
   body <- fmap LT.toStrict $ renderTextT $ buildResponseBody req
   newResponse

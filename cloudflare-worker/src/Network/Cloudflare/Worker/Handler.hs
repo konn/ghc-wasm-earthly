@@ -24,9 +24,8 @@ module Network.Cloudflare.Worker.Handler (
 import GHC.Generics (Generic)
 import GHC.Wasm.Object.Builtins
 import Network.Cloudflare.Worker.Handler.Fetch
-import Wasm.Prelude.Linear qualified as PL
 
-newtype Handlers = Handlers {fetch :: FetchHandler}
+newtype Handlers env = Handlers {fetch :: FetchHandler env}
   deriving (Generic)
 
 type JSHandlersFields = '[ '("fetch", JSFetchHandlerClass)]
@@ -35,9 +34,8 @@ type JSHandlersClass = JSDictionaryClass JSHandlersFields
 
 type JSHandlers = JSObject JSHandlersClass
 
-toJSHandlers :: Handlers -> IO JSHandlers
+toJSHandlers :: Handlers envs -> IO JSHandlers
 toJSHandlers Handlers {..} = do
   fetch' <- toJSFetchHandler fetch
   reflectDictionary $
-    newDictionary @JSHandlersFields
-      (setPartialField "fetch" fetch')
+    newDictionary @JSHandlersFields (setPartialField "fetch" fetch')
