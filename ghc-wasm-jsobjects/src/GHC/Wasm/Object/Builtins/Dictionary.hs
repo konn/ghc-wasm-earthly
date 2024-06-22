@@ -36,7 +36,6 @@ module GHC.Wasm.Object.Builtins.Dictionary (
   ReifiedDictionary (),
   PartialDictionary (),
   newDictionary,
-  completeDict,
   setPartialField,
   setReifiedDictField,
   KnownFields,
@@ -199,16 +198,13 @@ type family Keys fs where
 newDictionary ::
   forall fs.
   (KnownFields fs) =>
-  (PartialDictionary fs (Keys fs) %1 -> ()) %1 ->
+  (PartialDictionary fs (Keys fs) %1 -> PartialDictionary fs '[]) %1 ->
   ReifiedDictionary fs
 {-# INLINE newDictionary #-}
 newDictionary = Unsafe.toLinear \k -> unsafeDupablePerformIO do
   v <- MV.new (sLen (proxy# @fs))
-  () <- evaluate $ k (DB v)
-  ReifiedDictionary <$> V.unsafeFreeze v
-
-completeDict :: PartialDictionary fs '[] %1 -> ()
-completeDict = Unsafe.toLinear \ !_ -> ()
+  DB v' <- evaluate $ k (DB v)
+  ReifiedDictionary <$> V.unsafeFreeze v'
 
 type family Delete k ks where
   Delete k '[] = '[]

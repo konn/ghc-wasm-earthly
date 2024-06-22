@@ -101,8 +101,7 @@ newResponse resp = do
   newResponse' (Just resp.body) . Just
     =<< reflectDictionary do
       newDictionary
-        ( completeDict
-            PL.. setPartialField "status" (toJSPrim resp.status)
+        ( setPartialField "status" (toJSPrim resp.status)
             PL.. setPartialField
               "statusText"
               (fromJust $ toJSByteString $ toJSString $ BS8.unpack resp.statusText)

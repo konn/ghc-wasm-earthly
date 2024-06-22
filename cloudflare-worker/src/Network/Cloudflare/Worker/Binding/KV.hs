@@ -107,8 +107,7 @@ fromListKey ListKey {..} = unsafePerformIO $ do
   let cursor' = toUSVString . toJSString <$> cursor
   reflectDictionary $
     newDictionary
-      ( completeDict
-          PL.. setPartialField "cursor" (toNullable cursor')
+      ( setPartialField "cursor" (toNullable cursor')
           PL.. setPartialField "prefix" (toNullable prefix')
           PL.. setPartialField "limit" (toNullable limit')
       )

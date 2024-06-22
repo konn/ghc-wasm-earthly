@@ -40,4 +40,4 @@ toJSHandlers Handlers {..} = do
   fetch' <- toJSFetchHandler fetch
   reflectDictionary $
     newDictionary @JSHandlersFields
-      (completeDict PL.. setPartialField "fetch" fetch')
+      (setPartialField "fetch" fetch')
