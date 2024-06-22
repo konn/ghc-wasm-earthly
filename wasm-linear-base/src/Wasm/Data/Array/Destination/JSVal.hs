@@ -41,7 +41,7 @@ data DJSArray where
 foreign import javascript unsafe "Array($1)"
   js_new_array :: Int -> System.IO JSArray
 
-foreign import javascript unsafe "$1[$2] = $3"
+foreign import javascript unsafe "$3[$1] = $2"
   js_set_array :: Int -> JSVal -> JSArray %1 -> ()
 
 replicate :: JSVal -> DJSArray %1 -> ()
