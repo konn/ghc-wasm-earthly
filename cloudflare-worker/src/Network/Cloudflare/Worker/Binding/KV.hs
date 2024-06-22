@@ -16,6 +16,8 @@ module Network.Cloudflare.Worker.Binding.KV (
   KVClass,
   delete,
   listKeys,
+  ListKeys (..),
+  ListKeyResult (..),
   get,
   getWithMetadata,
   put,
@@ -57,7 +59,7 @@ foreign import javascript safe "$1.delete($2)"
 -- List keys
 ----------------
 
-data ListKey = ListKey
+data ListKeys = ListKeys
   { prefix :: !(Maybe String)
   , limit :: !(Maybe Word32)
   , cursor :: !(Maybe String)
@@ -87,7 +89,7 @@ data Key = Key
   deriving (Show, Eq, Ord, Generic)
   deriving anyclass (FromJSON)
 
-listKeys :: KV -> ListKey -> IO (Either String ListKeyResult)
+listKeys :: KV -> ListKeys -> IO (Either String ListKeyResult)
 listKeys kv key = do
   let jsKey = fromListKey key
   json <- await =<< js_kv_list kv jsKey
@@ -100,8 +102,8 @@ eitherResult :: J.Result a -> Either String a
 eitherResult (J.Success a) = Right a
 eitherResult (J.Error e) = Left e
 
-fromListKey :: ListKey -> JSListKeyInit
-fromListKey ListKey {..} = unsafePerformIO $ do
+fromListKey :: ListKeys -> JSListKeyInit
+fromListKey ListKeys {..} = unsafePerformIO $ do
   let prefix' = toUSVString . toJSString <$> prefix
   let limit' = toJSPrim <$> limit
   let cursor' = toUSVString . toJSString <$> cursor
