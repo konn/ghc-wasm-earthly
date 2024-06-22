@@ -1,5 +1,7 @@
 {-# LANGUAGE OverloadedRecordDot #-}
+{-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# OPTIONS_GHC -Wno-partial-fields #-}
 
 module GHC.Wasm.FFI.Plugin (plugin) where
 
@@ -56,20 +58,21 @@ parseExp flags s =
             PFailed _ -> error $ "parse failed: " <> s
     PFailed _ -> error $ "parse failed: " <> s
 
-generateDummy :: DynFlags -> SrcSpanAnn' (EpAnn AnnListItem) -> ForeignDecl GhcPs -> GenLocated SrcSpanAnnN RdrName -> GenLocated SrcSpanAnnA (HsSigType GhcPs) -> [GenLocated SrcSpanAnnA (HsDecl GhcPs)]
+generateDummy :: DynFlags -> SrcSpanAnnA -> ForeignDecl GhcPs -> GenLocated SrcSpanAnnN RdrName -> GenLocated SrcSpanAnnA (HsSigType GhcPs) -> [GenLocated SrcSpanAnnA (HsDecl GhcPs)]
 generateDummy flags loc ffi funName funType =
   let errorBody = parseExp flags $ "error " <> show (showSDoc flags (ppr ffi))
    in map
         (L loc)
-        [ SigD NoExtField $ TypeSig EpAnnNotUsed [funName] $ HsWC NoExtField funType
+        [ SigD NoExtField $ TypeSig noAnn [funName] $ HsWC NoExtField funType
         , ValD NoExtField $
             FunBind NoExtField funName $
               MG
-                (Generated DoPmc)
-                ( noSSA
+                (Generated OtherExpansion DoPmc)
+                ( L
+                    noAnn
                     [ noSSA
                         $ Match
-                          EpAnnNotUsed
+                          noAnn
                           ( FunRhs
                               { mc_strictness = NoSrcStrict
                               , mc_fun = funName
@@ -78,9 +81,9 @@ generateDummy flags loc ffi funName funType =
                           )
                           []
                         $ GRHSs
-                          { grhssLocalBinds = HsValBinds EpAnnNotUsed $ ValBinds NoAnnSortKey mempty []
+                          { grhssLocalBinds = HsValBinds noAnn $ ValBinds NoAnnSortKey mempty []
                           , grhssGRHSs =
-                              [noSSA $ GRHS EpAnnNotUsed [] $ errorBody]
+                              [noLocA $ GRHS noAnn [] $ errorBody]
                           , grhssExt = EpaComments []
                           }
                     ]
