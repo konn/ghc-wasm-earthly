@@ -33,7 +33,7 @@ fromIterator =
     resl <- js_iterator_next iter
     let val = js_iterator_value resl
     if js_iterator_done resl
-      then pure $ val <$ guard (js_is_undefined val)
+      then pure $ val <$ guard (not $ js_is_undefined val)
       else pure $ Just val
 
 data JSIteratorResultClass :: Prototype
