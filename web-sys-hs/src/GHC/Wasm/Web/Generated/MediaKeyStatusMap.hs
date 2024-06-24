@@ -32,7 +32,6 @@ foreign import javascript unsafe "$1.get($2)" js_fun_get_BufferSource_any
   :: MediaKeyStatusMap -> (BufferSource -> (IO JSAny))
 foreign import javascript unsafe "$1.size" js_get_size
   :: MediaKeyStatusMap -> (IO Word32)
-js_iter_MediaKeyStatusMap_ArrayBuffer_MediaKeyStatus ::
-  MediaKeyStatusMap
-  -> (PairIterable ArrayBufferClass MediaKeyStatusClass)
-js_iter_MediaKeyStatusMap_ArrayBuffer_MediaKeyStatus = unsafeCast
+foreign import javascript unsafe "$1[Symbol.iterator]()" js_iter_MediaKeyStatusMap_ArrayBuffer_MediaKeyStatus
+  :: MediaKeyStatusMap
+     -> (IO (PairIterable ArrayBufferClass MediaKeyStatusClass))

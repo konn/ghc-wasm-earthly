@@ -816,14 +816,17 @@ generateInterfaceMainModule name Attributed {entry = ifs} = skipNonTarget name d
             Just v ->
               (tyConOrVar "PairIterable" `appTy` toHaskellPrototype k.entry)
                 `appTy` toHaskellPrototype v.entry
-          funTy = T.pack $ pprint $ tyConOrVar (toTypeName hsTyName) `mkNormalFunTy` iterTyName
-          sigDec = [trimming|${hsFunName} :: ${funTy}|]
-          funDec = [trimming|${hsFunName} = unsafeCast|]
+          funTy = T.pack $ pprint $ tyConOrVar (toTypeName hsTyName) `mkNormalFunTy` (ioTy `appTy` iterTyName)
+          castDec =
+            [trimming|
+              foreign import javascript unsafe "$$1[Symbol.iterator]()"
+                ${hsFunName} :: ${funTy}
+            |]
 
       Writer.tell
         MainModuleFragments
           { mainExports = DL.singleton (varName, hsFunName)
-          , decs = DL.fromList [Left sigDec, Left funDec]
+          , decs = DL.fromList [Left castDec]
           }
     -- FIXME: Implement this
     genAsyncIterables = pure ()

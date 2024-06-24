@@ -57,6 +57,6 @@ foreign import javascript unsafe "$1.set($2,$3,$4)" js_fun_set_USVString_Blob_nu
      -> (USVString -> (Blob -> (Nullable USVStringClass -> (IO ()))))
 foreign import javascript unsafe "$1.set($2,$3)" js_fun_set_USVString_USVString_undefined
   :: FormData -> (USVString -> (USVString -> (IO ())))
-js_iter_FormData_USVString_FormDataEntryValue ::
-  FormData -> (PairIterable USVStringClass FormDataEntryValueClass)
-js_iter_FormData_USVString_FormDataEntryValue = unsafeCast
+foreign import javascript unsafe "$1[Symbol.iterator]()" js_iter_FormData_USVString_FormDataEntryValue
+  :: FormData
+     -> (IO (PairIterable USVStringClass FormDataEntryValueClass))

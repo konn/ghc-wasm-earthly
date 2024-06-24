@@ -47,6 +47,6 @@ foreign import javascript unsafe "$1.guard" js_get_guard
   :: Headers -> (IO HeadersGuardEnum)
 foreign import javascript unsafe "$1.guard = $2" js_set_guard
   :: Headers -> (HeadersGuardEnum -> (IO ()))
-js_iter_Headers_ByteString_ByteString ::
-  Headers -> (PairIterable JSByteStringClass JSByteStringClass)
-js_iter_Headers_ByteString_ByteString = unsafeCast
+foreign import javascript unsafe "$1[Symbol.iterator]()" js_iter_Headers_ByteString_ByteString
+  :: Headers
+     -> (IO (PairIterable JSByteStringClass JSByteStringClass))

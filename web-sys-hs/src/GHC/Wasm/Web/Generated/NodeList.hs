@@ -26,5 +26,5 @@ import GHC.Wasm.Web.Generated.NodeList.Core
 import GHC.Wasm.Web.Types
 foreign import javascript unsafe "$1.length" js_get_length
   :: NodeList -> (IO Word32)
-js_iter_NodeList_Node :: NodeList -> (Iterable NodeClass)
-js_iter_NodeList_Node = unsafeCast
+foreign import javascript unsafe "$1[Symbol.iterator]()" js_iter_NodeList_Node
+  :: NodeList -> (IO (Iterable NodeClass))
