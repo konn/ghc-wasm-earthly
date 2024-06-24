@@ -20,7 +20,7 @@ module GHC.Wasm.Web.Generated.DOMTokenList (
         js_fun_replace_DOMString_DOMString_boolean,
         js_fun_toggle_DOMString_nullable_boolean_boolean,
         js_fun_supports_DOMString_boolean, js_get_length, js_get_value,
-        js_set_value
+        js_set_value, js_iter_DOMTokenList_DOMString
     ) where
 import Data.Int
 import Data.Word
@@ -47,3 +47,6 @@ foreign import javascript unsafe "$1.value" js_get_value
   :: DOMTokenList -> (IO DOMString)
 foreign import javascript unsafe "$1.value = $2" js_set_value
   :: DOMTokenList -> (DOMString -> (IO ()))
+js_iter_DOMTokenList_DOMString ::
+  Iterable DOMStringClass -> DOMTokenList
+js_iter_DOMTokenList_DOMString = unsafeCast

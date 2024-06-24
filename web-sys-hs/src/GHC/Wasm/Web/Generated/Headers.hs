@@ -21,7 +21,7 @@ module GHC.Wasm.Web.Generated.Headers (
         js_fun_get_ByteString_nullable_ByteString,
         js_fun_has_ByteString_boolean,
         js_fun_set_ByteString_ByteString_undefined, js_get_guard,
-        js_set_guard
+        js_set_guard, js_iter_Headers_ByteString_ByteString
     ) where
 import Data.Int
 import Data.Word
@@ -47,3 +47,6 @@ foreign import javascript unsafe "$1.guard" js_get_guard
   :: Headers -> (IO HeadersGuardEnum)
 foreign import javascript unsafe "$1.guard = $2" js_set_guard
   :: Headers -> (HeadersGuardEnum -> (IO ()))
+js_iter_Headers_ByteString_ByteString ::
+  PairIterable JSByteStringClass JSByteStringClass -> Headers
+js_iter_Headers_ByteString_ByteString = unsafeCast

@@ -49,6 +49,7 @@ library
     GHC.Wasm.Object.Builtins.BigInt
     GHC.Wasm.Object.Builtins.Buffer
     GHC.Wasm.Object.Builtins.Dictionary
+    GHC.Wasm.Object.Builtins.Iterable
     GHC.Wasm.Object.Builtins.Iterator
     GHC.Wasm.Object.Builtins.Record
     GHC.Wasm.Object.Builtins.Sequence

@@ -17,7 +17,7 @@
 module GHC.Wasm.Web.Generated.MediaKeyStatusMap (
         MediaKeyStatusMap, MediaKeyStatusMapClass,
         js_fun_has_BufferSource_boolean, js_fun_get_BufferSource_any,
-        js_get_size
+        js_get_size, js_iter_MediaKeyStatusMap_ArrayBuffer_MediaKeyStatus
     ) where
 import Data.Int
 import Data.Word
@@ -32,3 +32,7 @@ foreign import javascript unsafe "$1.get($2)" js_fun_get_BufferSource_any
   :: MediaKeyStatusMap -> (BufferSource -> (IO JSAny))
 foreign import javascript unsafe "$1.size" js_get_size
   :: MediaKeyStatusMap -> (IO Word32)
+js_iter_MediaKeyStatusMap_ArrayBuffer_MediaKeyStatus ::
+  PairIterable ArrayBufferClass MediaKeyStatusClass
+  -> MediaKeyStatusMap
+js_iter_MediaKeyStatusMap_ArrayBuffer_MediaKeyStatus = unsafeCast

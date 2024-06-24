@@ -809,8 +809,22 @@ generateInterfaceMainModule name Attributed {entry = ifs} = skipNonTarget name d
                 , decs = DL.singleton $ Left writer
                 }
 
-    -- FIXME: Implement this
-    genIterables = pure ()
+    genIterables = V.forM_ ifs.iterables \Attributed {entry = Iterable k mv} -> do
+      let hsFunName = "js_iter_" <> hsTyName <> "_" <> toHaskellIdentifier k.entry <> maybe "" (("_" <>) . toHaskellIdentifier . (.entry)) mv
+          iterTyName = case mv of
+            Nothing -> tyConOrVar "Iterable" `appTy` toHaskellPrototype k.entry
+            Just v ->
+              (tyConOrVar "PairIterable" `appTy` toHaskellPrototype k.entry)
+                `appTy` toHaskellPrototype v.entry
+          funTy = T.pack $ pprint $ iterTyName `mkNormalFunTy` tyConOrVar (toTypeName hsTyName)
+          sigDec = [trimming|${hsFunName} :: ${funTy}|]
+          funDec = [trimming|${hsFunName} = unsafeCast|]
+
+      Writer.tell
+        MainModuleFragments
+          { mainExports = DL.singleton (varName, hsFunName)
+          , decs = DL.fromList [Left sigDec, Left funDec]
+          }
     -- FIXME: Implement this
     genAsyncIterables = pure ()
     -- FIXME: Implement this
