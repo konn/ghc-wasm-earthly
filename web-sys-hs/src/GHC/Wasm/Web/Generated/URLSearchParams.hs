@@ -50,5 +50,5 @@ foreign import javascript unsafe "$1.set($2,$3)" js_fun_set_USVString_USVString_
 foreign import javascript unsafe "$1.sort()" js_fun_sort__undefined
   :: URLSearchParams -> (IO ())
 js_iter_URLSearchParams_USVString_USVString ::
-  PairIterable USVStringClass USVStringClass -> URLSearchParams
+  URLSearchParams -> (PairIterable USVStringClass USVStringClass)
 js_iter_URLSearchParams_USVString_USVString = unsafeCast

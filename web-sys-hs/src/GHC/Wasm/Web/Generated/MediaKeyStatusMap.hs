@@ -33,6 +33,6 @@ foreign import javascript unsafe "$1.get($2)" js_fun_get_BufferSource_any
 foreign import javascript unsafe "$1.size" js_get_size
   :: MediaKeyStatusMap -> (IO Word32)
 js_iter_MediaKeyStatusMap_ArrayBuffer_MediaKeyStatus ::
-  PairIterable ArrayBufferClass MediaKeyStatusClass
-  -> MediaKeyStatusMap
+  MediaKeyStatusMap
+  -> (PairIterable ArrayBufferClass MediaKeyStatusClass)
 js_iter_MediaKeyStatusMap_ArrayBuffer_MediaKeyStatus = unsafeCast

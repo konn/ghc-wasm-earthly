@@ -816,7 +816,7 @@ generateInterfaceMainModule name Attributed {entry = ifs} = skipNonTarget name d
             Just v ->
               (tyConOrVar "PairIterable" `appTy` toHaskellPrototype k.entry)
                 `appTy` toHaskellPrototype v.entry
-          funTy = T.pack $ pprint $ iterTyName `mkNormalFunTy` tyConOrVar (toTypeName hsTyName)
+          funTy = T.pack $ pprint $ tyConOrVar (toTypeName hsTyName) `mkNormalFunTy` iterTyName
           sigDec = [trimming|${hsFunName} :: ${funTy}|]
           funDec = [trimming|${hsFunName} = unsafeCast|]
 

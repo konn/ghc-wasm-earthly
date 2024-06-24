@@ -48,5 +48,5 @@ foreign import javascript unsafe "$1.value" js_get_value
 foreign import javascript unsafe "$1.value = $2" js_set_value
   :: DOMTokenList -> (DOMString -> (IO ()))
 js_iter_DOMTokenList_DOMString ::
-  Iterable DOMStringClass -> DOMTokenList
+  DOMTokenList -> (Iterable DOMStringClass)
 js_iter_DOMTokenList_DOMString = unsafeCast
