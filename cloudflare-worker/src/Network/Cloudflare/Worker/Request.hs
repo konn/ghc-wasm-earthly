@@ -12,6 +12,7 @@ module Network.Cloudflare.Worker.Request (
   getBody,
   getBodyUsed,
   getHeaders,
+  getHeaders',
   getMethod,
   getRedirect,
   getCloudflare,
@@ -36,6 +37,8 @@ module Network.Cloudflare.Worker.Request (
 
 import Control.Monad
 import Data.Aeson qualified as J
+import Data.Bitraversable (Bitraversable (bitraverse))
+import Data.ByteString qualified as BS
 import Data.Text qualified as T
 import Data.Word
 import GHC.Wasm.Object.Builtins
@@ -47,6 +50,7 @@ import GHC.Wasm.Web.Generated.Request
 import GHC.Wasm.Web.Generated.RequestRedirect (RequestRedirect)
 import GHC.Wasm.Web.Generated.URLSearchParams
 import GHC.Wasm.Web.JSON
+import Streaming.Prelude qualified as S
 import System.IO.Unsafe (unsafePerformIO)
 
 type data WorkerRequestClass :: Prototype
@@ -166,8 +170,18 @@ getBody = unsafePerformIO . js_get_body . upcast
 getBodyUsed :: WorkerRequest -> Bool
 getBodyUsed = unsafePerformIO . js_get_bodyUsed . upcast
 
-getHeaders :: WorkerRequest -> Headers
-getHeaders = unsafePerformIO . js_get_headers . upcast
+getHeaders :: WorkerRequest -> [(BS.ByteString, BS.ByteString)]
+getHeaders =
+  unsafePerformIO
+    . ( S.toList_
+          . S.mapM (bitraverse toHaskellByteString toHaskellByteString)
+          . fromPairIterable
+          <=< js_iter_Headers_ByteString_ByteString
+            . getHeaders'
+      )
+
+getHeaders' :: WorkerRequest -> Headers
+getHeaders' = unsafePerformIO . js_get_headers . upcast
 
 getMethod :: WorkerRequest -> JSByteString
 getMethod = unsafePerformIO . js_get_method . upcast
