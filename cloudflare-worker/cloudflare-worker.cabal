@@ -80,7 +80,9 @@ executable hello-worker
   main-is: Main.hs
   hs-source-dirs: app
   ghc-options: -O2
-  build-depends: streaming
+  build-depends:
+    streaming,
+    streaming-bytestring,
 
   if os(wasi)
     ghc-options:

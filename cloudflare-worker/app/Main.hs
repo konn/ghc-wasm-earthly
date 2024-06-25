@@ -13,6 +13,7 @@ import Data.Aeson.KeyMap qualified as AKM
 import Data.ByteString.Char8 qualified as BS8
 import Data.Map.Strict qualified as Map
 import Data.Text.Lazy qualified as LT
+import Data.Text.Lazy.Encoding qualified as LTE
 import GHC.Wasm.Object.Builtins
 import GHC.Wasm.Prim
 import Lucid
@@ -20,6 +21,8 @@ import Network.Cloudflare.Worker.Handler
 import Network.Cloudflare.Worker.Handler.Fetch (FetchHandler)
 import Network.Cloudflare.Worker.Request qualified as Req
 import Network.Cloudflare.Worker.Response
+import Streaming (lift)
+import Streaming.ByteString qualified as Q
 
 foreign export javascript "handlers" handlers :: IO JSHandlers
 
@@ -104,6 +107,11 @@ buildResponseBody req = do
                   toHtml $
                     J.encode v
         Just v -> pre_ $ code_ $ toHtml $ J.encode v
+      h2_ "Body"
+      body <- lift $ mapM Q.toLazy_ $ Req.readBody req
+      case body of
+        Nothing -> p_ "N/A"
+        Just v -> pre_ $ code_ $ toHtml $ LTE.decodeUtf8 v
 
 toStr :: (IsJavaScriptString a) => JSObject a -> String
 toStr = fromJSString . convertToJSString
