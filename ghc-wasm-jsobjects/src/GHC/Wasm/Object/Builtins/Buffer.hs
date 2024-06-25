@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE InstanceSigs #-}
@@ -78,12 +79,14 @@ module GHC.Wasm.Object.Builtins.Buffer (
 ) where
 
 import Control.Arrow ((>>>))
+import Control.Monad.ST (ST)
+import Control.Monad.ST.Unsafe (unsafeIOToST)
 import Data.Array.Byte (ByteArray (..))
 import qualified Data.ByteString as BS
 import Data.ByteString.Short (ShortByteString (..))
 import qualified Data.ByteString.Short as BS
 import Data.Kind (Type)
-import Data.Primitive (PrimArray (..), copyPrimArray, copyPrimArrayToPtr, copyPtrToMutablePrimArray, newPrimArray, runPrimArray, sizeofPrimArray)
+import Data.Primitive (PrimArray (..), copyPrimArray, copyPrimArrayToPtr, mutablePrimArrayContents, newPinnedPrimArray, newPrimArray, runPrimArray, sizeofPrimArray)
 import Data.Primitive.Types (Prim)
 import qualified Data.Vector.Primitive as PV
 import Foreign
@@ -136,10 +139,14 @@ toByteArray = toPrimArray >>> \(PrimArray ba) -> ByteArray ba
 
 toPrimArray :: (JSByteArrayElement a) => JSByteArray a -> PrimArray a
 toPrimArray ba = runPrimArray do
-  let len = elemLength ba
-  parr <- newPrimArray len
-  copyPtrToMutablePrimArray parr 0 (byteOffset ba) len
+  let !len = elemLength ba
+  parr <- newPinnedPrimArray len
+  barr <- unsafeIOToST $ allocateArray (mutablePrimArrayContents parr) len
+  unsafeIOToST $ js_copy_into barr ba
   pure parr
+
+foreign import javascript unsafe "$1.set($2)"
+  js_copy_into :: JSByteArray a -> JSByteArray a -> IO ()
 
 usePrimArrayAsJSByteArray :: (JSByteArrayElement a) => PrimArray a -> (JSByteArray a -> IO b) -> IO b
 usePrimArrayAsJSByteArray parr act = do

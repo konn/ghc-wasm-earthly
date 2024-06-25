@@ -88,7 +88,7 @@ foreign import javascript unsafe "$1.length"
   js_stringLength :: JSString -> IO Int
 
 foreign import javascript unsafe "(new TextEncoder()).encodeInto($1, new Uint8Array(__exports.memory.buffer, $2, $3)).written"
-  js_encodeInto :: JSString -> Ptr a -> Int -> IO Int
+  js_encodeInto :: JSString -> Ptr Word8 -> Int -> IO Int
 
 toHaskellByteString :: JSByteString -> IO BS.ByteString
 toHaskellByteString jsbs = do
