@@ -9,6 +9,7 @@ module Network.Cloudflare.Worker.Request (
   WorkerRequest,
   newRequest,
   getUrl,
+  readBody,
   getBody,
   getBodyUsed,
   getHeaders,
@@ -50,6 +51,8 @@ import GHC.Wasm.Web.Generated.Request
 import GHC.Wasm.Web.Generated.RequestRedirect (RequestRedirect)
 import GHC.Wasm.Web.Generated.URLSearchParams
 import GHC.Wasm.Web.JSON
+import GHC.Wasm.Web.ReadableStream
+import Streaming.ByteString qualified as Q
 import Streaming.Prelude qualified as S
 import System.IO.Unsafe (unsafePerformIO)
 
@@ -166,6 +169,9 @@ foreign import javascript unsafe "$1.cf"
 
 getBody :: WorkerRequest -> Nullable ReadableStreamClass
 getBody = unsafePerformIO . js_get_body . upcast
+
+readBody :: WorkerRequest -> Maybe (Q.ByteStream IO ())
+readBody = fmap fromReadableStream . fromNullable . getBody
 
 getBodyUsed :: WorkerRequest -> Bool
 getBodyUsed = unsafePerformIO . js_get_bodyUsed . upcast
