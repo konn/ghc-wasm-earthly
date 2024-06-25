@@ -45,6 +45,19 @@ common defaults
 
 library
   import: defaults
+  hs-source-dirs: src
+  build-depends:
+    aeson,
+    bytestring,
+    ghc-wasm-compat,
+    ghc-wasm-jsobjects,
+    streaming-bytestring,
+    transformers,
+
+  if !os(wasi)
+    ghc-options:
+      -fobject-code
+      -fplugin=GHC.Wasm.FFI.Plugin
   -- cabal-gild: discover src
   exposed-modules:
     GHC.Wasm.Web.Generated.AbortSignal
@@ -1144,19 +1157,8 @@ library
     GHC.Wasm.Web.Generated.XPathResult
     GHC.Wasm.Web.Generated.XPathResult.Core
     GHC.Wasm.Web.JSON
+    GHC.Wasm.Web.ReadableStream
     GHC.Wasm.Web.Types
-
-  hs-source-dirs: src
-  build-depends:
-    aeson,
-    bytestring,
-    ghc-wasm-compat,
-    ghc-wasm-jsobjects,
-
-  if !os(wasi)
-    ghc-options:
-      -fobject-code
-      -fplugin=GHC.Wasm.FFI.Plugin
 
 executable web-sys-hs-exe
   import: defaults
