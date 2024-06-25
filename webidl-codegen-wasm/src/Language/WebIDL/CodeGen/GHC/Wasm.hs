@@ -83,7 +83,7 @@ import GHC.Types.Name.Reader (RdrName (..))
 import GHC.Types.SrcLoc
 import Language.Haskell.Parser.Ex.Helper
 import Language.WebIDL.AST.Parser (parseIDLFragment)
-import Language.WebIDL.AST.Types (Attribute (..), AttributeName (..), BufferType (..), ConstType (..), ConstValue (..), DistinguishableType (..), IDLFragment, PrimType (..), Sign (..), StringType (..), UnionType (..), WithNullarity (..))
+import Language.WebIDL.AST.Types (ArgumentName (..), Attribute (..), AttributeName (..), BufferType (..), ConstType (..), ConstValue (..), DistinguishableType (..), IDLFragment, PrimType (..), Sign (..), StringType (..), UnionType (..), WithNullarity (..))
 import Language.WebIDL.Desugar hiding (throw)
 import NeatInterpolation (trimming)
 import Path
@@ -828,8 +828,42 @@ generateInterfaceMainModule name Attributed {entry = ifs} = skipNonTarget name d
           { mainExports = DL.singleton (varName, hsFunName)
           , decs = DL.fromList [Left castDec]
           }
-    -- FIXME: Implement this
-    genAsyncIterables = pure ()
+    genAsyncIterables = V.forM_ ifs.asyncIterables \Attributed {entry = AsyncIterable k mv margs} -> do
+      let fstArg = Attributed mempty $ Argument (Distinguishable $ Plain $ DNamed hsTyName) $ ArgIdent "myself"
+          args =
+            maybe
+              ArgumentList
+                { requiredArgs = V.singleton fstArg
+                , optionalArgs = mempty
+                , ellipsis = Nothing
+                }
+              (#requiredArgs %~ V.cons fstArg)
+              margs
+          hsFunName = "js_asynciter_" <> hsTyName <> "_" <> toHaskellIdentifier k.entry <> maybe "" (("_" <>) . toHaskellIdentifier . (.entry)) mv
+          iterTyName = case mv of
+            Nothing -> tyConOrVar "AsyncIterable" `appTy` toHaskellPrototype k.entry
+            Just v ->
+              (tyConOrVar "PairAsyncIterable" `appTy` toHaskellPrototype k.entry)
+                `appTy` toHaskellPrototype v.entry
+          returnType = ioTy `appTy` iterTyName
+          ffi =
+            renderJSFFIImport $
+              toJSFFIImport
+                JSFFIImportSeed
+                  { hsFunName
+                  , jsFun = WithArgs \ ~(callee : as) ->
+                      let argSep = T.intercalate "," as
+                       in [trimming|${callee}[Symbol.asyncIterator](${argSep})|]
+                  , args
+                  , returnType
+                  , async = False
+                  }
+
+      Writer.tell
+        MainModuleFragments
+          { mainExports = DL.singleton (varName, hsFunName)
+          , decs = DL.fromList [ffi]
+          }
     -- FIXME: Implement this
     genStaticAttributes = pure ()
     -- FIXME: Implement this
@@ -865,7 +899,7 @@ renderJSFFIImport JSFFIImport {..} =
           foreign import javascript ${safety} "${jsCode}" ${hsFunName} :: ${sig}
         |]
 
-data JSFun = Call !Text | MethodOf !(HsType GhcPs) !Text
+data JSFun = Call !Text | MethodOf !(HsType GhcPs) !Text | WithArgs ([Text] -> Text)
   deriving (Generic)
 
 data JSFFIImportSeed = JSFFIImportSeed
@@ -914,19 +948,20 @@ toJSFFIImport JSFFIImportSeed {..} =
       ellipsNum = if isNothing args.ellipsis then 0 else 1
       argsHs0 = argumentHsTypes args
       signature = foldr mkNormalFunTy returnType argsHs
-      jsArgs =
-        T.intercalate "," $
-          V.toList $
-            V.generate
-              (reqArgNum + optArgNum + ellipsNum)
-              ( \i ->
-                  if i < reqArgNum + optArgNum
-                    then T.pack $ '$' : show (i + 1 + offset)
-                    else T.pack $ "... $" ++ show (i + 1 + offset)
-              )
+      argsList =
+        V.toList $
+          V.generate
+            (reqArgNum + optArgNum + ellipsNum)
+            ( \i ->
+                if i < reqArgNum + optArgNum
+                  then T.pack $ '$' : show (i + 1 + offset)
+                  else T.pack $ "... $" ++ show (i + 1 + offset)
+            )
+      jsArgs = T.intercalate "," $ argsList
       (argsHs, offset, jsCode) = case jsFun of
         Call m -> (argsHs0, 0, m <> "(" <> jsArgs <> ")")
         MethodOf ty mth -> (ty : argsHs0, 1, "$1." <> mth <> "(" <> jsArgs <> ")")
+        WithArgs f -> (argsHs0, 0, f argsList)
    in JSFFIImport {..}
 
 data JSFFIImport = JSFFIImport

@@ -20,7 +20,8 @@ module GHC.Wasm.Web.Generated.ReadableStream (
         js_fun_getReader_nullable_ReadableStreamGetReaderOptions_ReadableStreamReader,
         js_fun_pipeThrough_ReadableWritablePair_nullable_StreamPipeOptions_ReadableStream,
         js_fun_pipeTo_WritableStream_nullable_StreamPipeOptions_Promise_undefined,
-        js_fun_tee__sequence_ReadableStream, js_get_locked
+        js_fun_tee__sequence_ReadableStream, js_get_locked,
+        js_asynciter_ReadableStream_any
     ) where
 import Data.Int
 import Data.Word
@@ -58,3 +59,7 @@ foreign import javascript unsafe "$1.tee()" js_fun_tee__sequence_ReadableStream
   :: ReadableStream -> (IO (Sequence ReadableStreamClass))
 foreign import javascript unsafe "$1.locked" js_get_locked
   :: ReadableStream -> (IO Bool)
+foreign import javascript unsafe "$1[Symbol.asyncIterator]($2)" js_asynciter_ReadableStream_any
+  :: ReadableStream
+     -> (Nullable ReadableStreamIteratorOptionsClass
+         -> (IO (AsyncIterable AnyClass)))

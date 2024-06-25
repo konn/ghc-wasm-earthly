@@ -46,11 +46,14 @@ library
   exposed-modules:
     GHC.Wasm.Object.Builtins
     GHC.Wasm.Object.Builtins.Array
+    GHC.Wasm.Object.Builtins.AsyncIterable
+    GHC.Wasm.Object.Builtins.AsyncIterator
     GHC.Wasm.Object.Builtins.BigInt
     GHC.Wasm.Object.Builtins.Buffer
     GHC.Wasm.Object.Builtins.Dictionary
     GHC.Wasm.Object.Builtins.Iterable
     GHC.Wasm.Object.Builtins.Iterator
+    GHC.Wasm.Object.Builtins.Promise
     GHC.Wasm.Object.Builtins.Record
     GHC.Wasm.Object.Builtins.Sequence
     GHC.Wasm.Object.Builtins.String

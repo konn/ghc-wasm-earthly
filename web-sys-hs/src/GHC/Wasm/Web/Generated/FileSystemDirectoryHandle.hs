@@ -19,7 +19,8 @@ module GHC.Wasm.Web.Generated.FileSystemDirectoryHandle (
         js_fun_getFileHandle_USVString_nullable_FileSystemGetFileOptions_Promise_FileSystemFileHandle,
         js_fun_getDirectoryHandle_USVString_nullable_FileSystemGetDirectoryOptions_Promise_FileSystemDirectoryHandle,
         js_fun_removeEntry_USVString_nullable_FileSystemRemoveOptions_Promise_undefined,
-        js_fun_resolve_FileSystemHandle_Promise_nullable_sequence_USVString
+        js_fun_resolve_FileSystemHandle_Promise_nullable_sequence_USVString,
+        js_asynciter_FileSystemDirectoryHandle_USVString_FileSystemHandle
     ) where
 import Data.Int
 import Data.Word
@@ -51,3 +52,6 @@ foreign import javascript safe "$1.resolve($2)" js_fun_resolve_FileSystemHandle_
   :: FileSystemDirectoryHandle
      -> (FileSystemHandle
          -> (IO (Promise (NullableClass (SequenceClass USVStringClass)))))
+foreign import javascript unsafe "$1[Symbol.asyncIterator]()" js_asynciter_FileSystemDirectoryHandle_USVString_FileSystemHandle
+  :: FileSystemDirectoryHandle
+     -> (IO (PairAsyncIterable USVStringClass FileSystemHandleClass))
