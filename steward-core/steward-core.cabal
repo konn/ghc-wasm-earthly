@@ -1,0 +1,93 @@
+cabal-version: 3.0
+name: steward-core
+version: 0.1.0.0
+description: Please see the README on GitHub at <https://github.com/konn/ghc-wasm-earthly/steward-core#readme>
+homepage: https://github.com/konn/ghc-wasm-earthly#readme
+bug-reports: https://github.com/konn/ghc-wasm-earthly/issues
+author:
+maintainer:
+copyright: (c) Hiromi ISHII 2024- present
+license: BSD-3-Clause
+license-file: LICENSE
+build-type: Simple
+tested-with:
+  ghc ==9.8.4 || ==9.10.0.20240412
+
+extra-doc-files:
+  CHANGELOG.md
+  README.md
+
+source-repository head
+  type: git
+  location: https://github.com/konn/ghc-wasm-earthly
+  subdir: steward-core
+
+common defaults
+  autogen-modules: Paths_steward_core
+  other-modules: Paths_steward_core
+  ghc-options:
+    -Wall
+    -Wcompat
+    -Widentities
+    -Wincomplete-record-updates
+    -Wincomplete-uni-patterns
+    -Wmissing-export-lists
+    -Wmissing-home-modules
+    -Wpartial-fields
+    -Wredundant-constraints
+    -Wunused-packages
+
+  default-language: GHC2021
+  default-extensions:
+    ConstraintKinds
+    DataKinds
+    GADTs
+    ImpredicativeTypes
+    PolyKinds
+    RequiredTypeArguments
+    ScopedTypeVariables
+    TypeApplications
+    TypeFamilies
+    TypeOperators
+
+  build-depends: base >=4.7 && <5
+
+library
+  import: defaults
+  -- cabal-gild: discover src
+  exposed-modules: Steward.Types
+  hs-source-dirs: src
+  build-depends:
+    aeson,
+    bytestring,
+    case-insensitive,
+    http-api-data,
+    http-media,
+    http-types,
+    streaming-bytestring,
+    text,
+    unordered-containers,
+
+executable steward-core-exe
+  import: defaults
+  main-is: Main.hs
+  hs-source-dirs: app
+  ghc-options:
+    -threaded
+    -rtsopts
+    -with-rtsopts=-N
+
+  build-depends: steward-core
+
+test-suite steward-core-test
+  import: defaults
+  type: exitcode-stdio-1.0
+  main-is: Test.hs
+  hs-source-dirs: test
+  ghc-options:
+    -threaded
+    -O2
+    -rtsopts
+    -with-rtsopts=-N
+
+  build-depends: steward-core
