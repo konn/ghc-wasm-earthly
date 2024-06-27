@@ -121,17 +121,17 @@ data StewardResponse = StewardResponse
 type ServerApp m = m StewardResponse
 
 class Routable m a where
-  type RouteRet m a :: Type
+  type ResponseSeed m a :: Type
   type RouteArgs m a :: [Type]
   matchRoute' ::
     Proxy# a ->
     StewardRequest ->
     [T.Text] ->
-    ParseResult ((RouteArgs m a ~> m (RouteRet m a)) -> ServerApp m)
+    ParseResult ((RouteArgs m a ~> m (ResponseSeed m a)) -> ServerApp m)
 
 instance (KnownSymbol s, Routable m t) => Routable m (s /> t) where
   type RouteArgs m (s /> t) = RouteArgs m t
-  type RouteRet m (s /> t) = RouteRet m t
+  type ResponseSeed m (s /> t) = ResponseSeed m t
   matchRoute' _ req (x : xs)
     | x == T.pack (symbolVal' @s proxy#) =
         matchRoute' (proxy# @t) req xs
@@ -139,7 +139,7 @@ instance (KnownSymbol s, Routable m t) => Routable m (s /> t) where
 
 instance (KnownSymbols ss, Routable m t) => Routable m (ss /> t) where
   type RouteArgs m (ss /> t) = RouteArgs m t
-  type RouteRet m (ss /> t) = RouteRet m t
+  type ResponseSeed m (ss /> t) = ResponseSeed m t
 
   matchRoute' _ req xs
     | Just ys <- List.stripPrefix (symbolsVal ss) xs =
@@ -148,7 +148,7 @@ instance (KnownSymbols ss, Routable m t) => Routable m (ss /> t) where
 
 instance (FromPathPieces x, Routable m t) => Routable m (x /> t) where
   type RouteArgs m (x /> t) = x : RouteArgs m t
-  type RouteRet m (x /> t) = RouteRet m t
+  type ResponseSeed m (x /> t) = ResponseSeed m t
 
   matchRoute' _ req xs = case parsePathPieces @x xs of
     NoMatch -> NoMatch
@@ -162,7 +162,7 @@ type data Header_ = Header Symbol
 
 instance (KnownSymbol s, Routable m t) => Routable m (Header s /> t) where
   type RouteArgs m (Header s /> t) = Maybe BS.ByteString ': RouteArgs m t
-  type RouteRet m (Header s /> t) = RouteRet m t
+  type ResponseSeed m (Header s /> t) = ResponseSeed m t
 
   matchRoute' _ req xs =
     case matchRoute' (proxy# @t) req xs of
@@ -180,7 +180,7 @@ type data JSONBody_ = JSONBody Type
 
 instance (FromJSON a, Routable m t) => Routable m (JSONBody a /> t) where
   type RouteArgs m (JSONBody a /> t) = a ': RouteArgs m t
-  type RouteRet m (JSONBody a /> t) = RouteRet m t
+  type ResponseSeed m (JSONBody a /> t) = ResponseSeed m t
 
   matchRoute' _ req xs =
     case matchRoute' (proxy# @t) req xs of
@@ -195,7 +195,7 @@ type data RawBody_ = RawBody
 
 instance (Routable m t) => Routable m (RawBody /> t) where
   type RouteArgs m (RawBody /> t) = LBS.ByteString ': RouteArgs m t
-  type RouteRet m (RawBody /> t) = RouteRet m t
+  type ResponseSeed m (RawBody /> t) = ResponseSeed m t
 
   matchRoute' _ req xs =
     case matchRoute' (proxy# @t) req xs of
@@ -208,7 +208,7 @@ type data RawRequest_ = RawRequest
 
 instance (Routable m t) => Routable m (RawRequest /> t) where
   type RouteArgs m (RawRequest /> t) = StewardRequest ': RouteArgs m t
-  type RouteRet m (RawRequest /> t) = RouteRet m t
+  type ResponseSeed m (RawRequest /> t) = ResponseSeed m t
 
   matchRoute' _ req xs =
     case matchRoute' (proxy# @t) req xs of
@@ -224,7 +224,7 @@ instance
   Routable m (Verb meth status responseType)
   where
   type RouteArgs m (Verb meth status responseType) = '[]
-  type RouteRet m (Verb meth status responseType) = ResponseContent responseType
+  type ResponseSeed m (Verb meth status responseType) = ResponseContent responseType
   matchRoute' _ req []
     | req.method == methodVal meth =
         Parsed \get -> do
