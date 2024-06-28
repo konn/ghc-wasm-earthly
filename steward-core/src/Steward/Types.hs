@@ -18,10 +18,12 @@
 module Steward.Types (
   StewardRequest (..),
   PartialRequest (..),
+  StewardResponse (..),
   PreRoutable (..),
   HasHandler (..),
   GenericHasHandler,
   runHandlers,
+  toApplication,
   HasClient (..),
   GenericHasClient,
 
@@ -73,7 +75,6 @@ import GHC.Generics
 import GHC.Generics qualified as Generics
 import GHC.TypeLits
 import Network.HTTP.Types (Query, RequestHeaders, ResponseHeaders, Status (..), StdMethod (..), status404, status500)
-import Streaming.ByteString.Char8 qualified as Q
 
 data ParseResult a = NoMatch | Failed String | Parsed a
   deriving (Show, Eq, Ord, Generic, Generic1, Functor, Foldable, Traversable)
@@ -153,10 +154,10 @@ data StewardRequest = StewardRequest
   }
   deriving (Generic)
 
-data StewardResponse m = StewardResponse
-  { stauts :: !Status
+data StewardResponse = StewardResponse
+  { status :: !Status
   , headers :: !ResponseHeaders
-  , body :: !(Q.ByteStream m ())
+  , body :: !LBS.ByteString
   }
   deriving (Generic)
 
@@ -178,14 +179,14 @@ class (PreRoutable a) => Routable m a where
     Proxy# a ->
     StewardRequest ->
     [T.Text] ->
-    ParseResult ((RouteArgs a ~> m (ResponseSeed a)) -> m (StewardResponse m))
+    ParseResult ((RouteArgs a ~> m (ResponseSeed a)) -> m StewardResponse)
 
 matchRoute ::
   forall a ->
   (Routable m a) =>
   StewardRequest ->
   [T.Text] ->
-  ParseResult ((RouteArgs a ~> m (ResponseSeed a)) -> m (StewardResponse m))
+  ParseResult ((RouteArgs a ~> m (ResponseSeed a)) -> m StewardResponse)
 matchRoute a = matchRoute' (proxy# @a)
 
 instance (KnownSymbol s, PreRoutable t) => PreRoutable (s /> t) where
@@ -299,10 +300,10 @@ type data Verb method status responseType
 
 instance
   (KnownMethod meth, IsResponseType responseType) =>
-  PreRoutable (Verb meth status responseType)
+  PreRoutable (Verb meth statCode responseType)
   where
-  type RouteArgs (Verb meth status responseType) = '[]
-  type ResponseSeed (Verb meth status responseType) = ResponseContent responseType
+  type RouteArgs (Verb meth statCode responseType) = '[]
+  type ResponseSeed (Verb meth statCode responseType) = ResponseContent responseType
   buildRequest' _ _ =
     PartialRequest
       { pathInfo = []
@@ -314,8 +315,8 @@ instance
   decodeResponseBody' _ = decodeResponseType' (proxy# @responseType)
 
 instance
-  (Monad m, KnownMethod meth, KnownNat status, IsResponseType responseType) =>
-  Routable m (Verb meth status responseType)
+  (Monad m, KnownMethod meth, KnownNat statCode, IsResponseType responseType) =>
+  Routable m (Verb meth statCode responseType)
   where
   matchRoute' _ req []
     | req.method == methodVal meth =
@@ -323,13 +324,13 @@ instance
           body <- encodeResponse responseType <$> get
           pure $
             StewardResponse
-              { stauts =
+              { status =
                   Status
                     { statusMessage = mempty
-                    , statusCode = fromIntegral $ natVal' @status proxy#
+                    , statusCode = fromIntegral $ natVal' @statCode proxy#
                     }
               , headers = []
-              , body = Q.fromLazy body
+              , body = body
               }
     | otherwise = NoMatch
   matchRoute' _ _ _ = NoMatch
@@ -425,37 +426,59 @@ data Client m
 newtype instance Client m ::: api = Client {unClient :: RouteArgs api ~> m (ResponseSeed api)}
 
 class (MonadThrow m) => MonadClient m where
-  request :: PartialRequest -> m (StewardResponse m)
+  request :: PartialRequest -> m StewardResponse
 
-type Application m = StewardRequest -> m (StewardResponse m)
+type Application m = StewardRequest -> m StewardResponse
 
 class (Monad m) => MonadHandler m where
   runApp :: Application m -> m ()
 
+toApplication ::
+  (Applicative m, HasHandler m t) =>
+  t (Handler m) ->
+  StewardRequest ->
+  m StewardResponse
+toApplication hs req = case parseApplication hs req req.pathInfo of
+  NoMatch ->
+    pure
+      StewardResponse
+        { status = status404
+        , headers = mempty
+        , body = "Not Found"
+        }
+  Failed e ->
+    pure
+      StewardResponse
+        { status = status500
+        , headers = mempty
+        , body = fromString e
+        }
+  Parsed f -> f
+
 class HasHandler m t where
-  toApplication ::
+  parseApplication ::
     t (Handler m) ->
     StewardRequest ->
     [T.Text] ->
-    ParseResult (m (StewardResponse m))
-  default toApplication ::
+    ParseResult (m StewardResponse)
+  default parseApplication ::
     (GenericHasHandler m (t (Handler m))) =>
     t (Handler m) ->
     StewardRequest ->
     [T.Text] ->
-    ParseResult (m (StewardResponse m))
-  toApplication = gtoApplication . Generics.from
+    ParseResult (m StewardResponse)
+  parseApplication = gparseApplication . Generics.from
 
 type GenericHasHandler m a = (Generic a, GHandler m (Rep a))
 
 class GHandler m f where
-  gtoApplication :: f (Handler m) -> StewardRequest -> [T.Text] -> ParseResult (m (StewardResponse m))
+  gparseApplication :: f (Handler m) -> StewardRequest -> [T.Text] -> ParseResult (m StewardResponse)
 
 instance (GHandler m f) => GHandler m (M1 i c f) where
-  gtoApplication (M1 x) = gtoApplication x
+  gparseApplication (M1 x) = gparseApplication x
 
 instance {-# OVERLAPPING #-} (Routable m t) => GHandler m (K1 i (Handler m ::: t)) where
-  gtoApplication (K1 (Handler f)) r pinfo = case matchRoute t r pinfo of
+  gparseApplication (K1 (Handler f)) r pinfo = case matchRoute t r pinfo of
     NoMatch -> NoMatch
     Failed e -> Failed e
     Parsed g -> Parsed $ g f
@@ -465,31 +488,16 @@ instance
   (HasHandler m t) =>
   GHandler m (K1 i (t (Handler m)))
   where
-  gtoApplication (K1 x) = toApplication x
+  gparseApplication (K1 x) = parseApplication x
 
 instance (GHandler m l, GHandler m r) => GHandler m (l :*: r) where
-  gtoApplication (l :*: r) req pinfo = case gtoApplication l req pinfo of
-    NoMatch -> gtoApplication r req pinfo
+  gparseApplication (l :*: r) req pinfo = case gparseApplication l req pinfo of
+    NoMatch -> gparseApplication r req pinfo
     Failed e -> Failed e
     Parsed f -> Parsed f
 
 runHandlers :: (MonadHandler m, HasHandler m t) => t (Handler m) -> m ()
-runHandlers hs = runApp \req -> case toApplication hs req req.pathInfo of
-  NoMatch ->
-    pure
-      StewardResponse
-        { stauts = status404
-        , headers = mempty
-        , body = "Not Found"
-        }
-  Failed e ->
-    pure
-      StewardResponse
-        { stauts = status500
-        , headers = mempty
-        , body = fromString e
-        }
-  Parsed f -> f
+runHandlers = runApp . toApplication
 
 data ClientException = InvalidResponseBody String
   deriving (Show, Eq, Ord, Generic)
@@ -523,7 +531,7 @@ instance (PreRoutable t, MonadClient m) => GHasClient (K1 i (Client m ::: t)) wh
         appHList @(RouteArgs t)
           ( either (throwM . InvalidResponseBody) pure
               . decodeResponseBody' @t proxy#
-              <=< Q.toLazy_ . (.body)
+              . (.body)
               <=< request @m . buildRequest t
           )
   {-# INLINE gclient #-}
