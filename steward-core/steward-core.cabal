@@ -62,7 +62,6 @@ library
     bytestring,
     case-insensitive,
     generic-lens,
-    http-api-data,
     http-media,
     http-types,
     lens,

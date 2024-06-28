@@ -70,7 +70,6 @@ library
     effectful,
     ghc-wasm-compat,
     ghc-wasm-jsobjects,
-    http-api-data,
     http-media,
     http-types,
     lens,
