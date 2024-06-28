@@ -36,3 +36,4 @@ source-repository-package
     path-tagged-effectful
     effectful-lens
     time-effectful
+    random-effectful

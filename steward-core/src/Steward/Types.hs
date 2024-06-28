@@ -156,8 +156,6 @@ data StewardRequest = StewardRequest
   , secure :: !Bool
   , host :: !BS.ByteString
   , port :: !BS.ByteString
-  , rawPathInfo :: !BS.ByteString
-  , rawQueryString :: !BS.ByteString
   , body :: !LBS.ByteString
   , pathInfo :: ![T.Text]
   , queryString :: Query
@@ -433,7 +431,7 @@ newtype instance Handler m ::: api = Handler (RouteArgs api ~> m (ResponseSeed a
 type Client :: (Type -> Type) -> Type
 data Client m
 
-newtype instance Client m ::: api = Client {unClient :: RouteArgs api ~> m (ResponseSeed api)}
+newtype instance Client m ::: api = Client {call :: RouteArgs api ~> m (ResponseSeed api)}
 
 class (MonadThrow m) => MonadClient m where
   request :: PartialRequest -> m StewardResponse

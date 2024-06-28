@@ -1,0 +1,96 @@
+cabal-version: 3.0
+name: steward-fib-demo
+version: 0.1.0.0
+description: Please see the README on GitHub at <https://github.com/konn/ghc-wasm-earthly/steward-fib-demo#readme>
+homepage: https://github.com/konn/ghc-wasm-earthly#readme
+bug-reports: https://github.com/konn/ghc-wasm-earthly/issues
+author:
+maintainer:
+copyright: (c) Hiromi ISHII 2024- present
+license: BSD-3-Clause
+license-file: LICENSE
+build-type: Simple
+tested-with:
+  ghc ==9.10.1 || ==9.10.0.20240412
+
+extra-doc-files:
+  CHANGELOG.md
+  README.md
+
+source-repository head
+  type: git
+  location: https://github.com/konn/ghc-wasm-earthly
+  subdir: steward-fib-demo
+
+common defaults
+  autogen-modules: Paths_steward_fib_demo
+  other-modules: Paths_steward_fib_demo
+  ghc-options:
+    -Wall
+    -Wcompat
+    -Widentities
+    -Wincomplete-record-updates
+    -Wincomplete-uni-patterns
+    -Wmissing-export-lists
+    -Wmissing-home-modules
+    -Wpartial-fields
+    -Wredundant-constraints
+    -Wunused-packages
+
+  default-language: GHC2021
+  build-depends:
+    aeson,
+    base >=4.7 && <5,
+    bytestring,
+    containers,
+    steward-core,
+    text,
+
+library
+  import: defaults
+  -- cabal-gild: discover src
+  exposed-modules: Steward.Demo.Fib.Types
+  hs-source-dirs: src
+
+executable steward-fib-demo-worker
+  import: defaults
+  main-is: Main.hs
+  -- cabal-gild: discover app/worker --exclude=app/worker/Main.hs
+  other-modules:
+  hs-source-dirs: app/worker
+  build-depends:
+    aeson,
+    cloudflare-worker,
+    effectful,
+    random,
+    random-effectful,
+    steward-fib-demo,
+    steward-workers,
+    vector,
+
+  if os(wasi)
+    ghc-options:
+      -no-hs-main
+      -optl-mexec-model=reactor
+      "-optl-Wl,--export=handlers"
+  else
+    build-depends: ghc-wasm-compat
+    ghc-options:
+      -fplugin
+      GHC.Wasm.FFI.Plugin
+
+executable steward-fib-demo-client
+  import: defaults
+
+  if os(wasi)
+    buildable: False
+  main-is: Main.hs
+  -- cabal-gild: discover app/client --exclude=app/client/Main.hs
+  other-modules:
+  hs-source-dirs: app/client
+  build-depends:
+    aeson,
+    effectful,
+    optparse-applicative,
+    steward-client,
+    steward-fib-demo,

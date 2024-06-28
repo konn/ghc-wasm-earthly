@@ -79,7 +79,7 @@ hello-js:
 
 steward-cf:
   COPY cloudflare-worker/data/worker-template/ ./dist/
-  COPY (+patch-jsffi-for-cf/dist --target=steward-workers:exe:steward-workers-demo --wasm=handlers.wasm) ./dist/src
+  COPY (+patch-jsffi-for-cf/dist --target=steward-fib-demo:exe:steward-fib-demo-worker --wasm=handlers.wasm) ./dist/src
   RUN cd ./dist && npm i
-  SAVE ARTIFACT ./dist AS LOCAL _build/steward-cf
+  SAVE ARTIFACT ./dist AS LOCAL _build/steward-fib
 

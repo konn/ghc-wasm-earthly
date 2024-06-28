@@ -27,6 +27,9 @@ module Steward.Workers (
   StewardResponse (..),
   PartialRequest (..),
   module Steward.Types,
+  module Network.Cloudflare.Worker.Handler,
+  module Network.Cloudflare.Worker.Handler.Fetch,
+  module Network.Cloudflare.Worker.Binding,
 ) where
 
 import Control.Exception.Safe (Exception, SomeException, displayException, handleAny, throwM)
@@ -44,6 +47,8 @@ import Effectful.Dispatch.Static
 import GHC.Generics (Generic)
 import GHC.Wasm.Object.Builtins
 import GHC.Wasm.Prim (fromJSString)
+import Network.Cloudflare.Worker.Binding
+import Network.Cloudflare.Worker.Handler
 import Network.Cloudflare.Worker.Handler.Fetch
 import Network.Cloudflare.Worker.Request (WorkerRequest)
 import Network.Cloudflare.Worker.Request qualified as Req

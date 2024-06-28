@@ -1,0 +1,64 @@
+cabal-version: 3.0
+name: steward-client
+version: 0.1.0.0
+description: Please see the README on GitHub at <https://github.com/konn/ghc-wasm-earthly/steward-client#readme>
+homepage: https://github.com/konn/ghc-wasm-earthly#readme
+bug-reports: https://github.com/konn/ghc-wasm-earthly/issues
+author:
+maintainer:
+copyright: (c) Hiromi ISHII 2024- present
+license: BSD-3-Clause
+license-file: LICENSE
+build-type: Simple
+tested-with:
+  ghc ==9.10.1 || ==9.10.0.20240412
+
+extra-doc-files:
+  CHANGELOG.md
+  README.md
+
+source-repository head
+  type: git
+  location: https://github.com/konn/ghc-wasm-earthly
+  subdir: steward-client
+
+common defaults
+  autogen-modules: Paths_steward_client
+  other-modules: Paths_steward_client
+  ghc-options:
+    -Wall
+    -Wcompat
+    -Widentities
+    -Wincomplete-record-updates
+    -Wincomplete-uni-patterns
+    -Wmissing-export-lists
+    -Wmissing-home-modules
+    -Wpartial-fields
+    -Wredundant-constraints
+    -Wunused-packages
+
+  default-language: GHC2021
+  build-depends: base >=4.7 && <5
+
+library
+  import: defaults
+  -- cabal-gild: discover src --exclude=src/**/Internal.hs
+  exposed-modules:
+    Steward.Client
+    Steward.Client.Effectful
+
+  -- cabal-gild: discover src --include=src/**/Internal.hs
+  other-modules:
+  hs-source-dirs: src
+  build-depends:
+    bytestring,
+    effectful,
+    http-client,
+    http-client-tls,
+    http-types,
+    mtl,
+    network-uri,
+    safe-exceptions,
+    steward-core,
+    transformers,
+    unliftio,
