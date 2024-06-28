@@ -160,7 +160,7 @@ data StewardRequest = StewardRequest
   , pathInfo :: ![T.Text]
   , queryString :: Query
   }
-  deriving (Generic)
+  deriving (Show, Generic)
 
 data StewardResponse = StewardResponse
   { status :: !Status
@@ -452,7 +452,7 @@ toApplication hs req = case parseApplication hs req req.pathInfo of
       StewardResponse
         { status = status404
         , headers = mempty
-        , body = "Not Found"
+        , body = "Not Found: " <> LTE.encodeUtf8 (fromString $ show req.pathInfo)
         }
   Failed e ->
     pure
