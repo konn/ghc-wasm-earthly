@@ -75,6 +75,7 @@ import GHC.Generics
 import GHC.Generics qualified as Generics
 import GHC.TypeLits
 import Network.HTTP.Types (Query, RequestHeaders, ResponseHeaders, Status (..), StdMethod (..), status404, status500)
+import Text.Read (readEither)
 
 data ParseResult a = NoMatch | Failed String | Parsed a
   deriving (Show, Eq, Ord, Generic, Generic1, Functor, Foldable, Traversable)
@@ -106,6 +107,15 @@ instance FromPathPieces T.Text where
 
 instance ToPathPieces T.Text where
   toPathPieces = pure
+
+instance FromPathPieces Int where
+  parsePathPieces [] = NoMatch
+  parsePathPieces (x : xs) = case readEither (T.unpack x) of
+    Right a -> Parsed (a, xs)
+    Left err -> Failed $ "Failed to parse Int: " <> err
+
+instance ToPathPieces Int where
+  toPathPieces = pure . T.pack . show
 
 type KnownSymbols :: [Symbol] -> Constraint
 class KnownSymbols ss where

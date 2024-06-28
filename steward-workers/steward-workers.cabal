@@ -50,6 +50,10 @@ common defaults
     TypeFamilies
     TypeOperators
 
+  if !os(wasi)
+    ghc-options:
+      -fplugin
+      GHC.Wasm.FFI.Plugin
   build-depends: base >=4.7 && <5
 
 library
@@ -78,16 +82,27 @@ library
     text,
     transformers,
 
-executable steward-workers-exe
+executable steward-workers-demo
   import: defaults
+  build-depends: cloudflare-worker
   main-is: Main.hs
   hs-source-dirs: app
-  ghc-options:
-    -threaded
-    -rtsopts
-    -with-rtsopts=-N
+  ghc-options: -O2
+  build-depends:
+    aeson,
+    bytestring,
+    cloudflare-worker,
+    effectful,
+    ghc-wasm-compat,
+    ghc-wasm-jsobjects,
+    steward-workers,
+    text,
 
-  build-depends: steward-workers
+  if os(wasi)
+    ghc-options:
+      -no-hs-main
+      -optl-mexec-model=reactor
+      "-optl-Wl,--export=handlers"
 
 test-suite steward-workers-test
   import: defaults

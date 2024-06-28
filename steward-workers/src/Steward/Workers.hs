@@ -4,6 +4,7 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DisambiguateRecordFields #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedRecordDot #-}
@@ -13,7 +14,20 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 
-module Steward.Workers (runWorker, getContext, getWorkerEnv, fromHandlers) where
+module Steward.Workers (
+  Worker,
+  runWorker,
+  getContext,
+  getWorkerEnv,
+  fromHandlers,
+
+  -- * Re-exports
+  JSObject (..),
+  StewardRequest (..),
+  StewardResponse (..),
+  PartialRequest (..),
+  module Steward.Types,
+) where
 
 import Control.Exception.Safe (Exception, SomeException, displayException, handleAny, throwM)
 import Data.Bifunctor qualified as Bi

@@ -75,3 +75,11 @@ hello-js:
   COPY ./wasm-jsffi-ghc-demo/data/run.ts dist/run.ts
   RUN cd dist && deno run --allow-read ./run.ts ./console-log.wasm
   SAVE ARTIFACT ./dist AS LOCAL _build/hello-js
+
+
+steward-cf:
+  COPY cloudflare-worker/data/worker-template/ ./dist/
+  COPY (+patch-jsffi-for-cf/dist --target=steward-workers:exe:steward-workers-demo --wasm=handlers.wasm) ./dist/src
+  RUN cd ./dist && npm i
+  SAVE ARTIFACT ./dist AS LOCAL _build/hello-cf
+
