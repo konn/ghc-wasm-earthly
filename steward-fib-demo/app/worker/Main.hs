@@ -41,7 +41,11 @@ fetcher = runWorker $ do
   runConcurrent $ runPrim $ evalRandom g $ fromHandlers @Bound endpoints
 
 endpoints ::
-  (Random :> es, Prim :> es, Concurrent :> es, Worker Bound :> es) =>
+  ( Random :> es
+  , Prim :> es
+  , Concurrent :> es
+  , Worker Bound :> es
+  ) =>
   FibEndpoints (Handler (Eff es))
 endpoints =
   FibEndpoints
@@ -50,7 +54,10 @@ endpoints =
     , fib = Handler serveFib
     }
 
-serveFib :: (Prim :> es) => Int -> Eff es FibResult
+serveFib ::
+  (Prim :> es) =>
+  Int ->
+  Eff es FibResult
 serveFib n = do
   mv <- MU.new $ n + 1
   MU.write mv 0 0
@@ -66,13 +73,17 @@ serveFib n = do
   result <- MU.read mv n
   pure FibResult {input = n, ..}
 
-indexPage :: (Worker Bound :> es) => Eff es (Either LBS.ByteString (Html ()))
+indexPage ::
+  (Worker Bound :> es) =>
+  Eff es (Either LBS.ByteString (Html ()))
 indexPage = do
   mcf <- getCloudflareJSON @Bound
   req <- getStewardRequest @Bound
   pure $ Right $ buildResponseBody mcf req
 
-serveRandom :: (Concurrent :> es, Random :> es) => Eff es Int
+serveRandom ::
+  (Concurrent :> es, Random :> es) =>
+  Eff es Int
 serveRandom = uniform
 
 buildResponseBody :: Maybe J.Value -> StewardRequest -> Html ()
