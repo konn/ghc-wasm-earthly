@@ -81,5 +81,5 @@ steward-cf:
   COPY cloudflare-worker/data/worker-template/ ./dist/
   COPY (+patch-jsffi-for-cf/dist --target=steward-workers:exe:steward-workers-demo --wasm=handlers.wasm) ./dist/src
   RUN cd ./dist && npm i
-  SAVE ARTIFACT ./dist AS LOCAL _build/hello-cf
+  SAVE ARTIFACT ./dist AS LOCAL _build/steward-cf
 
