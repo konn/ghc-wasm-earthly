@@ -1,37 +1,71 @@
 {-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE DefaultSignatures #-}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE ImpredicativeTypes #-}
 {-# LANGUAGE MagicHash #-}
+{-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE OverloadedRecordDot #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RequiredTypeArguments #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeData #-}
+{-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE NoFieldSelectors #-}
 
-module Steward.Types where
+module Steward.Types (
+  StewardRequest (..),
+  PartialRequest (..),
+  PreRoutable (..),
+  HasHandler (..),
+  runHandlers,
+  Routable (..),
+  MonadHandler (..),
+  MonadClient (..),
+  KnownSymbols (),
+  KnownMethod (),
+  type (/>),
+  type (:::) (..),
+  type (~>),
+  FromPathPieces (..),
+  ToPathPieces (..),
+  ParseResult (..),
+  Verb,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Patch,
+  StdMethod (..),
+  Modifier (..),
+  ResponseType (..),
+  IsResponseType (..),
+  Client,
+  Handler,
+) where
 
-import Data.Aeson (FromJSON)
+import Control.Lens ((%~), (&), (.~))
+import Data.Aeson (FromJSON, ToJSON)
 import Data.Aeson qualified as J
-import Data.Bifunctor qualified as Bi
 import Data.ByteString qualified as BS
 import Data.ByteString.Lazy qualified as LBS
 import Data.CaseInsensitive qualified as CI
+import Data.Generics.Labels ()
 import Data.Kind
 import Data.List qualified as List
+import Data.String (fromString)
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
 import Data.Text.Lazy qualified as LT
 import Data.Text.Lazy.Encoding qualified as LTE
 import GHC.Exts (Proxy#, proxy#)
-import GHC.Generics (Generic, Generic1)
+import GHC.Generics
+import GHC.Generics qualified as Generics
 import GHC.TypeLits
-import Network.HTTP.Types (Query, RequestHeaders, ResponseHeaders, Status (..), StdMethod (..))
+import Network.HTTP.Types (Query, RequestHeaders, ResponseHeaders, Status (..), StdMethod (..), status404, status500)
 import Streaming.ByteString.Char8 qualified as Q
-
-class MonadHandler m
-
-class MonadClient m
 
 data ParseResult a = NoMatch | Failed String | Parsed a
   deriving (Show, Eq, Ord, Generic, Generic1, Functor, Foldable, Traversable)
@@ -46,17 +80,14 @@ class FromPathPieces a where
   parsePathPieces :: [T.Text] -> ParseResult (a, [T.Text])
 
 class ToPathPieces a where
-  toPathPieces :: a -> [T.Text] -> [T.Text]
+  toPathPieces :: a -> [T.Text]
 
 instance FromPathPieces T.Text where
   parsePathPieces [] = NoMatch
   parsePathPieces (x : xs) = Parsed (x, xs)
 
 instance ToPathPieces T.Text where
-  toPathPieces = (:)
-
-type Paths :: [Symbol] -> Type -> Type
-newtype Paths paths a = Paths {unPaths :: a}
+  toPathPieces = pure
 
 type KnownSymbols :: [Symbol] -> Constraint
 class KnownSymbols ss where
@@ -71,21 +102,6 @@ instance (KnownSymbol s, KnownSymbols ss) => KnownSymbols (s : ss) where
 symbolsVal :: forall ss -> (KnownSymbols ss) => [T.Text]
 symbolsVal ss = symbolsVal' (proxy# @ss)
 
-instance
-  (KnownSymbols paths, FromPathPieces a) =>
-  FromPathPieces (Paths paths a)
-  where
-  parsePathPieces xs =
-    let syms = symbolsVal paths
-     in case List.stripPrefix syms xs of
-          Just rest -> Bi.first Paths <$> parsePathPieces rest
-          Nothing -> NoMatch
-
-instance (KnownSymbols paths, ToPathPieces a) => ToPathPieces (Paths paths a) where
-  toPathPieces (Paths a) = (symbolsVal paths <>) . toPathPieces a
-
-newtype Captures captured a = Captures {getCaptures :: captured -> a}
-
 infixr 4 />
 
 type (/>) :: k -> Type -> Type
@@ -97,6 +113,15 @@ type family xs ~> a where
   '[] ~> t = t
   (x : xs) ~> t = x -> (xs ~> t)
 
+data PartialRequest = PartialRequest
+  { pathInfo :: ![T.Text]
+  , queryString :: !Query
+  , method :: !StdMethod
+  , body :: !LBS.ByteString
+  , headers :: !RequestHeaders
+  }
+  deriving (Generic)
+
 data StewardRequest = StewardRequest
   { method :: !StdMethod
   , headers :: !RequestHeaders
@@ -105,7 +130,7 @@ data StewardRequest = StewardRequest
   , port :: !BS.ByteString
   , rawPathInfo :: !BS.ByteString
   , rawQueryString :: !BS.ByteString
-  , body :: LBS.ByteString
+  , body :: !LBS.ByteString
   , pathInfo :: ![T.Text]
   , queryString :: Query
   }
@@ -118,27 +143,46 @@ data StewardResponse = StewardResponse
   }
   deriving (Generic)
 
-type ServerApp m = m StewardResponse
+class PreRoutable a where
+  type RouteArgs a :: [Type]
+  buildRequest' :: Proxy# a -> HList (RouteArgs a) -> PartialRequest
 
-class Routable m a where
+class (PreRoutable a) => Routable m a where
   type ResponseSeed m a :: Type
-  type RouteArgs m a :: [Type]
   matchRoute' ::
     Proxy# a ->
     StewardRequest ->
     [T.Text] ->
-    ParseResult ((RouteArgs m a ~> m (ResponseSeed m a)) -> ServerApp m)
+    ParseResult ((RouteArgs a ~> m (ResponseSeed m a)) -> m StewardResponse)
+
+matchRoute ::
+  forall a ->
+  (Routable m a) =>
+  StewardRequest ->
+  [T.Text] ->
+  ParseResult ((RouteArgs a ~> m (ResponseSeed m a)) -> m StewardResponse)
+matchRoute a = matchRoute' (proxy# @a)
+
+instance (KnownSymbol s, PreRoutable t) => PreRoutable (s /> t) where
+  type RouteArgs (s /> t) = RouteArgs t
+  buildRequest' _ =
+    (#pathInfo %~ (T.pack (symbolVal' @s proxy#) :))
+      . buildRequest' (proxy# @t)
 
 instance (KnownSymbol s, Routable m t) => Routable m (s /> t) where
-  type RouteArgs m (s /> t) = RouteArgs m t
   type ResponseSeed m (s /> t) = ResponseSeed m t
   matchRoute' _ req (x : xs)
     | x == T.pack (symbolVal' @s proxy#) =
         matchRoute' (proxy# @t) req xs
   matchRoute' _ _ _ = NoMatch
 
+instance (KnownSymbols ss, PreRoutable t) => PreRoutable (ss /> t) where
+  type RouteArgs (ss /> t) = RouteArgs t
+  buildRequest' _ =
+    (#pathInfo %~ (symbolsVal ss <>))
+      . buildRequest' (proxy# @t)
+
 instance (KnownSymbols ss, Routable m t) => Routable m (ss /> t) where
-  type RouteArgs m (ss /> t) = RouteArgs m t
   type ResponseSeed m (ss /> t) = ResponseSeed m t
 
   matchRoute' _ req xs
@@ -146,8 +190,19 @@ instance (KnownSymbols ss, Routable m t) => Routable m (ss /> t) where
         matchRoute' (proxy# @t) req ys
   matchRoute' _ _ _ = NoMatch
 
-instance (FromPathPieces x, Routable m t) => Routable m (x /> t) where
-  type RouteArgs m (x /> t) = x : RouteArgs m t
+instance
+  (ToPathPieces x, PreRoutable t) =>
+  PreRoutable (x /> t)
+  where
+  type RouteArgs (x /> t) = x : RouteArgs t
+  buildRequest' _ (x :- xs) =
+    buildRequest' (proxy# @t) xs
+      & #pathInfo %~ (toPathPieces x <>)
+
+instance
+  (ToPathPieces x, FromPathPieces x, Routable m t) =>
+  Routable m (x /> t)
+  where
   type ResponseSeed m (x /> t) = ResponseSeed m t
 
   matchRoute' _ req xs = case parsePathPieces @x xs of
@@ -158,10 +213,17 @@ instance (FromPathPieces x, Routable m t) => Routable m (x /> t) where
       Failed e -> Failed e
       Parsed f -> Parsed \g -> f (g a)
 
-type data Header_ = Header Symbol
+type data Modifier = Header Symbol | JSONBody Type | RawRequestBody
+
+instance (KnownSymbol s, PreRoutable t) => PreRoutable (Header s /> t) where
+  type RouteArgs (Header s /> t) = Maybe BS.ByteString ': RouteArgs t
+  buildRequest' _ (mhdr :- xs) =
+    let headerName = CI.mk $ TE.encodeUtf8 $ T.pack $ symbolVal' @s proxy#
+     in buildRequest' (proxy# @t) xs
+          & #headers
+            %~ maybe id ((:) . (headerName,)) mhdr . filter ((/= headerName) . fst)
 
 instance (KnownSymbol s, Routable m t) => Routable m (Header s /> t) where
-  type RouteArgs m (Header s /> t) = Maybe BS.ByteString ': RouteArgs m t
   type ResponseSeed m (Header s /> t) = ResponseSeed m t
 
   matchRoute' _ req xs =
@@ -175,11 +237,26 @@ instance (KnownSymbol s, Routable m t) => Routable m (Header s /> t) where
               (CI.mk $ TE.encodeUtf8 $ T.pack $ symbolVal' @s proxy#)
               req.headers
 
-type JSONBody_ :: Type
-type data JSONBody_ = JSONBody Type
+instance (PreRoutable t) => PreRoutable (RawRequestBody /> t) where
+  type RouteArgs (RawRequestBody /> t) = LBS.ByteString ': RouteArgs t
+  buildRequest' _ (a :- xs) =
+    buildRequest' (proxy# @t) xs & #body .~ a
 
-instance (FromJSON a, Routable m t) => Routable m (JSONBody a /> t) where
-  type RouteArgs m (JSONBody a /> t) = a ': RouteArgs m t
+instance (Routable m t) => Routable m (RawRequestBody /> t) where
+  type ResponseSeed m (RawRequestBody /> t) = ResponseSeed m t
+  matchRoute' _ req xs =
+    case matchRoute' (proxy# @t) req xs of
+      NoMatch -> NoMatch
+      Failed e -> Failed e
+      Parsed f -> Parsed \g -> f (g req.body)
+
+instance (ToJSON a, PreRoutable t) => PreRoutable (JSONBody a /> t) where
+  type RouteArgs (JSONBody a /> t) = a ': RouteArgs t
+  buildRequest' _ (a :- xs) =
+    buildRequest' (proxy# @t) xs
+      & #body .~ J.encode a
+
+instance (ToJSON a, FromJSON a, Routable m t) => Routable m (JSONBody a /> t) where
   type ResponseSeed m (JSONBody a /> t) = ResponseSeed m t
 
   matchRoute' _ req xs =
@@ -190,40 +267,27 @@ instance (FromJSON a, Routable m t) => Routable m (JSONBody a /> t) where
         Nothing -> Failed "Failed to decode JSON body"
         Just a -> Parsed \g -> f (g a)
 
-type RawBody_ :: Type
-type data RawBody_ = RawBody
-
-instance (Routable m t) => Routable m (RawBody /> t) where
-  type RouteArgs m (RawBody /> t) = LBS.ByteString ': RouteArgs m t
-  type ResponseSeed m (RawBody /> t) = ResponseSeed m t
-
-  matchRoute' _ req xs =
-    case matchRoute' (proxy# @t) req xs of
-      NoMatch -> NoMatch
-      Failed e -> Failed e
-      Parsed f -> Parsed \g -> f (g req.body)
-
-type RawRequest_ :: Type
-type data RawRequest_ = RawRequest
-
-instance (Routable m t) => Routable m (RawRequest /> t) where
-  type RouteArgs m (RawRequest /> t) = StewardRequest ': RouteArgs m t
-  type ResponseSeed m (RawRequest /> t) = ResponseSeed m t
-
-  matchRoute' _ req xs =
-    case matchRoute' (proxy# @t) req xs of
-      NoMatch -> NoMatch
-      Failed e -> Failed e
-      Parsed f -> Parsed \g -> f (g req)
-
 type Verb :: StdMethod -> Nat -> ResponseType -> Type
 type data Verb method status responseType
+
+instance
+  (KnownMethod meth) =>
+  PreRoutable (Verb meth status responseType)
+  where
+  type RouteArgs (Verb meth status responseType) = '[]
+  buildRequest' _ _ =
+    PartialRequest
+      { pathInfo = []
+      , queryString = mempty
+      , method = methodVal meth
+      , body = mempty
+      , headers = []
+      }
 
 instance
   (Monad m, KnownMethod meth, KnownNat status, IsResponseType responseType) =>
   Routable m (Verb meth status responseType)
   where
-  type RouteArgs m (Verb meth status responseType) = '[]
   type ResponseSeed m (Verb meth status responseType) = ResponseContent responseType
   matchRoute' _ req []
     | req.method == methodVal meth =
@@ -241,8 +305,6 @@ instance
               }
     | otherwise = NoMatch
   matchRoute' _ _ _ = NoMatch
-
-type ContentType = Type
 
 data ResponseType = JSON Type | PlainText | NoContent
   deriving (Generic)
@@ -310,17 +372,84 @@ instance KnownMethod 'PATCH where
 methodVal :: forall method -> (KnownMethod method) => StdMethod
 methodVal method = methodVal' (proxy# @method)
 
-class KnownMethods (methods :: [StdMethod]) where
-  methodsVal' :: Proxy# methods -> [StdMethod]
+infixr 9 :-
 
-instance KnownMethods '[] where
-  methodsVal' _ = []
+data HList xs where
+  HNil :: HList '[]
+  (:-) :: x -> HList xs -> HList (x : xs)
+
+infixl 0 :::
+
+data family mode ::: api
+
+type Handler :: (Type -> Type) -> Type
+data Handler m
+
+newtype instance Handler m ::: api = Handler (RouteArgs api ~> m (ResponseSeed m api))
+
+type Client :: (Type -> Type) -> Type
+data Client m
+
+newtype instance Client m ::: api = Client (RouteArgs api ~> m (ResponseSeed m api))
+
+class (Monad m) => MonadClient m where
+  request :: PartialRequest -> m StewardResponse
+
+type Application m = StewardRequest -> m StewardResponse
+
+class (Monad m) => MonadHandler m where
+  runApp :: Application m -> m ()
+
+class HasHandler m t where
+  toApplication :: t (Handler m) -> StewardRequest -> ParseResult (m StewardResponse)
+  default toApplication ::
+    (GenericHasHandler m (t (Handler m))) =>
+    t (Handler m) ->
+    StewardRequest ->
+    ParseResult (m StewardResponse)
+  toApplication = gtoApplication . Generics.from
+
+type GenericHasHandler m a = (Generic a, GHandler m (Rep a))
+
+class GHandler m f where
+  gtoApplication :: f (Handler m) -> StewardRequest -> ParseResult (m StewardResponse)
+
+instance (GHandler m f) => GHandler m (M1 i c f) where
+  gtoApplication (M1 x) = gtoApplication x
+
+instance {-# OVERLAPPING #-} (Routable m t) => GHandler m (K1 i (Handler m ::: t)) where
+  gtoApplication (K1 (Handler f)) r = case matchRoute t r r.pathInfo of
+    NoMatch -> NoMatch
+    Failed e -> Failed e
+    Parsed g -> Parsed $ g f
 
 instance
-  (KnownMethod m, KnownMethods methods) =>
-  KnownMethods (m : methods)
+  {-# OVERLAPPABLE #-}
+  (HasHandler m t) =>
+  GHandler m (K1 i (t (Handler m)))
   where
-  methodsVal' _ = methodVal m : methodsVal' (proxy# @methods)
+  gtoApplication (K1 x) = toApplication x
 
-methodsVal :: forall methods -> (KnownMethods methods) => [StdMethod]
-methodsVal methods = methodsVal' (proxy# @methods)
+instance (GHandler m l, GHandler m r) => GHandler m (l :*: r) where
+  gtoApplication (l :*: r) req = case gtoApplication l req of
+    NoMatch -> gtoApplication r req
+    Failed e -> Failed e
+    Parsed f -> Parsed f
+
+runHandlers :: (MonadHandler m, HasHandler m t) => t (Handler m) -> m ()
+runHandlers hs = runApp \req -> case toApplication hs req of
+  NoMatch ->
+    pure
+      StewardResponse
+        { stauts = status404
+        , headers = mempty
+        , body = "Not Found"
+        }
+  Failed e ->
+    pure
+      StewardResponse
+        { stauts = status500
+        , headers = mempty
+        , body = fromString e
+        }
+  Parsed f -> f

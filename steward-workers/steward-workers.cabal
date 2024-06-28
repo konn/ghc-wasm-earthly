@@ -1,7 +1,7 @@
 cabal-version: 3.0
-name: steward-core
+name: steward-workers
 version: 0.1.0.0
-description: Please see the README on GitHub at <https://github.com/konn/ghc-wasm-earthly/steward-core#readme>
+description: Please see the README on GitHub at <https://github.com/konn/ghc-wasm-earthly/steward-workers#readme>
 homepage: https://github.com/konn/ghc-wasm-earthly#readme
 bug-reports: https://github.com/konn/ghc-wasm-earthly/issues
 author:
@@ -20,11 +20,11 @@ extra-doc-files:
 source-repository head
   type: git
   location: https://github.com/konn/ghc-wasm-earthly
-  subdir: steward-core
+  subdir: steward-workers
 
 common defaults
-  autogen-modules: Paths_steward_core
-  other-modules: Paths_steward_core
+  autogen-modules: Paths_steward_workers
+  other-modules: Paths_steward_workers
   ghc-options:
     -Wall
     -Wcompat
@@ -37,40 +37,25 @@ common defaults
     -Wredundant-constraints
     -Wunused-packages
 
-  default-language: GHC2021
-  default-extensions:
-    ConstraintKinds
-    DataKinds
-    GADTs
-    ImpredicativeTypes
-    PolyKinds
-    RequiredTypeArguments
-    ScopedTypeVariables
-    TypeApplications
-    TypeFamilies
-    TypeOperators
-
+  default-language: Haskell2010
   build-depends: base >=4.7 && <5
 
 library
   import: defaults
   -- cabal-gild: discover src
-  exposed-modules: Steward.Types
+  exposed-modules: Steward.Workers
   hs-source-dirs: src
   build-depends:
     aeson,
     bytestring,
-    case-insensitive,
-    generic-lens,
     http-api-data,
     http-media,
     http-types,
-    lens,
+    safe-exceptions,
     streaming-bytestring,
     text,
-    unordered-containers,
 
-executable steward-core-exe
+executable steward-workers-exe
   import: defaults
   main-is: Main.hs
   hs-source-dirs: app
@@ -79,9 +64,9 @@ executable steward-core-exe
     -rtsopts
     -with-rtsopts=-N
 
-  build-depends: steward-core
+  build-depends: steward-workers
 
-test-suite steward-core-test
+test-suite steward-workers-test
   import: defaults
   type: exitcode-stdio-1.0
   main-is: Test.hs
@@ -92,4 +77,4 @@ test-suite steward-core-test
     -rtsopts
     -with-rtsopts=-N
 
-  build-depends: steward-core
+  build-depends: steward-workers
