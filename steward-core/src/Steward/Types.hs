@@ -452,7 +452,7 @@ toApplication hs req = case parseApplication hs req req.pathInfo of
       StewardResponse
         { status = status404
         , headers = mempty
-        , body = "Not Found: " <> LTE.encodeUtf8 (fromString $ show req.pathInfo)
+        , body = "Not Found: " <> LTE.encodeUtf8 (LT.fromStrict $ T.intercalate "/" req.pathInfo)
         }
   Failed e ->
     pure

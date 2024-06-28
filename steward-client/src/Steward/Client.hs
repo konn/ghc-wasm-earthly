@@ -88,7 +88,7 @@ fromStewardRequest uri req =
       }
 
 data StewardClientError = StatusCodeException Status LBS.ByteString
-  deriving (Show, Eq, Ord, Generic)
+  deriving (Show, Generic)
   deriving anyclass (Exception)
 
 toStewardResponse :: (MonadThrow m) => Response LBS.ByteString -> m StewardResponse
