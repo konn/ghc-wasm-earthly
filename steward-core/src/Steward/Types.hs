@@ -74,7 +74,12 @@ import GHC.Exts (Proxy#, proxy#)
 import GHC.Generics
 import GHC.Generics qualified as Generics
 import GHC.TypeLits
-import Network.HTTP.Types (Query, RequestHeaders, ResponseHeaders, Status (..), StdMethod (..), status404, status500)
+import Lucid (Html)
+import Lucid qualified
+import Network.HTTP.Media (MediaType)
+import Network.HTTP.Media qualified as Media
+import Network.HTTP.Media.MediaType ((//))
+import Network.HTTP.Types (Query, RequestHeaders, ResponseHeaders, Status (..), StdMethod (..), hContentType, status404, status500)
 import Text.Read (readEither)
 
 data ParseResult a = NoMatch | Failed String | Parsed a
@@ -337,35 +342,45 @@ instance
                     { statusMessage = mempty
                     , statusCode = fromIntegral $ natVal' @statCode proxy#
                     }
-              , headers = []
+              , headers = [(hContentType, Media.renderHeader $ mediaType @responseType proxy#)]
               , body = body
               }
     | otherwise = NoMatch
   matchRoute' _ _ _ = NoMatch
 
-data ResponseType = JSON Type | PlainText | NoContent
+data ResponseType = JSON Type | PlainText | NoContent | HTML
   deriving (Generic)
 
 type IsResponseType :: ResponseType -> Constraint
 class IsResponseType rt where
   type ResponseContent rt :: a
+  mediaType :: Proxy# rt -> MediaType
   encodeResponse' :: Proxy# rt -> ResponseContent rt -> LBS.ByteString
   decodeResponseType' :: Proxy# rt -> LBS.ByteString -> Either String (ResponseContent rt)
 
 instance (J.FromJSON a, J.ToJSON a) => IsResponseType (JSON a) where
   type ResponseContent (JSON a) = a
+  mediaType _ = "application" // "json"
   encodeResponse' _ = J.encode
   decodeResponseType' _ = J.eitherDecode
 
 instance IsResponseType PlainText where
   type ResponseContent PlainText = LT.Text
+  mediaType _ = "text" // "plain"
   encodeResponse' _ = LTE.encodeUtf8
   decodeResponseType' _ = Right . LTE.decodeUtf8
 
 instance IsResponseType NoContent where
   type ResponseContent NoContent = ()
+  mediaType _ = "text" // "plain"
   encodeResponse' _ _ = LBS.empty
   decodeResponseType' _ _ = Right ()
+
+instance IsResponseType HTML where
+  type ResponseContent HTML = Either LBS.ByteString (Html ())
+  mediaType _ = "text" // "html"
+  encodeResponse' _ = either id Lucid.renderBS
+  decodeResponseType' _ = Right . Left
 
 encodeResponse :: forall rt -> (IsResponseType rt) => ResponseContent rt -> LBS.ByteString
 encodeResponse rt = encodeResponse' (proxy# @rt)

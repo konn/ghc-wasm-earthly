@@ -60,12 +60,18 @@ executable steward-fib-demo-worker
   hs-source-dirs: app/worker
   build-depends:
     aeson,
+    case-insensitive,
     cloudflare-worker,
     effectful,
+    ghc-wasm-jsobjects,
+    http-types,
+    lucid2,
     random,
     random-effectful,
     steward-fib-demo,
     steward-workers,
+    streaming-bytestring,
+    transformers,
     vector,
 
   if os(wasi)

@@ -16,7 +16,7 @@ data FibResult = FibResult {input, result :: !Int}
   deriving anyclass (FromJSON, ToJSON)
 
 data FibEndpoints mode = FibEndpoints
-  { index :: mode ::: Get PlainText
+  { index :: mode ::: Get HTML
   , fib :: mode ::: "fib" /> Int /> Get (JSON FibResult)
   , random :: mode ::: "random" /> Get (JSON Int)
   }

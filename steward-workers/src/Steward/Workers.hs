@@ -19,6 +19,9 @@ module Steward.Workers (
   runWorker,
   getContext,
   getWorkerEnv,
+  getCloudflareJSON,
+  getStewardRequest,
+  getRawRequest,
   fromHandlers,
 
   -- * Re-exports
@@ -33,6 +36,7 @@ module Steward.Workers (
 ) where
 
 import Control.Exception.Safe (Exception, SomeException, displayException, handleAny, throwM)
+import Data.Aeson qualified as A
 import Data.Bifunctor qualified as Bi
 import Data.ByteString.Char8 qualified as BS8
 import Data.CaseInsensitive qualified as CI
@@ -67,9 +71,10 @@ data Worker :: Prototype -> Effect
 type instance DispatchOf (Worker e) = 'Static 'WithSideEffects
 
 data instance StaticRep (Worker e) = WorkerEnv
-  { env :: JSObject e
-  , context :: FetchContext
-  , request :: StewardRequest
+  { env :: !(JSObject e)
+  , context :: !FetchContext
+  , rawRequest :: !Req.WorkerRequest
+  , request :: !StewardRequest
   }
   deriving (Generic)
 
@@ -78,6 +83,17 @@ getContext = getStaticRep @(Worker e) >>= pure . context
 
 getWorkerEnv :: forall e es. (Worker e :> es) => Eff es (JSObject e)
 getWorkerEnv = getStaticRep @(Worker e) >>= pure . env
+
+getRawRequest :: forall e es. (Worker e :> es) => Eff es Req.WorkerRequest
+getRawRequest = (.rawRequest) <$> getStaticRep @(Worker e)
+
+getStewardRequest :: forall e es. (Worker e :> es) => Eff es StewardRequest
+getStewardRequest = (.request) <$> getStaticRep @(Worker e)
+
+getCloudflareJSON :: forall e es. (Worker e :> es) => Eff es (Maybe A.Value)
+getCloudflareJSON = do
+  WorkerEnv {rawRequest} <- getStaticRep @(Worker e)
+  unsafeEff_ $ Req.getCloudflareJSON rawRequest
 
 fromHandlers ::
   forall e es t.
@@ -92,7 +108,7 @@ runWorker :: Eff '[Worker e, IOE] StewardResponse -> FetchHandler e
 runWorker act req env context = runEff $ handleAny toErrorResp do
   req' <- toStewardRequest req
   fromStewardResponse
-    =<< evalStaticRep WorkerEnv {request = req', ..} act
+    =<< evalStaticRep WorkerEnv {rawRequest = req, request = req', ..} act
 
 toErrorResp :: SomeException -> Eff '[IOE] WorkerResponse
 toErrorResp exc =

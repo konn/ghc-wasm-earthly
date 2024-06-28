@@ -65,6 +65,7 @@ library
     http-media,
     http-types,
     lens,
+    lucid2,
     safe-exceptions,
     streaming-bytestring,
     text,
