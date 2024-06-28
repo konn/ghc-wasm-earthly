@@ -66,6 +66,7 @@ library
     http-media,
     http-types,
     lens,
+    safe-exceptions,
     streaming-bytestring,
     text,
     unordered-containers,

@@ -20,7 +20,12 @@ module Steward.Types (
   PartialRequest (..),
   PreRoutable (..),
   HasHandler (..),
+  GenericHasHandler,
   runHandlers,
+  HasClient (..),
+  GenericHasClient,
+
+  -- * Internal types
   Routable (..),
   MonadHandler (..),
   MonadClient (..),
@@ -44,9 +49,12 @@ module Steward.Types (
   IsResponseType (..),
   Client,
   Handler,
+  ClientException (..),
 ) where
 
+import Control.Exception.Safe (Exception, MonadThrow, throwM)
 import Control.Lens ((%~), (&), (.~))
+import Control.Monad ((<=<))
 import Data.Aeson (FromJSON, ToJSON)
 import Data.Aeson qualified as J
 import Data.ByteString qualified as BS
@@ -69,6 +77,15 @@ import Streaming.ByteString.Char8 qualified as Q
 
 data ParseResult a = NoMatch | Failed String | Parsed a
   deriving (Show, Eq, Ord, Generic, Generic1, Functor, Foldable, Traversable)
+
+class AppHList xs where
+  appHList :: (HList xs -> r) -> xs ~> r
+
+instance AppHList '[] where
+  appHList f = f HNil
+
+instance (AppHList xs) => AppHList (x : xs) where
+  appHList f x = appHList @xs (f . (x :-))
 
 instance Applicative ParseResult where
   pure = Parsed
@@ -136,41 +153,50 @@ data StewardRequest = StewardRequest
   }
   deriving (Generic)
 
-data StewardResponse = StewardResponse
+data StewardResponse m = StewardResponse
   { stauts :: !Status
   , headers :: !ResponseHeaders
-  , body :: !(Q.ByteStream IO ())
+  , body :: !(Q.ByteStream m ())
   }
   deriving (Generic)
 
-class PreRoutable a where
+class (AppHList (RouteArgs a)) => PreRoutable a where
+  type ResponseSeed a :: Type
   type RouteArgs a :: [Type]
   buildRequest' :: Proxy# a -> HList (RouteArgs a) -> PartialRequest
+  decodeResponseBody' :: Proxy# a -> LBS.ByteString -> Either String (ResponseSeed a)
+
+buildRequest ::
+  forall a ->
+  (PreRoutable a) =>
+  HList (RouteArgs a) ->
+  PartialRequest
+buildRequest a = buildRequest' (proxy# @a)
 
 class (PreRoutable a) => Routable m a where
-  type ResponseSeed m a :: Type
   matchRoute' ::
     Proxy# a ->
     StewardRequest ->
     [T.Text] ->
-    ParseResult ((RouteArgs a ~> m (ResponseSeed m a)) -> m StewardResponse)
+    ParseResult ((RouteArgs a ~> m (ResponseSeed a)) -> m (StewardResponse m))
 
 matchRoute ::
   forall a ->
   (Routable m a) =>
   StewardRequest ->
   [T.Text] ->
-  ParseResult ((RouteArgs a ~> m (ResponseSeed m a)) -> m StewardResponse)
+  ParseResult ((RouteArgs a ~> m (ResponseSeed a)) -> m (StewardResponse m))
 matchRoute a = matchRoute' (proxy# @a)
 
 instance (KnownSymbol s, PreRoutable t) => PreRoutable (s /> t) where
   type RouteArgs (s /> t) = RouteArgs t
+  type ResponseSeed (s /> t) = ResponseSeed t
   buildRequest' _ =
     (#pathInfo %~ (T.pack (symbolVal' @s proxy#) :))
       . buildRequest' (proxy# @t)
+  decodeResponseBody' _ = decodeResponseBody' @t proxy#
 
 instance (KnownSymbol s, Routable m t) => Routable m (s /> t) where
-  type ResponseSeed m (s /> t) = ResponseSeed m t
   matchRoute' _ req (x : xs)
     | x == T.pack (symbolVal' @s proxy#) =
         matchRoute' (proxy# @t) req xs
@@ -178,13 +204,13 @@ instance (KnownSymbol s, Routable m t) => Routable m (s /> t) where
 
 instance (KnownSymbols ss, PreRoutable t) => PreRoutable (ss /> t) where
   type RouteArgs (ss /> t) = RouteArgs t
+  type ResponseSeed (ss /> t) = ResponseSeed t
   buildRequest' _ =
     (#pathInfo %~ (symbolsVal ss <>))
       . buildRequest' (proxy# @t)
+  decodeResponseBody' _ = decodeResponseBody' @t proxy#
 
 instance (KnownSymbols ss, Routable m t) => Routable m (ss /> t) where
-  type ResponseSeed m (ss /> t) = ResponseSeed m t
-
   matchRoute' _ req xs
     | Just ys <- List.stripPrefix (symbolsVal ss) xs =
         matchRoute' (proxy# @t) req ys
@@ -195,16 +221,16 @@ instance
   PreRoutable (x /> t)
   where
   type RouteArgs (x /> t) = x : RouteArgs t
+  type ResponseSeed (x /> t) = ResponseSeed t
   buildRequest' _ (x :- xs) =
     buildRequest' (proxy# @t) xs
       & #pathInfo %~ (toPathPieces x <>)
+  decodeResponseBody' _ = decodeResponseBody' @t proxy#
 
 instance
   (ToPathPieces x, FromPathPieces x, Routable m t) =>
   Routable m (x /> t)
   where
-  type ResponseSeed m (x /> t) = ResponseSeed m t
-
   matchRoute' _ req xs = case parsePathPieces @x xs of
     NoMatch -> NoMatch
     Failed e -> Failed e
@@ -217,15 +243,15 @@ type data Modifier = Header Symbol | JSONBody Type | RawRequestBody
 
 instance (KnownSymbol s, PreRoutable t) => PreRoutable (Header s /> t) where
   type RouteArgs (Header s /> t) = Maybe BS.ByteString ': RouteArgs t
+  type ResponseSeed (Header s /> t) = ResponseSeed t
   buildRequest' _ (mhdr :- xs) =
     let headerName = CI.mk $ TE.encodeUtf8 $ T.pack $ symbolVal' @s proxy#
      in buildRequest' (proxy# @t) xs
           & #headers
             %~ maybe id ((:) . (headerName,)) mhdr . filter ((/= headerName) . fst)
+  decodeResponseBody' _ = decodeResponseBody' @t proxy#
 
 instance (KnownSymbol s, Routable m t) => Routable m (Header s /> t) where
-  type ResponseSeed m (Header s /> t) = ResponseSeed m t
-
   matchRoute' _ req xs =
     case matchRoute' (proxy# @t) req xs of
       NoMatch -> NoMatch
@@ -239,11 +265,12 @@ instance (KnownSymbol s, Routable m t) => Routable m (Header s /> t) where
 
 instance (PreRoutable t) => PreRoutable (RawRequestBody /> t) where
   type RouteArgs (RawRequestBody /> t) = LBS.ByteString ': RouteArgs t
+  type ResponseSeed (RawRequestBody /> t) = ResponseSeed t
   buildRequest' _ (a :- xs) =
     buildRequest' (proxy# @t) xs & #body .~ a
+  decodeResponseBody' _ = decodeResponseBody' @t proxy#
 
 instance (Routable m t) => Routable m (RawRequestBody /> t) where
-  type ResponseSeed m (RawRequestBody /> t) = ResponseSeed m t
   matchRoute' _ req xs =
     case matchRoute' (proxy# @t) req xs of
       NoMatch -> NoMatch
@@ -252,13 +279,13 @@ instance (Routable m t) => Routable m (RawRequestBody /> t) where
 
 instance (ToJSON a, PreRoutable t) => PreRoutable (JSONBody a /> t) where
   type RouteArgs (JSONBody a /> t) = a ': RouteArgs t
+  type ResponseSeed (JSONBody a /> t) = ResponseSeed t
   buildRequest' _ (a :- xs) =
     buildRequest' (proxy# @t) xs
       & #body .~ J.encode a
+  decodeResponseBody' _ = decodeResponseBody' @t proxy#
 
 instance (ToJSON a, FromJSON a, Routable m t) => Routable m (JSONBody a /> t) where
-  type ResponseSeed m (JSONBody a /> t) = ResponseSeed m t
-
   matchRoute' _ req xs =
     case matchRoute' (proxy# @t) req xs of
       NoMatch -> NoMatch
@@ -271,10 +298,11 @@ type Verb :: StdMethod -> Nat -> ResponseType -> Type
 type data Verb method status responseType
 
 instance
-  (KnownMethod meth) =>
+  (KnownMethod meth, IsResponseType responseType) =>
   PreRoutable (Verb meth status responseType)
   where
   type RouteArgs (Verb meth status responseType) = '[]
+  type ResponseSeed (Verb meth status responseType) = ResponseContent responseType
   buildRequest' _ _ =
     PartialRequest
       { pathInfo = []
@@ -283,12 +311,12 @@ instance
       , body = mempty
       , headers = []
       }
+  decodeResponseBody' _ = decodeResponseType' (proxy# @responseType)
 
 instance
   (Monad m, KnownMethod meth, KnownNat status, IsResponseType responseType) =>
   Routable m (Verb meth status responseType)
   where
-  type ResponseSeed m (Verb meth status responseType) = ResponseContent responseType
   matchRoute' _ req []
     | req.method == methodVal meth =
         Parsed \get -> do
@@ -313,18 +341,22 @@ type IsResponseType :: ResponseType -> Constraint
 class IsResponseType rt where
   type ResponseContent rt :: a
   encodeResponse' :: Proxy# rt -> ResponseContent rt -> LBS.ByteString
+  decodeResponseType' :: Proxy# rt -> LBS.ByteString -> Either String (ResponseContent rt)
 
-instance (J.ToJSON a) => IsResponseType (JSON a) where
+instance (J.FromJSON a, J.ToJSON a) => IsResponseType (JSON a) where
   type ResponseContent (JSON a) = a
   encodeResponse' _ = J.encode
+  decodeResponseType' _ = J.eitherDecode
 
 instance IsResponseType PlainText where
   type ResponseContent PlainText = LT.Text
   encodeResponse' _ = LTE.encodeUtf8
+  decodeResponseType' _ = Right . LTE.decodeUtf8
 
 instance IsResponseType NoContent where
   type ResponseContent NoContent = ()
   encodeResponse' _ _ = LBS.empty
+  decodeResponseType' _ _ = Right ()
 
 encodeResponse :: forall rt -> (IsResponseType rt) => ResponseContent rt -> LBS.ByteString
 encodeResponse rt = encodeResponse' (proxy# @rt)
@@ -385,40 +417,45 @@ data family mode ::: api
 type Handler :: (Type -> Type) -> Type
 data Handler m
 
-newtype instance Handler m ::: api = Handler (RouteArgs api ~> m (ResponseSeed m api))
+newtype instance Handler m ::: api = Handler (RouteArgs api ~> m (ResponseSeed api))
 
 type Client :: (Type -> Type) -> Type
 data Client m
 
-newtype instance Client m ::: api = Client (RouteArgs api ~> m (ResponseSeed m api))
+newtype instance Client m ::: api = Client {unClient :: RouteArgs api ~> m (ResponseSeed api)}
 
-class (Monad m) => MonadClient m where
-  request :: PartialRequest -> m StewardResponse
+class (MonadThrow m) => MonadClient m where
+  request :: PartialRequest -> m (StewardResponse m)
 
-type Application m = StewardRequest -> m StewardResponse
+type Application m = StewardRequest -> m (StewardResponse m)
 
 class (Monad m) => MonadHandler m where
   runApp :: Application m -> m ()
 
 class HasHandler m t where
-  toApplication :: t (Handler m) -> StewardRequest -> ParseResult (m StewardResponse)
+  toApplication ::
+    t (Handler m) ->
+    StewardRequest ->
+    [T.Text] ->
+    ParseResult (m (StewardResponse m))
   default toApplication ::
     (GenericHasHandler m (t (Handler m))) =>
     t (Handler m) ->
     StewardRequest ->
-    ParseResult (m StewardResponse)
+    [T.Text] ->
+    ParseResult (m (StewardResponse m))
   toApplication = gtoApplication . Generics.from
 
 type GenericHasHandler m a = (Generic a, GHandler m (Rep a))
 
 class GHandler m f where
-  gtoApplication :: f (Handler m) -> StewardRequest -> ParseResult (m StewardResponse)
+  gtoApplication :: f (Handler m) -> StewardRequest -> [T.Text] -> ParseResult (m (StewardResponse m))
 
 instance (GHandler m f) => GHandler m (M1 i c f) where
   gtoApplication (M1 x) = gtoApplication x
 
 instance {-# OVERLAPPING #-} (Routable m t) => GHandler m (K1 i (Handler m ::: t)) where
-  gtoApplication (K1 (Handler f)) r = case matchRoute t r r.pathInfo of
+  gtoApplication (K1 (Handler f)) r pinfo = case matchRoute t r pinfo of
     NoMatch -> NoMatch
     Failed e -> Failed e
     Parsed g -> Parsed $ g f
@@ -431,13 +468,13 @@ instance
   gtoApplication (K1 x) = toApplication x
 
 instance (GHandler m l, GHandler m r) => GHandler m (l :*: r) where
-  gtoApplication (l :*: r) req = case gtoApplication l req of
-    NoMatch -> gtoApplication r req
+  gtoApplication (l :*: r) req pinfo = case gtoApplication l req pinfo of
+    NoMatch -> gtoApplication r req pinfo
     Failed e -> Failed e
     Parsed f -> Parsed f
 
 runHandlers :: (MonadHandler m, HasHandler m t) => t (Handler m) -> m ()
-runHandlers hs = runApp \req -> case toApplication hs req of
+runHandlers hs = runApp \req -> case toApplication hs req req.pathInfo of
   NoMatch ->
     pure
       StewardResponse
@@ -453,3 +490,40 @@ runHandlers hs = runApp \req -> case toApplication hs req of
         , body = fromString e
         }
   Parsed f -> f
+
+data ClientException = InvalidResponseBody String
+  deriving (Show, Eq, Ord, Generic)
+  deriving anyclass (Exception)
+
+class HasClient t where
+  client :: (MonadClient m) => t (Client m)
+  default client ::
+    forall m.
+    (MonadClient m, GenericHasClient (t (Client m))) =>
+    t (Client m)
+  client = Generics.to $ gclient @(Rep (t (Client m))) @m
+
+type GenericHasClient a = (Generic a, GHasClient (Rep a))
+
+class GHasClient f where
+  gclient :: (MonadClient m) => f (Client m)
+
+instance (GHasClient f) => GHasClient (M1 i c f) where
+  gclient = M1 gclient
+  {-# INLINE gclient #-}
+
+instance (GHasClient l, GHasClient r) => GHasClient (l :*: r) where
+  gclient = gclient :*: gclient
+  {-# INLINE gclient #-}
+
+instance (PreRoutable t, MonadClient m) => GHasClient (K1 i (Client m ::: t)) where
+  gclient =
+    K1 $
+      Client $
+        appHList @(RouteArgs t)
+          ( either (throwM . InvalidResponseBody) pure
+              . decodeResponseBody' @t proxy#
+              <=< Q.toLazy_ . (.body)
+              <=< request @m . buildRequest t
+          )
+  {-# INLINE gclient #-}
