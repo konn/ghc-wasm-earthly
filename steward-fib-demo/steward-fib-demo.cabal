@@ -73,6 +73,7 @@ executable steward-fib-demo-worker
       -no-hs-main
       -optl-mexec-model=reactor
       "-optl-Wl,--export=handlers"
+      -O2
   else
     build-depends: ghc-wasm-compat
     ghc-options:
