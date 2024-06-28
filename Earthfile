@@ -24,7 +24,7 @@ build:
   COPY --keep-ts . .
   RUN --mount ${MOUNT_GLOBAL_STORE} \
       --mount ${MOUNT_DIST_NEWSTYLE} \
-      ${CABAL} update
+      ${CABAL} update --index-state=2024-06-28T07:25:12Z
   RUN --mount ${MOUNT_GLOBAL_STORE} \
       --mount ${MOUNT_DIST_NEWSTYLE} \
       ${CABAL} build --only-dependencies ${target}
