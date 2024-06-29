@@ -41,17 +41,7 @@ requestWith meth uri mbody = do
   reqInfo <-
     reflectDictionary $
       newDictionary @RequestInitFields
-        ( setPartialField "headers" none
-            PL.. setPartialField "integrity" none
-            PL.. setPartialField "mode" none
-            PL.. setPartialField "observe" none
-            PL.. setPartialField "redirect" none
-            PL.. setPartialField "referrer" none
-            PL.. setPartialField "referrerPolicy" none
-            PL.. setPartialField "signal" none
-            PL.. setPartialField "credentials" none
-            PL.. setPartialField "cache" none
-            PL.. setPartialField "method" (nonNull methStr)
+        ( setPartialField "method" (nonNull methStr)
             PL.. setPartialField "body" (nonNull $ toNullable $ inject <$> rs)
         )
   js_cf_fetch_raw (uriToReqInfo uri) $ nonNull reqInfo
