@@ -115,7 +115,9 @@ data TokenType = JWT
 
 data RawJWTToken = RawJWTToken
   { header :: RawTokenHeader
+  , decodedHeader :: BS.ByteString
   , payload :: RawTokenPayload
+  , decodedPayload :: BS.ByteString
   , signature :: Signature
   }
   deriving (Show, Eq, Ord, Generic)
@@ -138,10 +140,10 @@ verifyJWT ::
 verifyJWT now keys toks = do
   header <-
     Bi.first ("Invalid Header (JSON): " <>) $
-      J.eitherDecodeStrict' toks.header
+      J.eitherDecodeStrict' toks.decodedHeader
   payload <-
     Bi.first ("Invalid Payload (JSON): " <>) $
-      J.eitherDecodeStrict' toks.payload
+      J.eitherDecodeStrict' toks.decodedPayload
   key <-
     maybe (Left $ "Key not found: " <> T.unpack header.kid) pure $
       Map.lookup header.kid keys
@@ -164,12 +166,12 @@ parseJWT :: BS.ByteString -> Either String RawJWTToken
 parseJWT raw = Bi.first (("Error during parsing token (" <> BS8.unpack raw <> "):") <>) $
   case BS8.split '.' raw of
     [header, payload, signature] -> do
-      hdr <-
+      decodedHeader <-
         Bi.first ("Invalid Header (Base65): " <>) $ decodeB64Pad header
-      Bi.first ("Invalid Header: " <>) $ validateRawJSON hdr
-      pay <-
+      Bi.first ("Invalid Header: " <>) $ validateRawJSON decodedHeader
+      decodedPayload <-
         Bi.first ("Invalid payload (Base64): " <>) (decodeB64Pad payload)
-      Bi.first ("Invalid Payload: " <>) $ validateRawJSON pay
+      Bi.first ("Invalid Payload: " <>) $ validateRawJSON decodedPayload
 
       pure RawJWTToken {..}
     _ -> Left "Invalid JWT String"
