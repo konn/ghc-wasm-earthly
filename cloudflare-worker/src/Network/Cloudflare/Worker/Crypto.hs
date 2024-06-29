@@ -165,10 +165,10 @@ parseJWT raw = Bi.first (("Error during parsing token (" <> BS8.unpack raw <> ")
   case BS8.split '.' raw of
     [header, payload, signature] -> do
       hdr <-
-        Bi.first ("Invalid Header (Base65): " <>) $ decodeB64Pad hdr
+        Bi.first ("Invalid Header (Base65): " <>) $ decodeB64Pad headr
       Bi.first ("Invalid Header: " <>) $ validateRawJSON hdr
       pay <-
-        Bi.first ("Invalid payload (Base64): " <>) (decodeB64Pad pay)
+        Bi.first ("Invalid payload (Base64): " <>) (decodeB64Pad payload)
       Bi.first ("Invalid Payload: " <>) $ validateRawJSON pay
 
       pure RawJWTToken {..}
