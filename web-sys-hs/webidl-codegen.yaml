@@ -13,3 +13,4 @@ targets:
 - WebSocket
 - Crypto
 - SubtleCrypto
+- JsonWebKey

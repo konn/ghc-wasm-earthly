@@ -500,6 +500,8 @@ library
     GHC.Wasm.Web.Generated.IterationCompositeOperation.Core
     GHC.Wasm.Web.Generated.JSON
     GHC.Wasm.Web.Generated.JSON.Core
+    GHC.Wasm.Web.Generated.JsonWebKey
+    GHC.Wasm.Web.Generated.JsonWebKey.Core
     GHC.Wasm.Web.Generated.KeyFormat
     GHC.Wasm.Web.Generated.KeyFormat.Core
     GHC.Wasm.Web.Generated.KeyType
@@ -834,6 +836,8 @@ library
     GHC.Wasm.Web.Generated.ResponseInit.Core
     GHC.Wasm.Web.Generated.ResponseType
     GHC.Wasm.Web.Generated.ResponseType.Core
+    GHC.Wasm.Web.Generated.RsaOtherPrimesInfo
+    GHC.Wasm.Web.Generated.RsaOtherPrimesInfo.Core
     GHC.Wasm.Web.Generated.SVGAngle
     GHC.Wasm.Web.Generated.SVGAngle.Core
     GHC.Wasm.Web.Generated.SVGAnimatedLength
