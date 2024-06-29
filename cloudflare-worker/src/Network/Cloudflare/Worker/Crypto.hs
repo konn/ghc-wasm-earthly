@@ -45,7 +45,7 @@ import Data.Attoparsec.ByteString.Streaming qualified as AQ
 import Data.Bifunctor qualified as Bi
 import Data.Bitraversable (bitraverse)
 import Data.ByteString qualified as BS
-import Data.ByteString.Base64 qualified as B64
+import Data.ByteString.Base64.URL qualified as B64
 import Data.ByteString.Char8 qualified as BS8
 import Data.CaseInsensitive qualified as CI
 import Data.Map.Strict (Map)
@@ -172,7 +172,7 @@ parseJWT raw = Bi.first (("Error during parsing token (" <> BS8.unpack raw <> ")
       decodedPayload <-
         Bi.first ("Invalid payload (Base64): " <>) (decodeB64Pad payload)
       Bi.first ("Invalid Payload: " <>) $ validateRawJSON decodedPayload
-      signature <- decodeB64Pad sigB64
+      signature <- Bi.first ("Invalid signature (Base64): " <>) $ decodeB64Pad sigB64
 
       pure RawJWTToken {..}
     _ -> Left "Invalid JWT String"
