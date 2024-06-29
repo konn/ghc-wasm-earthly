@@ -83,7 +83,7 @@ fromCloudflarePubKey pk = do
       (toDOMString False $ toJSString "jwk")
       (upcast jwk)
       rs256
-      True
+      False
       (toSequence $ V.singleton $ toDOMString False $ toJSString "verify")
 
 toJWK :: CloudflarePubKey -> JsonWebKey
