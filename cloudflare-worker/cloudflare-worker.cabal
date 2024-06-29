@@ -51,6 +51,7 @@ library
   import: defaults
   build-depends:
     aeson,
+    base64-bytestring,
     bytestring,
     containers,
     ghc-wasm-jsobjects,
@@ -70,6 +71,8 @@ library
     Network.Cloudflare.Worker
     Network.Cloudflare.Worker.Binding
     Network.Cloudflare.Worker.Binding.KV
+    Network.Cloudflare.Worker.Crypto
+    Network.Cloudflare.Worker.FetchAPI
     Network.Cloudflare.Worker.Handler
     Network.Cloudflare.Worker.Handler.Fetch
     Network.Cloudflare.Worker.Request
