@@ -8,6 +8,7 @@
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE QualifiedDo #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RequiredTypeArguments #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -209,12 +210,11 @@ type family RequiredKeys fs where
 newDictionary ::
   forall fs.
   (KnownFields fs) =>
-  (PartialDictionary fs (RequiredKeys fs) %1 -> PartialDictionary fs '[]) %1 ->
+  (PartialDictionary fs (RequiredKeys fs) %1 -> PartialDictionary fs '[]) ->
   JSDictionary fs
-{-# INLINE newDictionary #-}
 newDictionary f =
-  let !(PD dic) = f js_new_partial
-   in dic
+  let !(PD dic') = f js_new_partial
+   in dic'
 
 setPartialField ::
   forall fs gs x.
@@ -223,14 +223,15 @@ setPartialField ::
   JSObject x ->
   PartialDictionary fs gs %1 ->
   PartialDictionary fs (Delete f gs)
+{-# NOINLINE setPartialField #-}
 setPartialField f val (PD obj) =
   PD
     (js_set_partial obj (toJSString (symbolVal' (proxy# @f))) (upcast val))
 
-foreign import javascript unsafe "$1[$2] = $3"
+foreign import javascript unsafe "$1[$2] = $3; return $1"
   js_set_partial :: JSDictionary fs %1 -> JSString -> JSAny -> JSDictionary fs
 
-foreign import javascript unsafe "Object()"
+foreign import javascript unsafe "new Object()"
   js_new_partial :: PartialDictionary fs (RequiredKeys fs)
 
 newReifiedDictionary ::

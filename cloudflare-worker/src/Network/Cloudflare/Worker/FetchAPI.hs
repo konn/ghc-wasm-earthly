@@ -38,7 +38,7 @@ requestWith :: Method -> String -> Maybe (Q.ByteStream IO ()) -> IO (Promise Res
 requestWith meth uri mbody = do
   rs <- mapM toReadableStream mbody
   methStr <- fromHaskellByteString meth
-  let reqInfo =
+  let !reqInfo =
         newDictionary @RequestInitFields
           ( setPartialField "method" (nonNull methStr)
               PL.. setPartialField "body" (nonNull $ toNullable $ inject <$> rs)

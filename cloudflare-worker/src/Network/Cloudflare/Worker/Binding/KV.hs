@@ -116,6 +116,7 @@ eitherResult (J.Success a) = Right a
 eitherResult (J.Error e) = Left e
 
 fromListKey :: ListKeys -> JSListKeyInit
+{-# NOINLINE fromListKey #-}
 fromListKey ListKeys {..} =
   let prefix' = toUSVString . toJSString <$> prefix
       limit' = toJSPrim <$> limit
