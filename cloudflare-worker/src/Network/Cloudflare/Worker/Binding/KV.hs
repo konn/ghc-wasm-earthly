@@ -38,7 +38,6 @@ import GHC.Wasm.Object.Builtins
 import GHC.Wasm.Prim
 import GHC.Wasm.Web.JSON
 import Steward.Types (FromQueryParamString, FromQueryParams, ToQueryParamString, ToQueryParams)
-import System.IO.Unsafe (unsafePerformIO)
 import Wasm.Prelude.Linear qualified as PL
 
 ----------------
