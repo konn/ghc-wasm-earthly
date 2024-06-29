@@ -2,6 +2,7 @@
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE ImpredicativeTypes #-}
 {-# LANGUAGE MagicHash #-}
@@ -53,7 +54,14 @@ module Steward.Types (
   Handler,
   ClientException (..),
   FromQueryParams (..),
+  GenericFromQueryParams,
+  FromQueryParamString (..),
   ToQueryParams (..),
+  GenericToQueryParams,
+  ToQueryParamString (..),
+  DQuery,
+  Shown (..),
+  Readed (..),
 ) where
 
 import Control.Exception.Safe (Exception, MonadThrow, throwM)
@@ -62,9 +70,13 @@ import Control.Monad ((<=<))
 import Data.Aeson (FromJSON, ToJSON)
 import Data.Aeson qualified as J
 import Data.ByteString qualified as BS
+import Data.ByteString.Char8 qualified as BS8
 import Data.ByteString.Lazy qualified as LBS
 import Data.CaseInsensitive qualified as CI
+import Data.DList (DList)
+import Data.DList qualified as DL
 import Data.Generics.Labels ()
+import Data.Int
 import Data.Kind
 import Data.List qualified as List
 import Data.String (fromString)
@@ -72,6 +84,7 @@ import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
 import Data.Text.Lazy qualified as LT
 import Data.Text.Lazy.Encoding qualified as LTE
+import Data.Word
 import GHC.Exts (Proxy#, proxy#)
 import GHC.Generics
 import GHC.Generics qualified as Generics
@@ -81,7 +94,7 @@ import Lucid qualified
 import Network.HTTP.Media (MediaType)
 import Network.HTTP.Media qualified as Media
 import Network.HTTP.Media.MediaType ((//))
-import Network.HTTP.Types (Query, RequestHeaders, ResponseHeaders, Status (..), StdMethod (..), hContentType, status404, status500)
+import Network.HTTP.Types (Query, QueryItem, RequestHeaders, ResponseHeaders, Status (..), StdMethod (..), hContentType, status404, status500)
 import Text.Read (readEither)
 
 data ParseResult a = NoMatch | Failed String | Parsed a
@@ -102,6 +115,57 @@ instance Applicative ParseResult where
   NoMatch <*> _ = NoMatch
   Parsed f <*> a = f <$> a
 
+class FromQueryParamString a where
+  parseQueryParamString :: BS.ByteString -> ParseResult a
+
+instance FromQueryParamString BS.ByteString where
+  parseQueryParamString = Parsed
+
+class ToQueryParamString a where
+  toQueryParamString :: a -> BS.ByteString
+
+instance FromQueryParamString T.Text where
+  parseQueryParamString = Parsed . TE.decodeUtf8
+
+instance ToQueryParamString T.Text where
+  toQueryParamString = TE.encodeUtf8
+
+instance FromQueryParamString String where
+  parseQueryParamString = Parsed . T.unpack . TE.decodeUtf8
+
+instance ToQueryParamString String where
+  toQueryParamString = TE.encodeUtf8 . T.pack
+
+instance FromQueryParamString LT.Text where
+  parseQueryParamString = Parsed . LTE.decodeUtf8 . LBS.fromStrict
+
+instance ToQueryParamString LT.Text where
+  toQueryParamString = LBS.toStrict . LTE.encodeUtf8
+
+newtype Shown a = Shown {unShown :: a}
+  deriving (Generic, Functor, Foldable, Traversable)
+  deriving newtype (Show)
+
+instance (Show a) => ToQueryParamString (Shown a) where
+  toQueryParamString = BS8.pack . show . (.unShown)
+
+instance (Show a) => ToPathPieces (Shown a) where
+  toPathPieces = toPathPieces . show
+
+newtype Readed a = Readed {unReaded :: a}
+  deriving (Generic, Functor, Foldable, Traversable)
+
+instance (Read a) => FromQueryParamString (Readed a) where
+  parseQueryParamString bs = case readEither (BS8.unpack bs) of
+    Right a -> Parsed (Readed a)
+    Left e -> Failed e
+
+instance (Read a) => FromPathPieces (Readed a) where
+  parsePathPieces [] = NoMatch
+  parsePathPieces (x : xs) = case readEither (T.unpack x) of
+    Right a -> Parsed (Readed a, xs)
+    Left err -> Failed $ "Failed to parse Readed: " <> err
+
 class FromPathPieces a where
   parsePathPieces :: [T.Text] -> ParseResult (a, [T.Text])
 
@@ -112,17 +176,111 @@ instance FromPathPieces T.Text where
   parsePathPieces [] = NoMatch
   parsePathPieces (x : xs) = Parsed (x, xs)
 
+instance FromPathPieces String where
+  parsePathPieces [] = NoMatch
+  parsePathPieces (x : xs) = Parsed (T.unpack x, xs)
+
+instance ToPathPieces String where
+  toPathPieces = pure . T.pack
+
 instance ToPathPieces T.Text where
   toPathPieces = pure
 
-instance FromPathPieces Int where
-  parsePathPieces [] = NoMatch
-  parsePathPieces (x : xs) = case readEither (T.unpack x) of
-    Right a -> Parsed (a, xs)
-    Left err -> Failed $ "Failed to parse Int: " <> err
+deriving via Shown Integer instance ToPathPieces Integer
 
-instance ToPathPieces Int where
-  toPathPieces = pure . T.pack . show
+deriving via Shown Integer instance ToQueryParamString Integer
+
+deriving via Readed Integer instance FromPathPieces Integer
+
+deriving via Readed Integer instance FromQueryParamString Integer
+
+deriving via Shown Natural instance ToPathPieces Natural
+
+deriving via Shown Natural instance ToQueryParamString Natural
+
+deriving via Readed Natural instance FromPathPieces Natural
+
+deriving via Readed Natural instance FromQueryParamString Natural
+
+deriving via Shown Int instance ToPathPieces Int
+
+deriving via Shown Int instance ToQueryParamString Int
+
+deriving via Readed Int instance FromPathPieces Int
+
+deriving via Readed Int instance FromQueryParamString Int
+
+deriving via Shown Int8 instance ToPathPieces Int8
+
+deriving via Shown Int8 instance ToQueryParamString Int8
+
+deriving via Readed Int8 instance FromPathPieces Int8
+
+deriving via Readed Int8 instance FromQueryParamString Int8
+
+deriving via Shown Int16 instance ToPathPieces Int16
+
+deriving via Shown Int16 instance ToQueryParamString Int16
+
+deriving via Readed Int16 instance FromPathPieces Int16
+
+deriving via Readed Int16 instance FromQueryParamString Int16
+
+deriving via Shown Int32 instance ToPathPieces Int32
+
+deriving via Shown Int32 instance ToQueryParamString Int32
+
+deriving via Readed Int32 instance FromPathPieces Int32
+
+deriving via Readed Int32 instance FromQueryParamString Int32
+
+deriving via Shown Int64 instance ToPathPieces Int64
+
+deriving via Shown Int64 instance ToQueryParamString Int64
+
+deriving via Readed Int64 instance FromPathPieces Int64
+
+deriving via Readed Int64 instance FromQueryParamString Int64
+
+deriving via Shown Word instance ToPathPieces Word
+
+deriving via Shown Word instance ToQueryParamString Word
+
+deriving via Readed Word instance FromPathPieces Word
+
+deriving via Readed Word instance FromQueryParamString Word
+
+deriving via Shown Word8 instance ToPathPieces Word8
+
+deriving via Shown Word8 instance ToQueryParamString Word8
+
+deriving via Readed Word8 instance FromPathPieces Word8
+
+deriving via Readed Word8 instance FromQueryParamString Word8
+
+deriving via Shown Word16 instance ToPathPieces Word16
+
+deriving via Shown Word16 instance ToQueryParamString Word16
+
+deriving via Readed Word16 instance FromPathPieces Word16
+
+deriving via Readed Word16 instance FromQueryParamString Word16
+
+deriving via Shown Word32 instance ToPathPieces Word32
+
+deriving via Shown Word32 instance ToQueryParamString Word32
+
+deriving via Readed Word32 instance FromPathPieces Word32
+
+deriving via Readed Word32 instance FromQueryParamString Word32
+
+deriving via Shown Word64 instance ToPathPieces Word64
+
+deriving via Shown Word64 instance ToQueryParamString Word64
+
+deriving via Readed Word64 instance FromPathPieces Word64
+
+deriving via Readed Word64 instance FromQueryParamString Word64
 
 type KnownSymbols :: [Symbol] -> Constraint
 class KnownSymbols ss where
@@ -150,7 +308,7 @@ type family xs ~> a where
 
 data PartialRequest = PartialRequest
   { pathInfo :: ![T.Text]
-  , queryString :: !Query
+  , queryString :: !DQuery
   , method :: !StdMethod
   , body :: !LBS.ByteString
   , headers :: !RequestHeaders
@@ -296,8 +454,125 @@ instance (Routable m t) => Routable m (RawRequestBody /> t) where
 class FromQueryParams a where
   parseQueryParams :: Query -> ParseResult a
 
+type GenericFromQueryParams a = (Generic a, GFromQueryParams (Generics.Rep a))
+
+instance (GenericFromQueryParams a) => FromQueryParams (Generically a) where
+  parseQueryParams = fmap (Generically . Generics.to) . gparseQueryParams
+
+instance FromQueryParams Query where
+  parseQueryParams = Parsed
+
+class GFromQueryParams f where
+  gparseQueryParams :: Query -> ParseResult (f ())
+
+instance GFromQueryParams U1 where
+  gparseQueryParams _ = Parsed U1
+
+instance
+  {-# OVERLAPPING #-}
+  (KnownSymbol s) =>
+  GFromQueryParams (M1 S ('MetaSel ('Just s) x y z) (K1 i Bool))
+  where
+  gparseQueryParams qs =
+    let fld = symbolVal' @s proxy#
+     in case lookup (TE.encodeUtf8 $ T.pack fld) qs of
+          Nothing -> Parsed $ M1 $ K1 False
+          Just Nothing -> Parsed $ M1 $ K1 True
+          Just (Just v) ->
+            Failed $ "Query Flag expected, but got a value: " <> show (fld, v)
+
+instance
+  {-# OVERLAPPING #-}
+  (KnownSymbol s, FromQueryParamString a) =>
+  GFromQueryParams (M1 S ('MetaSel ('Just s) x y z) (K1 i (Maybe a)))
+  where
+  gparseQueryParams qs =
+    let fld = symbolVal' @s proxy#
+     in case lookup (TE.encodeUtf8 $ T.pack fld) qs of
+          Nothing -> Parsed $ M1 $ K1 Nothing
+          Just Nothing -> Failed $ "No associated value in query: " <> fld
+          Just (Just x) -> case parseQueryParamString x of
+            NoMatch -> Failed $ "Query field (" <> fld <> ") doesn't parse"
+            Failed e -> Failed $ "Parse fail in query (" <> fld <> "): " <> e
+            Parsed a -> Parsed $ M1 $ K1 $ Just a
+
+instance
+  {-# OVERLAPPABLE #-}
+  (KnownSymbol s, FromQueryParamString a) =>
+  GFromQueryParams (M1 S ('MetaSel ('Just s) x y z) (K1 i a))
+  where
+  gparseQueryParams qs =
+    let fld = symbolVal' @s proxy#
+     in case lookup (TE.encodeUtf8 $ T.pack fld) qs of
+          Nothing -> Failed $ "No query parameter: " <> fld
+          Just Nothing -> Failed $ "No associated value in query: " <> fld
+          Just (Just x) -> case parseQueryParamString x of
+            NoMatch -> NoMatch
+            Failed e -> Failed e
+            Parsed a -> Parsed $ M1 $ K1 a
+
+instance (GFromQueryParams l, GFromQueryParams r) => GFromQueryParams (l :*: r) where
+  gparseQueryParams qs = (:*:) <$> gparseQueryParams qs <*> gparseQueryParams qs
+
+instance {-# OVERLAPPABLE #-} (GFromQueryParams f) => GFromQueryParams (M1 i c f) where
+  gparseQueryParams qs = M1 <$> gparseQueryParams qs
+
+type DQuery = DList QueryItem
+
 class ToQueryParams a where
-  toQueryParams :: a -> Query
+  toQueryParams :: a -> DQuery
+
+type GenericToQueryParams a = (Generic a, GToQueryParams (Generics.Rep a))
+
+instance (GenericToQueryParams a) => ToQueryParams (Generically a) where
+  toQueryParams = gtoQueryParams . Generics.from . (\(Generically a) -> a)
+
+instance ToQueryParams Query where
+  toQueryParams = DL.fromList
+
+class GToQueryParams f where
+  gtoQueryParams :: f a -> DQuery
+
+instance GToQueryParams U1 where
+  gtoQueryParams _ = mempty
+
+instance
+  {-# OVERLAPPABLE #-}
+  (KnownSymbol s, ToQueryParamString a) =>
+  GToQueryParams (M1 S ('MetaSel ('Just s) x y z) (K1 i (Maybe a)))
+  where
+  gtoQueryParams (M1 (K1 (Just x))) =
+    DL.singleton
+      ( TE.encodeUtf8 $ T.pack $ symbolVal' @s proxy#
+      , Just $ toQueryParamString x
+      )
+  gtoQueryParams (M1 (K1 Nothing)) = mempty
+
+instance
+  {-# OVERLAPPABLE #-}
+  (KnownSymbol s, ToQueryParamString a) =>
+  GToQueryParams (M1 S ('MetaSel ('Just s) x y z) (K1 i a))
+  where
+  gtoQueryParams (M1 (K1 x)) =
+    DL.singleton
+      ( TE.encodeUtf8 $ T.pack $ symbolVal' @s proxy#
+      , Just $ toQueryParamString x
+      )
+
+instance
+  {-# OVERLAPPING #-}
+  (KnownSymbol s) =>
+  GToQueryParams (M1 S ('MetaSel ('Just s) x y z) (K1 i Bool))
+  where
+  gtoQueryParams (M1 (K1 p))
+    | p = DL.singleton (TE.encodeUtf8 $ T.pack $ symbolVal' @s proxy#, Nothing)
+    | otherwise = mempty
+
+instance (GToQueryParams l, GToQueryParams r) => GToQueryParams (l :*: r) where
+  gtoQueryParams (l :*: r) = gtoQueryParams l <> gtoQueryParams r
+
+instance {-# OVERLAPPABLE #-} (GToQueryParams f) => GToQueryParams (M1 i c f) where
+  gtoQueryParams (M1 x) = gtoQueryParams x
 
 instance (ToQueryParams a, PreRoutable t) => PreRoutable (QueryParam a /> t) where
   type RouteArgs (QueryParam a /> t) = a ': RouteArgs t

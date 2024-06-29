@@ -61,6 +61,7 @@ library
     aeson,
     bytestring,
     case-insensitive,
+    dlist,
     generic-lens,
     http-media,
     http-types,

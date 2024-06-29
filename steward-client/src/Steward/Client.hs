@@ -25,6 +25,7 @@ import Control.Monad.Trans.Reader (ReaderT (..))
 import Data.ByteString.Builder qualified as BB
 import Data.ByteString.Char8 qualified as BS8
 import Data.ByteString.Lazy qualified as LBS
+import Data.Foldable qualified as F
 import Data.Functor ((<&>))
 import GHC.Generics (Generic)
 import Network.HTTP.Client (Manager, Request, Response (..), httpLbs, requestFromURI)
@@ -84,7 +85,7 @@ fromStewardRequest uri req =
             BB.toLazyByteString $
               BB.byteString (BS8.dropWhileEnd (== '/') r.path)
                 <> encodePathSegments req.pathInfo
-      , H.queryString = renderQuery True req.queryString
+      , H.queryString = renderQuery True (F.toList req.queryString)
       }
 
 data StewardClientError = StatusCodeException Status LBS.ByteString
