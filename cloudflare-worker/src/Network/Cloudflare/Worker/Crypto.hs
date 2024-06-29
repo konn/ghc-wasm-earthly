@@ -17,6 +17,8 @@ module Network.Cloudflare.Worker.Crypto (
 
   -- * Combinators for verifying JWT provided by Cloudflare Zero Trust
   getCloudflarePublicKeys,
+  TeamName,
+  CloudflareAudienceID,
   CloudflarePubKey (..),
   CloudflarePubKeys,
   verifyCloudflareJWTAssertion,

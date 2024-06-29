@@ -79,6 +79,8 @@ library
     streaming,
     streaming-bytestring,
     text,
+    time,
+    time-effectful,
     transformers,
 
 executable steward-workers-demo

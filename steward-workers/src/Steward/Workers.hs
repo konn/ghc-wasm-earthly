@@ -13,6 +13,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
+{-# OPTIONS_GHC -Wno-redundant-constraints #-}
 
 module Steward.Workers (
   Worker,
@@ -23,6 +24,9 @@ module Steward.Workers (
   getStewardRequest,
   getRawRequest,
   fromHandlers,
+  getCloudflarePublicKeys,
+  CloudflareTunnelConfig (..),
+  withCloudflareTunnelAuth,
 
   -- * Re-exports
   JSObject (..),
@@ -46,12 +50,16 @@ import Data.String (fromString)
 import Data.Text.Encoding qualified as TE
 import Data.Text.Lazy qualified as LT
 import Data.Text.Lazy.Encoding qualified as LTE
+import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import Effectful
 import Effectful.Dispatch.Static
+import Effectful.Time (Clock, getCurrentTime)
 import GHC.Generics (Generic)
 import GHC.Wasm.Object.Builtins
 import GHC.Wasm.Prim (fromJSString)
 import Network.Cloudflare.Worker.Binding
+import Network.Cloudflare.Worker.Crypto (CloudflareAudienceID, CloudflarePubKeys, CloudflareUser, TeamName, verifyCloudflareJWTAssertion)
+import Network.Cloudflare.Worker.Crypto qualified as Crypto
 import Network.Cloudflare.Worker.Handler
 import Network.Cloudflare.Worker.Handler.Fetch
 import Network.Cloudflare.Worker.Request (WorkerRequest)
@@ -94,6 +102,43 @@ getCloudflareJSON :: forall e es. (Worker e :> es) => Eff es (Maybe A.Value)
 getCloudflareJSON = do
   WorkerEnv {rawRequest} <- getStaticRep @(Worker e)
   unsafeEff_ $ Req.getCloudflareJSON rawRequest
+
+data CloudflareTunnelConfig = CloudflareTunnelConfig
+  { teamName :: TeamName
+  , appAudienceID :: CloudflareAudienceID
+  }
+  deriving (Show, Eq, Ord, Generic)
+  deriving anyclass (A.FromJSON, A.ToJSON)
+
+withCloudflareTunnelAuth ::
+  forall e es.
+  (Worker e :> es, Clock :> es) =>
+  CloudflareTunnelConfig ->
+  (CloudflareUser -> Eff es Bool) ->
+  (CloudflareUser -> Eff es StewardResponse) ->
+  Eff es StewardResponse
+withCloudflareTunnelAuth cfg check act = do
+  WorkerEnv {rawRequest} <- getStaticRep @(Worker e)
+  now <- utcTimeToPOSIXSeconds <$> getCurrentTime
+  keys <- getCloudflarePublicKeys @e cfg.teamName
+  case verifyCloudflareJWTAssertion now cfg.appAudienceID keys rawRequest of
+    Left err ->
+      pure $
+        StewardResponse
+          (Status 401 "Unauthorized")
+          []
+          ("Invalid CloudflareTunnel: " <> fromString err)
+    Right user -> do
+      authorized <- check user
+      if authorized
+        then act user
+        else
+          pure $
+            StewardResponse (Status 403 "Forbidden") [] $
+              "User not allowed to access: " <> fromString (show user)
+
+getCloudflarePublicKeys :: (Worker e :> es) => String -> Eff es CloudflarePubKeys
+getCloudflarePublicKeys = unsafeEff_ . Crypto.getCloudflarePublicKeys
 
 fromHandlers ::
   forall e es t.
