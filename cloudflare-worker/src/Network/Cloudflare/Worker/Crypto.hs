@@ -180,10 +180,7 @@ parseJWT raw = Bi.first (("Error during parsing token (" <> BS8.unpack raw <> ")
 decodeB64Pad :: BS8.ByteString -> Either String Signature
 decodeB64Pad = B64.decode . pad
   where
-    pad bs =
-      let n = BS.length bs
-          pads = BS8.replicate (4 - (n `mod` 4)) '='
-       in bs <> pads
+    pad bs = bs
 
 validateRawJSON :: BS.ByteString -> Either String ()
 validateRawJSON raw =
