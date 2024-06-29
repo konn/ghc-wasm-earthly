@@ -92,6 +92,8 @@ toJWK pk =
     ( setPartialField "n" (nonNull $ toDOMString False $ toJSString $ T.unpack $ pk.pubkeyN.rawBE)
         PL.. setPartialField "e" (nonNull $ toDOMString False $ toJSString $ T.unpack $ pk.pubkeyE.rawBE)
         PL.. setPartialField "kty" (toDOMString False $ toJSString "RSA")
+        PL.. setPartialField "use" (nonNull $ toDOMString False $ toJSString "sig")
+        PL.. setPartialField "alg" (nonNull $ toDOMString False $ toJSString "RS256")
     )
 
 data Alg = RS256
