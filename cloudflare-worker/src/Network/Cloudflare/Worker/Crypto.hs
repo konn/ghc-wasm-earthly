@@ -200,15 +200,15 @@ data AppTokenHeader = AppTokenHeader {alg :: !Alg, kid :: !T.Text}
 
 data AppTokenPayload = AppTokenPayload
   { aud :: !Audiences
-  , email :: !T.Text
+  , email :: !(Maybe T.Text)
   , exp :: !POSIXTime
   , iat :: !POSIXTime
   , nbf :: !POSIXTime
   , iss :: !T.Text
   , type_ :: !T.Text
-  , identity_nonce :: !T.Text
+  , identity_nonce :: !(Maybe T.Text)
   , sub :: !T.Text
-  , country :: !T.Text
+  , country :: !(Maybe T.Text)
   }
   deriving (Show, Eq, Ord, Generic)
 
@@ -289,9 +289,14 @@ instance J.ToJSON CloudflarePubKey where
 
 type TeamName = String
 
-data CloudflareUser = CloudflareUser {email :: T.Text, country :: T.Text}
+data CloudflareUser = CloudflareUser {email :: Maybe T.Text, country :: Maybe T.Text, type_ :: T.Text}
   deriving (Show, Eq, Ord, Generic)
-  deriving anyclass (FromJSON, J.ToJSON)
+
+instance J.FromJSON CloudflareUser where
+  parseJSON = J.genericParseJSON appTokenOpts
+
+instance J.ToJSON CloudflareUser where
+  toJSON = J.genericToJSON appTokenOpts
 
 type CloudflareAudienceID = T.Text
 
@@ -316,6 +321,7 @@ verifyCloudflareJWTAssertion now aud keys req = do
         CloudflareUser
           { email = tok.payload.email
           , country = tok.payload.country
+          , type_ = tok.payload.type_
           }
     else Left "Invalid Audience"
 
