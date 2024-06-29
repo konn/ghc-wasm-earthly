@@ -182,7 +182,7 @@ decodeB64Pad = B64.decode . pad
   where
     pad bs =
       let n = BS.length bs
-          pads = BS8.replicate (4 - (n `rem` 4)) '='
+          pads = BS8.replicate ((-n) `rem` 4) '='
        in bs <> pads
 
 validateRawJSON :: BS.ByteString -> Either String ()
