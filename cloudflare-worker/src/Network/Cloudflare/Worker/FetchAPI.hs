@@ -55,12 +55,6 @@ put uri = requestWith "PUT" uri . Just
 delete :: String -> IO (Promise ResponseClass)
 delete uri = requestWith "DELETE" uri Nothing
 
-nonNull :: JSObject a -> Nullable a
-nonNull = toNullable . Just
-
-none :: Nullable a
-none = toNullable Nothing
-
 fetch :: RequestInfo -> Nullable RequestInitClass -> IO (Promise ResponseClass)
 fetch = js_cf_fetch_raw
 

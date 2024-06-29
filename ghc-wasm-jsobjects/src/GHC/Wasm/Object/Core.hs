@@ -45,6 +45,9 @@ module GHC.Wasm.Object.Core (
   Nullable,
   toNullable,
   fromNullable,
+  nullable,
+  nonNull,
+  none,
 
   -- * Unions
   UnionClass,
@@ -266,6 +269,15 @@ jsNull = js_null
 
 toNullable :: Maybe (JSObject c) -> Nullable c
 toNullable = maybe (unsafeCast js_null) upcast
+
+nonNull :: JSObject a -> Nullable a
+nonNull = toNullable . Just
+
+none :: Nullable a
+none = toNullable Nothing
+
+nullable :: b -> (JSObject a -> b) -> Nullable a -> b
+nullable n j = maybe n j . fromNullable
 
 fromNullable :: Nullable c -> Maybe (JSObject c)
 fromNullable n
