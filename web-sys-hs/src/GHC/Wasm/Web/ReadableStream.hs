@@ -72,7 +72,7 @@ fromReadableStream =
       . ( fmap (unsafeCast @_ @(ReadableStreamDefaultReaderClass))
             . flip
               js_fun_getReader_nullable_ReadableStreamGetReaderOptions_ReadableStreamReader
-              (toNullable Nothing)
+              none
         )
 
 fromReadResult :: ReadableStreamDefaultReader -> Q.ByteStream IO ()

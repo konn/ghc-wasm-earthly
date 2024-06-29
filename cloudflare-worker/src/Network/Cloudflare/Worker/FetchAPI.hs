@@ -24,13 +24,13 @@ import Wasm.Prelude.Linear qualified as PL
 
 get :: String -> IO (Promise ResponseClass)
 get uri =
-  js_cf_fetch_raw (uriToReqInfo uri) (toNullable Nothing)
+  js_cf_fetch_raw (uriToReqInfo uri) none
 
 uriToReqInfo :: String -> RequestInfo
 uriToReqInfo = upcast . toUSVString . toJSString
 
 fetchRequest :: Request -> IO (Promise ResponseClass)
-fetchRequest req = js_cf_fetch_raw (inject req) (toNullable Nothing)
+fetchRequest req = js_cf_fetch_raw (inject req) none
 
 type Method = BS.ByteString
 

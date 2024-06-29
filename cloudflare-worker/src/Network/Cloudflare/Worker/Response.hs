@@ -107,7 +107,6 @@ newResponse resp = do
               (fromJust $ toJSByteString $ toJSString $ BS8.unpack resp.statusText)
             PL.. setPartialField "headers" (inject headers)
             PL.. setPartialField "cf" empty
-            PL.. setPartialField "websocket" (toNullable Nothing)
             PL.. setPartialField "encodeBody" (fromJust $ toJSByteString $ toJSString "automatic")
         )
 
@@ -122,7 +121,7 @@ toHeaders dic = do
   hdrs0 <-
     toJSRecord @JSByteStringClass $
       fromJust . toJSByteString . toJSString . T.unpack <$> dic
-  js_cons_Headers $ toNullable $ Just $ inject hdrs0
+  js_cons_Headers $ nonNull $ inject hdrs0
 
 foreign import javascript unsafe "new Response($1, $2)"
   js_new_response :: Nullable USVStringClass -> Nullable WorkerResponseInitClass -> IO WorkerResponse
