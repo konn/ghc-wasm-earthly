@@ -52,6 +52,8 @@ module Steward.Types (
   Client,
   Handler,
   ClientException (..),
+  FromQueryParams (..),
+  ToQueryParams (..),
 ) where
 
 import Control.Exception.Safe (Exception, MonadThrow, throwM)
@@ -253,7 +255,7 @@ instance
       Failed e -> Failed e
       Parsed f -> Parsed \g -> f (g a)
 
-type data Modifier = Header Symbol | JSONBody Type | RawRequestBody
+type data Modifier = Header Symbol | JSONBody Type | RawRequestBody | QueryParam Type
 
 instance (KnownSymbol s, PreRoutable t) => PreRoutable (Header s /> t) where
   type RouteArgs (Header s /> t) = Maybe BS.ByteString ': RouteArgs t
@@ -290,6 +292,32 @@ instance (Routable m t) => Routable m (RawRequestBody /> t) where
       NoMatch -> NoMatch
       Failed e -> Failed e
       Parsed f -> Parsed \g -> f (g req.body)
+
+class FromQueryParams a where
+  parseQueryParams :: Query -> ParseResult a
+
+class ToQueryParams a where
+  toQueryParams :: a -> Query
+
+instance (ToQueryParams a, PreRoutable t) => PreRoutable (QueryParam a /> t) where
+  type RouteArgs (QueryParam a /> t) = a ': RouteArgs t
+  type ResponseSeed (QueryParam a /> t) = ResponseSeed t
+  buildRequest' _ (a :- xs) =
+    buildRequest' (proxy# @t) xs
+      & #queryString %~ (toQueryParams a <>)
+  decodeResponseBody' _ = decodeResponseBody' @t proxy#
+
+instance
+  (ToQueryParams a, FromQueryParams a, Routable m t) =>
+  Routable m (QueryParam a /> t)
+  where
+  matchRoute' _ req xs = case parseQueryParams (req.queryString) of
+    NoMatch -> NoMatch
+    Failed e -> Failed e
+    Parsed a -> case matchRoute' (proxy# @t) req xs of
+      NoMatch -> NoMatch
+      Failed e -> Failed e
+      Parsed f -> Parsed \g -> f (g a)
 
 instance (ToJSON a, PreRoutable t) => PreRoutable (JSONBody a /> t) where
   type RouteArgs (JSONBody a /> t) = a ': RouteArgs t
