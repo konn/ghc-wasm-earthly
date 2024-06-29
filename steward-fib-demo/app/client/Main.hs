@@ -36,7 +36,9 @@ optsP = Opt.info (parser <**> Opt.helper) (Opt.fullDesc <> Opt.progDesc "Steward
             ]
       pure Opts {..}
 
-fibs :: (StewardClient :> es) => FibEndpoints (Client (Eff es))
+fibs ::
+  (StewardClient :> es) =>
+  FibEndpoints (Client (Eff es))
 fibs = client
 
 main :: IO ()

@@ -24,7 +24,7 @@ module Network.Cloudflare.Worker.Binding.KV (
 ) where
 
 import Control.Monad (forM, void, (<=<))
-import Data.Aeson (FromJSON, Value)
+import Data.Aeson (FromJSON, ToJSON, Value)
 import Data.Aeson qualified as J
 import Data.Bifunctor qualified as Bi
 import Data.Word (Word32)
@@ -65,6 +65,7 @@ data ListKeys = ListKeys
   , cursor :: !(Maybe String)
   }
   deriving (Show, Eq, Ord, Generic)
+  deriving anyclass (FromJSON, ToJSON)
 
 type JSListKeyInit =
   JSDictionary
@@ -79,7 +80,7 @@ data ListKeyResult = ListKeyResult
   , list_complete :: !Bool
   }
   deriving (Show, Eq, Ord, Generic)
-  deriving anyclass (FromJSON)
+  deriving anyclass (FromJSON, ToJSON)
 
 data Key = Key
   { name :: String
@@ -87,7 +88,7 @@ data Key = Key
   , metadata :: Maybe Value
   }
   deriving (Show, Eq, Ord, Generic)
-  deriving anyclass (FromJSON)
+  deriving anyclass (FromJSON, ToJSON)
 
 listKeys :: KV -> ListKeys -> IO (Either String ListKeyResult)
 listKeys kv key = do
@@ -136,7 +137,7 @@ data ValueWithMetadata = ValueWithMetadata
   , metadata :: Maybe Value
   }
   deriving (Show, Eq, Ord, Generic)
-  deriving anyclass (FromJSON)
+  deriving anyclass (FromJSON, ToJSON)
 
 getWithMetadata :: KV -> String -> IO (Maybe ValueWithMetadata)
 getWithMetadata kv key = do
@@ -163,6 +164,7 @@ data PutOptions = PutOptions
   , metadata :: Maybe Value
   }
   deriving (Show, Eq, Ord, Generic)
+  deriving anyclass (FromJSON)
 
 instance J.ToJSON PutOptions where
   toJSON = J.genericToJSON J.defaultOptions {J.omitNothingFields = True}
