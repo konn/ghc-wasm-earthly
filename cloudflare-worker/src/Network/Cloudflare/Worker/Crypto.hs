@@ -57,7 +57,6 @@ import Data.Vector qualified as V
 import Data.Word (Word8)
 import GHC.Generics (Generic)
 import GHC.IO (unsafePerformIO)
-import GHC.Natural (Natural)
 import GHC.Wasm.Object.Builtins
 import GHC.Wasm.Prim
 import GHC.Wasm.Web.Generated.AlgorithmIdentifier (AlgorithmIdentifier)
@@ -217,8 +216,8 @@ verifyRS256 pk sig msg = unsafePerformIO do
 
 data CloudflarePubKey = CloudflarePubKey
   { keyId :: T.Text
-  , pubkeyN :: Natural
-  , pubkeyE :: Natural
+  , pubkeyN :: BigEndian
+  , pubkeyE :: BigEndian
   }
   deriving (Show, Eq, Ord, Generic)
 
