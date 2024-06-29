@@ -174,8 +174,6 @@ parseJWT raw = Bi.first (("Error during parsing token (" <> BS8.unpack raw <> ")
       pure RawJWTToken {..}
     _ -> Left "Invalid JWT String"
 
---- >>> parseJWT "eyJhbGciOiJSUzI1NiIsImtpZCI6IjExM2QzMGE0MDVlOGM2YjliYTYzMDQ5MGRiYzhiYzc4ZGQwZjM5YTgyYzFkMzM1YjRmMmM4YjFiZGFkYmQzN2QifQ.eyJhdWQiOlsiYzFlZDJjMmUzNGI3MTZhYzhkNDNiMTkyZTNjOTYwZTkxMzQ4Njc1MGNjZjZhYWNhOWVhOGVjOWY5ODkwODllZCJdLCJlbWFpbCI6Imtvbm4uamlucm9AZ21haWwuY29tIiwiZXhwIjoxNzE5NjY3MDA5LCJpYXQiOjE3MTkwNjIyMDksIm5iZiI6MTcxOTA2MjIwOSwiaXNzIjoiaHR0cHM6Ly9rb25uLXNhbi5jbG91ZGZsYXJlYWNjZXNzLmNvbSIsInR5cGUiOiJhcHAiLCJpZGVudGl0eV9ub25jZSI6Ik1YeTZhazd3ZmRBd29Pd2MiLCJzdWIiOiJhZWYzZjY5OS02ZWUxLTVkZDUtOWFkMi00ODBjNDlhODU0ZDQiLCJjb3VudHJ5IjoiSlAifQ.g81Zg1_gkAS0qG_mV4PaihiEE2eu5T31967xKDo_OElHOCfNjUO5IaovZilCDhGnG7vXma6a-bF_ZeO7hBnj6iOiOETLF1cFFG8PkfyqSijy5jOL8DlpB7HUC2UKX0p1qkLbKmlkMQTg9Ix-SsbPhNcF7BrLELdThBSBYg6Y1En5VOV48DuD5F166a_Vx3V5jIYtZDuBIk5glt4Fx-Ot_M4AP-9QmnWr3LQqw-fJM_PU0Gy8hF6LE_LGd4pruc00ACYtaGSky2xL_5uav0tfAnUkQDpGkSlYzAPKbNnkSstMKyhXPajYQT0N6cLX-yOCScP93JSasfG4knL7BRav4A"
-
 decodeB64Pad :: BS8.ByteString -> Either String Signature
 decodeB64Pad = B64.decode . pad
   where
