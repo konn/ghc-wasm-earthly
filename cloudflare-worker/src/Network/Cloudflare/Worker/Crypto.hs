@@ -1,25 +1,36 @@
 {-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
+{- | Bindings to the Crypto API available in Cloudflare Workers
+and some utilities to verify Cloudflare Zero Trust JWT.
+-}
 module Network.Cloudflare.Worker.Crypto (
   JSObject (..),
-  verifyRS256,
-  crypto,
   subtleCrypto,
   randomUUID,
+  getCloudflarePublicKeys,
+  verifyRS256,
+  crypto,
   CloudflarePubKey (..),
 ) where
 
+import Control.Arrow ((&&&))
+import Control.Exception.Safe (throwString)
 import Data.Aeson (FromJSON (..))
 import Data.Aeson qualified as J
-import Data.Bits (shiftR)
+import Data.Aeson.Parser qualified as AA
+import Data.Attoparsec.ByteString.Streaming qualified as AQ
+import Data.Bitraversable (bitraverse)
 import Data.ByteString qualified as BS
 import Data.ByteString.Base64 qualified as B64
 import Data.ByteString.Builder qualified as BB
 import Data.ByteString.Lazy qualified as LBS
 import Data.Functor.Const (Const (..))
-import Data.Monoid (Dual (..))
+import Data.Map.Strict (Map)
+import Data.Map.Strict qualified as Map
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
 import Data.Vector qualified as V
@@ -32,7 +43,11 @@ import GHC.Wasm.Prim
 import GHC.Wasm.Web.Generated.AlgorithmIdentifier (AlgorithmIdentifier)
 import GHC.Wasm.Web.Generated.Crypto
 import GHC.Wasm.Web.Generated.CryptoKey (CryptoKey)
+import GHC.Wasm.Web.Generated.Response qualified as Resp
 import GHC.Wasm.Web.Generated.SubtleCrypto (SubtleCrypto, js_fun_importKey_KeyFormat_object_AlgorithmIdentifier_boolean_sequence_KeyUsage_Promise_any, js_fun_verify_AlgorithmIdentifier_CryptoKey_BufferSource_BufferSource_Promise_any)
+import GHC.Wasm.Web.ReadableStream (fromReadableStream)
+import Network.Cloudflare.Worker.FetchAPI qualified as Fetch
+import Streaming.ByteString qualified as Q
 
 foreign import javascript unsafe "crypto.subtle"
   subtleCrypto :: SubtleCrypto
@@ -84,6 +99,7 @@ data CloudflarePubKey = CloudflarePubKey
 
 data CloudflareCerts = CloudflareCerts {keys :: [CloudflarePubKey]}
   deriving (Show, Eq, Ord, Generic)
+  deriving anyclass (FromJSON)
 
 newtype BigEndian = BigEndian {rawNatural :: Natural}
   deriving (Show, Eq, Ord, Generic)
@@ -126,3 +142,22 @@ instance J.ToJSON CloudflarePubKey where
       , "n" J..= BigEndian pubkeyN
       , "e" J..= BigEndian pubkeyE
       ]
+
+type TeamName = String
+
+getCloudflarePublicKeys :: TeamName -> IO (Map T.Text CloudflarePubKey)
+getCloudflarePublicKeys team = do
+  rsp <-
+    await
+      =<< Fetch.get ("https://" <> team <> ".cloudflareaccess.com/cdn-cgi/access/certs")
+  (val, ()) <-
+    bitraverse (either (throwString . show) pure) Q.effects
+      =<< maybe
+        (throwString "Empty Body returned for Cloudflare certs!")
+        (AQ.parse AA.json' . fromReadableStream)
+        . fromNullable
+      =<< Resp.js_get_body rsp
+  case J.fromJSON val of
+    J.Error e -> throwString $ "Error during parsing cf keys: " <> e
+    J.Success CloudflareCerts {..} ->
+      pure $ Map.fromList $ map (keyId &&& id) keys

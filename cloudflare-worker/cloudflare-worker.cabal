@@ -51,12 +51,15 @@ library
   import: defaults
   build-depends:
     aeson,
+    attoparsec-aeson,
     base64-bytestring,
     bytestring,
     containers,
     ghc-wasm-jsobjects,
+    safe-exceptions,
     steward-core,
     streaming,
+    streaming-attoparsec,
     streaming-bytestring,
     text,
     transformers,
