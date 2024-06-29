@@ -165,13 +165,14 @@ verifyTimestamps now pay = do
 parseJWT :: BS.ByteString -> Either String RawJWTToken
 parseJWT raw = Bi.first (("Error during parsing token (" <> BS8.unpack raw <> "):") <>) $
   case BS8.split '.' raw of
-    [header, payload, signature] -> do
+    [header, payload, sigB64] -> do
       decodedHeader <-
         Bi.first ("Invalid Header (Base65): " <>) $ decodeB64Pad header
       Bi.first ("Invalid Header: " <>) $ validateRawJSON decodedHeader
       decodedPayload <-
         Bi.first ("Invalid payload (Base64): " <>) (decodeB64Pad payload)
       Bi.first ("Invalid Payload: " <>) $ validateRawJSON decodedPayload
+      signature <- decodeB64Pad sigB64
 
       pure RawJWTToken {..}
     _ -> Left "Invalid JWT String"
