@@ -1,6 +1,8 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
@@ -8,31 +10,49 @@
 and some utilities to verify Cloudflare Zero Trust JWT.
 -}
 module Network.Cloudflare.Worker.Crypto (
-  JSObject (..),
+  -- * Binding to the standard Crypto-related APIs
+  crypto,
   subtleCrypto,
   randomUUID,
+
+  -- * Combinators for verifying JWT provided by Cloudflare Zero Trust
   getCloudflarePublicKeys,
-  verifyRS256,
-  crypto,
   CloudflarePubKey (..),
+  CloudflarePubKeys,
+  verifyCloudflareJWTAssertion,
+  CloudflareUser (..),
+
+  -- ** Low-level combinators
+  parseJWT,
+  JWTToken (..),
+  verifyJWT,
+  verifyRS256,
+
+  -- * Re-exports
+  JSObject (..),
 ) where
 
 import Control.Arrow ((&&&))
 import Control.Exception.Safe (throwString)
+import Control.Monad (unless, when)
 import Data.Aeson (FromJSON (..))
 import Data.Aeson qualified as J
 import Data.Aeson.Parser qualified as AA
 import Data.Attoparsec.ByteString.Streaming qualified as AQ
+import Data.Bifunctor qualified as Bi
 import Data.Bitraversable (bitraverse)
 import Data.ByteString qualified as BS
 import Data.ByteString.Base64 qualified as B64
 import Data.ByteString.Builder qualified as BB
+import Data.ByteString.Char8 qualified as BS8
 import Data.ByteString.Lazy qualified as LBS
+import Data.CaseInsensitive qualified as CI
 import Data.Functor.Const (Const (..))
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
+import Data.Time.Clock.POSIX (POSIXTime)
 import Data.Vector qualified as V
 import Data.Word (Word8)
 import GHC.Generics (Generic)
@@ -47,19 +67,12 @@ import GHC.Wasm.Web.Generated.Response qualified as Resp
 import GHC.Wasm.Web.Generated.SubtleCrypto (SubtleCrypto, js_fun_importKey_KeyFormat_object_AlgorithmIdentifier_boolean_sequence_KeyUsage_Promise_any, js_fun_verify_AlgorithmIdentifier_CryptoKey_BufferSource_BufferSource_Promise_any)
 import GHC.Wasm.Web.ReadableStream (fromReadableStream)
 import Network.Cloudflare.Worker.FetchAPI qualified as Fetch
+import Network.Cloudflare.Worker.Request (WorkerRequest)
+import Network.Cloudflare.Worker.Request qualified as Req
 import Streaming.ByteString qualified as Q
-
-foreign import javascript unsafe "crypto.subtle"
-  subtleCrypto :: SubtleCrypto
-
-foreign import javascript unsafe "crypto"
-  crypto :: Crypto
 
 randomUUID :: IO String
 randomUUID = fromJSString . convertToJSString <$> js_fun_randomUUID__DOMString crypto
-
-foreign import javascript unsafe "{name: \"RSASSA-PKCS1-v1_5\", hash: \"SHA-256\"}"
-  rs256 :: AlgorithmIdentifier
 
 fromCloudflarePubKey :: CloudflarePubKey -> IO CryptoKey
 fromCloudflarePubKey pk = do
@@ -72,6 +85,109 @@ fromCloudflarePubKey pk = do
       rs256
       True
       (toSequence $ V.singleton $ toDOMString False $ toJSString "verify")
+
+data Alg = RS256
+  deriving (Show, Eq, Ord, Generic)
+  deriving anyclass (FromJSON, J.ToJSON)
+
+data TokenType = JWT
+  deriving (Show, Eq, Ord, Generic)
+  deriving anyclass (FromJSON, J.ToJSON)
+
+data RawJWTToken = RawJWTToken
+  { header :: RawTokenHeader
+  , payload :: RawTokenPayload
+  , signature :: Signature
+  }
+  deriving (Show, Eq, Ord, Generic)
+
+data JWTToken = JWTToken
+  { header :: AppTokenHeader
+  , payload :: AppTokenPayload
+  }
+  deriving (Show, Eq, Ord, Generic)
+
+type RawTokenHeader = BS.ByteString
+
+type RawTokenPayload = BS.ByteString
+
+verifyJWT ::
+  POSIXTime ->
+  Map T.Text CloudflarePubKey ->
+  RawJWTToken ->
+  Either String JWTToken
+verifyJWT now keys toks = do
+  header <-
+    Bi.first ("Invalid Header (JSON): " <>) $
+      J.eitherDecodeStrict' toks.header
+  payload <-
+    Bi.first ("Invalid Payload (JSON): " <>) $
+      J.eitherDecodeStrict' toks.header
+  key <-
+    maybe (Left $ "Key not found: " <> T.unpack header.kid) pure $
+      Map.lookup header.kid keys
+  let msg = B64.encode toks.header <> "." <> B64.encode toks.payload
+  unless (verifyRS256 key toks.signature msg) $
+    Left "Invalid signature"
+  verifyTimestamps now payload
+  pure JWTToken {..}
+
+verifyTimestamps :: POSIXTime -> AppTokenPayload -> Either String ()
+verifyTimestamps now pay = do
+  when (now < pay.iat) do
+    Left "Token issued in the future"
+  when (now > pay.exp) do
+    Left "Token expired"
+  when (now < pay.nbf) do
+    Left "Token not yet valid"
+
+parseJWT :: BS.ByteString -> Either String RawJWTToken
+parseJWT raw =
+  case BS8.split '.' raw of
+    [hdr, pay, sig] -> do
+      header <-
+        Bi.first ("Invalid Header (Base65): " <>) $ B64.decode hdr
+      Bi.first ("Invalid Header: " <>) $ validateRawJSON header
+      payload <-
+        Bi.first ("Invalid payload (Base64): " <>) (B64.decode pay)
+      Bi.first ("Invalid Payload: " <>) $ validateRawJSON payload
+      signature <- Bi.first ("Invalid signature Base64: " <>) $ B64.decode sig
+
+      pure RawJWTToken {..}
+    _ -> Left "Invalid JWT String"
+
+validateRawJSON :: BS.ByteString -> Either String ()
+validateRawJSON raw =
+  if BS8.any (`elem` ("\r\n\t " :: [Char])) raw
+    then Right ()
+    else Left "JSON contains whitespaces"
+
+data AppTokenHeader = AppTokenHeader {alg :: !Alg, kid :: !T.Text, typ :: !TokenType}
+  deriving (Show, Eq, Ord, Generic)
+  deriving (J.FromJSON, J.ToJSON)
+
+data AppTokenPayload = AppTokenPayload
+  { aud :: ![T.Text]
+  , email :: !T.Text
+  , exp :: !POSIXTime
+  , iat :: !POSIXTime
+  , nbf :: !POSIXTime
+  , iss :: !T.Text
+  , type_ :: !T.Text
+  , identity_nonce :: !T.Text
+  , sub :: !T.Text
+  , country :: !T.Text
+  }
+  deriving (Show, Eq, Ord, Generic)
+
+appTokenOpts :: J.Options
+appTokenOpts = J.defaultOptions {J.fieldLabelModifier = T.unpack . T.dropWhileEnd (== '_') . T.pack}
+
+instance J.FromJSON AppTokenPayload where
+  parseJSON = J.genericParseJSON appTokenOpts
+
+instance J.ToJSON AppTokenPayload where
+  toJSON = J.genericToJSON appTokenOpts
 
 type Signature = BS.ByteString
 
@@ -115,7 +231,7 @@ instance FromJSON CloudflarePubKey where
   parseJSON = J.withObject "JWK" \dic -> do
     keyId <- dic J..: "kid"
     "RSA" :: T.Text <- dic J..: "kty"
-    "RS256" :: T.Text <- dic J..: "alg"
+    RS256 <- dic J..: "alg"
     "sig" :: T.Text <- dic J..: "use"
     BigEndian pubkeyN <- dic J..: "n"
     BigEndian pubkeyE <- dic J..: "e"
@@ -145,7 +261,39 @@ instance J.ToJSON CloudflarePubKey where
 
 type TeamName = String
 
-getCloudflarePublicKeys :: TeamName -> IO (Map T.Text CloudflarePubKey)
+data CloudflareUser = CloudflareUser {email :: T.Text, country :: T.Text}
+  deriving (Show, Eq, Ord, Generic)
+  deriving anyclass (FromJSON, J.ToJSON)
+
+type CloudflareAudienceID = T.Text
+
+verifyCloudflareJWTAssertion ::
+  POSIXTime ->
+  CloudflareAudienceID ->
+  CloudflarePubKeys ->
+  WorkerRequest ->
+  Either String CloudflareUser
+verifyCloudflareJWTAssertion now aud keys req = do
+  let hdrName = "Cf-Access-Jwt-Assertion"
+  val <-
+    maybe (Left $ "No " <> BS8.unpack hdrName <> " header given") Right $
+      lookup (CI.mk hdrName) $
+        map (Bi.first CI.mk) $
+          Req.getHeaders req
+  parsed <- parseJWT val
+  tok <- verifyJWT now keys parsed
+  if aud `elem` tok.payload.aud
+    then
+      pure
+        CloudflareUser
+          { email = tok.payload.email
+          , country = tok.payload.country
+          }
+    else Left "Invalid Audience"
+
+type CloudflarePubKeys = Map T.Text CloudflarePubKey
+
+getCloudflarePublicKeys :: TeamName -> IO CloudflarePubKeys
 getCloudflarePublicKeys team = do
   rsp <-
     await
@@ -161,3 +309,12 @@ getCloudflarePublicKeys team = do
     J.Error e -> throwString $ "Error during parsing cf keys: " <> e
     J.Success CloudflareCerts {..} ->
       pure $ Map.fromList $ map (keyId &&& id) keys
+
+foreign import javascript unsafe "crypto.subtle"
+  subtleCrypto :: SubtleCrypto
+
+foreign import javascript unsafe "crypto"
+  crypto :: Crypto
+
+foreign import javascript unsafe "{name: \"RSASSA-PKCS1-v1_5\", hash: \"SHA-256\"}"
+  rs256 :: AlgorithmIdentifier
