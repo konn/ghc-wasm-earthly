@@ -147,7 +147,7 @@ verifyJWT now keys toks = do
   key <-
     maybe (Left $ "Key not found: " <> T.unpack header.kid) pure $
       Map.lookup header.kid keys
-  let msg = B64.encode toks.header <> "." <> B64.encode toks.payload
+  let msg = toks.header <> "." <> toks.payload
   unless (verifyRS256 key toks.signature msg) $
     Left "Invalid signature"
   verifyTimestamps now payload
