@@ -38,12 +38,11 @@ requestWith :: Method -> String -> Maybe (Q.ByteStream IO ()) -> IO (Promise Res
 requestWith meth uri mbody = do
   rs <- mapM toReadableStream mbody
   methStr <- fromHaskellByteString meth
-  reqInfo <-
-    reflectDictionary $
-      newDictionary @RequestInitFields
-        ( setPartialField "method" (nonNull methStr)
-            PL.. setPartialField "body" (nonNull $ toNullable $ inject <$> rs)
-        )
+  let reqInfo =
+        newDictionary @RequestInitFields
+          ( setPartialField "method" (nonNull methStr)
+              PL.. setPartialField "body" (nonNull $ toNullable $ inject <$> rs)
+          )
   js_cf_fetch_raw (uriToReqInfo uri) $ nonNull reqInfo
 
 post :: String -> Q.ByteStream IO () -> IO (Promise ResponseClass)

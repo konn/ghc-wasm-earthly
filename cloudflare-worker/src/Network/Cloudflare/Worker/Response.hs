@@ -98,17 +98,16 @@ newResponse :: SimpleResponseInit -> IO WorkerResponse
 newResponse resp = do
   headers <- toHeaders resp.headers
   empty <- emptyObject
-  newResponse' (Just resp.body) . Just
-    =<< reflectDictionary do
-      newDictionary
-        ( setPartialField "status" (toJSPrim resp.status)
-            PL.. setPartialField
-              "statusText"
-              (fromJust $ toJSByteString $ toJSString $ BS8.unpack resp.statusText)
-            PL.. setPartialField "headers" (inject headers)
-            PL.. setPartialField "cf" empty
-            PL.. setPartialField "encodeBody" (fromJust $ toJSByteString $ toJSString "automatic")
-        )
+  newResponse' (Just resp.body) . Just $
+    newDictionary
+      ( setPartialField "status" (toJSPrim resp.status)
+          PL.. setPartialField
+            "statusText"
+            (fromJust $ toJSByteString $ toJSString $ BS8.unpack resp.statusText)
+          PL.. setPartialField "headers" (inject headers)
+          PL.. setPartialField "cf" empty
+          PL.. setPartialField "encodeBody" (fromJust $ toJSByteString $ toJSString "automatic")
+      )
 
 newResponse' :: Maybe T.Text -> Maybe WorkerResponseInit -> IO WorkerResponse
 newResponse' mbody minit =

@@ -116,16 +116,15 @@ eitherResult (J.Success a) = Right a
 eitherResult (J.Error e) = Left e
 
 fromListKey :: ListKeys -> JSListKeyInit
-fromListKey ListKeys {..} = unsafePerformIO $ do
+fromListKey ListKeys {..} =
   let prefix' = toUSVString . toJSString <$> prefix
-  let limit' = toJSPrim <$> limit
-  let cursor' = toUSVString . toJSString . (.cursor) <$> cursor
-  reflectDictionary $
-    newDictionary
-      ( setPartialField "cursor" (toNullable cursor')
-          PL.. setPartialField "prefix" (toNullable prefix')
-          PL.. setPartialField "limit" (toNullable limit')
-      )
+      limit' = toJSPrim <$> limit
+      cursor' = toUSVString . toJSString . (.cursor) <$> cursor
+   in newDictionary
+        ( setPartialField "cursor" (toNullable cursor')
+            PL.. setPartialField "prefix" (toNullable prefix')
+            PL.. setPartialField "limit" (toNullable limit')
+        )
 
 foreign import javascript safe "$1.list($2)"
   js_kv_list :: KV -> JSListKeyInit -> IO (Promise JSONClass)
