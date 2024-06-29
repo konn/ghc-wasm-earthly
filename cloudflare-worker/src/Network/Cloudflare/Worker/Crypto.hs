@@ -74,16 +74,16 @@ randomUUID :: IO String
 randomUUID = fromJSString . convertToJSString <$> js_fun_randomUUID__DOMString crypto
 
 fromCloudflarePubKey :: CloudflarePubKey -> IO CryptoKey
-fromCloudflarePubKey pk = do
-  jwk <- fromHaskellByteString $ LBS.toStrict $ J.encode pk
-  fmap unsafeCast . await
-    =<< js_fun_importKey_KeyFormat_object_AlgorithmIdentifier_boolean_sequence_KeyUsage_Promise_any
-      subtleCrypto
-      (toDOMString False $ toJSString "jwk")
-      (upcast jwk)
-      rs256
-      True
-      (toSequence $ V.singleton $ toDOMString False $ toJSString "verify")
+fromCloudflarePubKey pk =
+  useByteStringAsJSByteArray @Word8 (LBS.toStrict $ J.encode pk) \jwk -> do
+    fmap unsafeCast . await
+      =<< js_fun_importKey_KeyFormat_object_AlgorithmIdentifier_boolean_sequence_KeyUsage_Promise_any
+        subtleCrypto
+        (toDOMString False $ toJSString "jwk")
+        (upcast jwk)
+        rs256
+        True
+        (toSequence $ V.singleton $ toDOMString False $ toJSString "verify")
 
 data Alg = RS256
   deriving (Show, Eq, Ord, Generic)
