@@ -18,6 +18,7 @@ module Network.Cloudflare.Worker.Binding.KV (
   listKeys,
   ListKeys (..),
   ListKeyResult (..),
+  Key (..),
   get,
   getWithMetadata,
   ValueWithMetadata (..),
