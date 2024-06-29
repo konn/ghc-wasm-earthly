@@ -234,7 +234,7 @@ newtype BigEndian = BigEndian {rawNatural :: Natural}
 
 instance FromJSON BigEndian where
   parseJSON = J.withText "BigEndian" \txt -> do
-    !raw <- either (fail . ("BigEndian: " <>)) pure $ B64.decode $ TE.encodeUtf8 txt
+    !raw <- either (fail . (("BigEndian(" <> T.unpack txt <> ")") <>)) pure $ B64.decode $ TE.encodeUtf8 txt
     let !n = BS.foldl' (\acc x -> acc * 256 + fromIntegral x) 0 raw
     pure $ BigEndian n
 
