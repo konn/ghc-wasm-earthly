@@ -1,0 +1,4 @@
+:set prompt      "\n[%s]\nghci> "
+:set prompt2     "ghci| "
+:set prompt-cont "ghci| "
+:seti -XLambdaCase -XOverloadedStrings -XGHC2021

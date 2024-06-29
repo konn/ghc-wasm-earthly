@@ -11,3 +11,5 @@ targets:
 - Request
 - Response
 - WebSocket
+- Crypto
+- SubtleCrypto

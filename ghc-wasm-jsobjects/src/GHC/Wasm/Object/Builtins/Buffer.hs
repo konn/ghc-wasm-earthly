@@ -26,6 +26,7 @@ module GHC.Wasm.Object.Builtins.Buffer (
   JSByteArray,
   byteArrayElementLength,
   byteArrayByteLength,
+  useByteStringAsJSByteArray,
   usePrimArrayAsJSByteArray,
   usePrimVectorAsJSByteArray,
   toPrimArray,
@@ -41,7 +42,7 @@ module GHC.Wasm.Object.Builtins.Buffer (
   BigUint64Array,
   Float32Array,
   Float64Array,
-  JSByteArrayElement (),
+  JSByteArrayElement (..),
 
   -- * DataView
   DataViewClass,
@@ -79,12 +80,12 @@ module GHC.Wasm.Object.Builtins.Buffer (
 ) where
 
 import Control.Arrow ((>>>))
-import Control.Monad.ST (ST)
 import Control.Monad.ST.Unsafe (unsafeIOToST)
 import Data.Array.Byte (ByteArray (..))
 import qualified Data.ByteString as BS
 import Data.ByteString.Short (ShortByteString (..))
 import qualified Data.ByteString.Short as BS
+import qualified Data.ByteString.Short as SBS
 import Data.Kind (Type)
 import Data.Primitive (PrimArray (..), copyPrimArray, copyPrimArrayToPtr, mutablePrimArrayContents, newPinnedPrimArray, newPrimArray, runPrimArray, sizeofPrimArray)
 import Data.Primitive.Types (Prim)
@@ -147,6 +148,15 @@ toPrimArray ba = runPrimArray do
 
 foreign import javascript unsafe "$1.set($2)"
   js_copy_into :: JSByteArray a -> JSByteArray a -> IO ()
+
+useByteStringAsJSByteArray ::
+  (JSByteArrayElement a) =>
+  BS.ByteString ->
+  (JSByteArray a -> IO r) ->
+  IO r
+useByteStringAsJSByteArray bs f =
+  case SBS.toShort bs of
+    SBS ba -> usePrimArrayAsJSByteArray (PrimArray ba) f
 
 usePrimArrayAsJSByteArray :: (JSByteArrayElement a) => PrimArray a -> (JSByteArray a -> IO b) -> IO b
 usePrimArrayAsJSByteArray parr act = do

@@ -7,10 +7,6 @@
 
 module GHC.Wasm.Object.Builtins (
   module GHC.Wasm.Object.Core,
-  PromiseClass,
-  Promise,
-  upcastPromise,
-  await,
   module GHC.Wasm.Object.Builtins.Array,
   module GHC.Wasm.Object.Builtins.BigInt,
   module GHC.Wasm.Object.Builtins.Buffer,
@@ -23,7 +19,6 @@ module GHC.Wasm.Object.Builtins (
   module GHC.Wasm.Object.Builtins.String,
 ) where
 
-import GHC.Exts (UnliftedType)
 import GHC.Wasm.Object.Builtins.Array
 import GHC.Wasm.Object.Builtins.AsyncIterable
 import GHC.Wasm.Object.Builtins.BigInt
