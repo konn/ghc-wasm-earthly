@@ -197,8 +197,8 @@ type family Keys fs where
 
 type family RequiredKeys fs where
   RequiredKeys '[] = '[]
-  RequiredKeys ('(f, NullableClass v) ': fs) = Keys fs
-  RequiredKeys ('(f, v) ': fs) = f ': Keys fs
+  RequiredKeys ('(f, NullableClass v) ': fs) = RequiredKeys fs
+  RequiredKeys ('(f, v) ': fs) = f ': RequiredKeys fs
 
 newDictionary ::
   forall fs.
