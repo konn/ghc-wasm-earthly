@@ -195,10 +195,15 @@ type family Keys fs where
   Keys '[] = '[]
   Keys ('(f, v) ': fs) = f ': Keys fs
 
+type family NonNullableKeys fs where
+  NonNullableKeys '[] = '[]
+  NonNullableKeys ('(f, NullableClass v) ': fs) = Keys fs
+  NonNullableKeys ('(f, v) ': fs) = f ': Keys fs
+
 newDictionary ::
   forall fs.
   (KnownFields fs) =>
-  (PartialDictionary fs (Keys fs) %1 -> PartialDictionary fs '[]) %1 ->
+  (PartialDictionary fs (NonNullableKeys fs) %1 -> PartialDictionary fs '[]) %1 ->
   ReifiedDictionary fs
 {-# INLINE newDictionary #-}
 newDictionary = Unsafe.toLinear \k -> unsafeDupablePerformIO do
