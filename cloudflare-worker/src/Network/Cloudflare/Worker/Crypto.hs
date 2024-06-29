@@ -154,7 +154,7 @@ verifyTimestamps now pay = do
     Left "Token not yet valid"
 
 parseJWT :: BS.ByteString -> Either String RawJWTToken
-parseJWT raw =
+parseJWT raw = Bi.first (("Error during parsing token (" <> BS8.unpack raw <> "):") <>) $
   case BS8.split '.' raw of
     [hdr, pay, sig] -> do
       header <-
