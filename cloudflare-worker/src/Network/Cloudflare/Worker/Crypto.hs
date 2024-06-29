@@ -47,7 +47,6 @@ import Data.Bitraversable (bitraverse)
 import Data.ByteString qualified as BS
 import Data.ByteString.Base64 qualified as B64
 import Data.ByteString.Char8 qualified as BS8
-import Data.ByteString.Lazy qualified as LBS
 import Data.CaseInsensitive qualified as CI
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
@@ -62,6 +61,7 @@ import GHC.Wasm.Prim
 import GHC.Wasm.Web.Generated.AlgorithmIdentifier (AlgorithmIdentifier)
 import GHC.Wasm.Web.Generated.Crypto
 import GHC.Wasm.Web.Generated.CryptoKey (CryptoKey)
+import GHC.Wasm.Web.Generated.JsonWebKey (JsonWebKey)
 import GHC.Wasm.Web.Generated.Response qualified as Resp
 import GHC.Wasm.Web.Generated.SubtleCrypto (SubtleCrypto, js_fun_importKey_KeyFormat_object_AlgorithmIdentifier_boolean_sequence_KeyUsage_Promise_any, js_fun_verify_AlgorithmIdentifier_CryptoKey_BufferSource_BufferSource_Promise_any)
 import GHC.Wasm.Web.ReadableStream (fromReadableStream)
@@ -69,21 +69,30 @@ import Network.Cloudflare.Worker.FetchAPI qualified as Fetch
 import Network.Cloudflare.Worker.Request (WorkerRequest)
 import Network.Cloudflare.Worker.Request qualified as Req
 import Streaming.ByteString qualified as Q
+import Wasm.Data.Function.Linear qualified as PL
 
 randomUUID :: IO String
 randomUUID = fromJSString . convertToJSString <$> js_fun_randomUUID__DOMString crypto
 
 fromCloudflarePubKey :: CloudflarePubKey -> IO CryptoKey
-fromCloudflarePubKey pk =
-  useByteStringAsJSByteArray @Word8 (LBS.toStrict $ J.encode pk) \jwk -> do
-    fmap unsafeCast . await
-      =<< js_fun_importKey_KeyFormat_object_AlgorithmIdentifier_boolean_sequence_KeyUsage_Promise_any
-        subtleCrypto
-        (toDOMString False $ toJSString "jwk")
-        (upcast jwk)
-        rs256
-        True
-        (toSequence $ V.singleton $ toDOMString False $ toJSString "verify")
+fromCloudflarePubKey pk = do
+  let jwk = toJWK pk
+  fmap unsafeCast . await
+    =<< js_fun_importKey_KeyFormat_object_AlgorithmIdentifier_boolean_sequence_KeyUsage_Promise_any
+      subtleCrypto
+      (toDOMString False $ toJSString "jwk")
+      (upcast jwk)
+      rs256
+      True
+      (toSequence $ V.singleton $ toDOMString False $ toJSString "verify")
+
+toJWK :: CloudflarePubKey -> JsonWebKey
+toJWK pk =
+  newDictionary
+    ( setPartialField "n" (nonNull $ toDOMString False $ toJSString $ T.unpack $ pk.pubkeyN.rawBE)
+        PL.. setPartialField "e" (nonNull $ toDOMString False $ toJSString $ T.unpack $ pk.pubkeyE.rawBE)
+        PL.. setPartialField "kty" (toDOMString False $ toJSString "RSA")
+    )
 
 data Alg = RS256
   deriving (Show, Eq, Ord, Generic)
@@ -237,7 +246,7 @@ data CloudflareCerts = CloudflareCerts {keys :: [CloudflarePubKey]}
   deriving (Show, Eq, Ord, Generic)
   deriving anyclass (FromJSON)
 
-newtype BigEndian = BigEndian T.Text
+newtype BigEndian = BigEndian {rawBE :: T.Text}
   deriving (Show, Eq, Ord, Generic)
   deriving newtype (FromJSON, J.ToJSON)
 
