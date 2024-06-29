@@ -145,7 +145,7 @@ verifyJWT now keys toks = do
   key <-
     maybe (Left $ "Key not found: " <> T.unpack header.kid) pure $
       Map.lookup header.kid keys
-  let msg = encodeB64NoPad toks.header <> "." <> encodeB64NoPad toks.payload
+  let msg = B64.encode toks.header <> "." <> B64.encode toks.payload
   unless (verifyRS256 key toks.signature msg) $
     Left "Invalid signature"
   verifyTimestamps now payload
@@ -163,13 +163,13 @@ verifyTimestamps now pay = do
 parseJWT :: BS.ByteString -> Either String RawJWTToken
 parseJWT raw = Bi.first (("Error during parsing token (" <> BS8.unpack raw <> "):") <>) $
   case BS8.split '.' raw of
-    [hdr, pay, signature] -> do
-      header <-
+    [header, payload, signature] -> do
+      hdr <-
         Bi.first ("Invalid Header (Base65): " <>) $ decodeB64Pad hdr
-      Bi.first ("Invalid Header: " <>) $ validateRawJSON header
-      payload <-
+      Bi.first ("Invalid Header: " <>) $ validateRawJSON hdr
+      pay <-
         Bi.first ("Invalid payload (Base64): " <>) (decodeB64Pad pay)
-      Bi.first ("Invalid Payload: " <>) $ validateRawJSON payload
+      Bi.first ("Invalid Payload: " <>) $ validateRawJSON pay
 
       pure RawJWTToken {..}
     _ -> Left "Invalid JWT String"
