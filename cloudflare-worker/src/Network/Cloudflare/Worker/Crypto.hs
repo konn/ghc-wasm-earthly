@@ -46,15 +46,12 @@ import Data.Bifunctor qualified as Bi
 import Data.Bitraversable (bitraverse)
 import Data.ByteString qualified as BS
 import Data.ByteString.Base64 qualified as B64
-import Data.ByteString.Builder qualified as BB
 import Data.ByteString.Char8 qualified as BS8
 import Data.ByteString.Lazy qualified as LBS
 import Data.CaseInsensitive qualified as CI
-import Data.Functor.Const (Const (..))
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Text qualified as T
-import Data.Text.Encoding qualified as TE
 import Data.Time.Clock.POSIX (POSIXTime)
 import Data.Vector qualified as V
 import Data.Word (Word8)
@@ -229,14 +226,9 @@ data CloudflareCerts = CloudflareCerts {keys :: [CloudflarePubKey]}
   deriving (Show, Eq, Ord, Generic)
   deriving anyclass (FromJSON)
 
-newtype BigEndian = BigEndian {rawNatural :: Natural}
+newtype BigEndian = BigEndian T.Text
   deriving (Show, Eq, Ord, Generic)
-
-instance FromJSON BigEndian where
-  parseJSON = J.withText "BigEndian" \txt -> do
-    !raw <- either (fail . (("BigEndian(" <> T.unpack txt <> ")") <>)) pure $ B64.decode $ TE.encodeUtf8 txt
-    let !n = BS.foldl' (\acc x -> acc * 256 + fromIntegral x) 0 raw
-    pure $ BigEndian n
+  deriving newtype (FromJSON, J.ToJSON)
 
 -- | In JWK Format
 instance FromJSON CloudflarePubKey where
@@ -245,20 +237,9 @@ instance FromJSON CloudflarePubKey where
     "RSA" :: T.Text <- dic J..: "kty"
     RS256 <- dic J..: "alg"
     "sig" :: T.Text <- dic J..: "use"
-    BigEndian pubkeyN <- dic J..: "n"
-    BigEndian pubkeyE <- dic J..: "e"
+    pubkeyN <- dic J..: "n"
+    pubkeyE <- dic J..: "e"
     pure CloudflarePubKey {keyId, pubkeyN, pubkeyE}
-
-instance J.ToJSON BigEndian where
-  toJSON = J.toJSON . TE.decodeASCII . B64.encode . naturalBE . rawNatural
-
-naturalBE :: Natural -> BS.ByteString
-naturalBE = LBS.toStrict . BB.toLazyByteString . getConst . go
-  where
-    go 0 = pure ()
-    go n =
-      let (q, r) = n `quotRem` 256
-       in go q *> Const (BB.word8 $ fromIntegral r)
 
 instance J.ToJSON CloudflarePubKey where
   toJSON CloudflarePubKey {..} =
@@ -267,8 +248,8 @@ instance J.ToJSON CloudflarePubKey where
       , "kty" J..= ("RSA" :: T.Text)
       , "alg" J..= ("RS256" :: T.Text)
       , "use" J..= ("sig" :: T.Text)
-      , "n" J..= BigEndian pubkeyN
-      , "e" J..= BigEndian pubkeyE
+      , "n" J..= pubkeyN
+      , "e" J..= pubkeyE
       ]
 
 type TeamName = String
