@@ -30,10 +30,11 @@ import Data.Aeson (FromJSON, ToJSON, Value)
 import Data.Aeson qualified as J
 import Data.Bifunctor qualified as Bi
 import Data.Word (Word32)
-import GHC.Generics (Generic)
+import GHC.Generics (Generic, Generically (..))
 import GHC.Wasm.Object.Builtins
 import GHC.Wasm.Prim
 import GHC.Wasm.Web.JSON
+import Steward.Types (FromQueryParams, ToQueryParams)
 import System.IO.Unsafe (unsafePerformIO)
 import Wasm.Prelude.Linear qualified as PL
 
@@ -68,6 +69,7 @@ data ListKeys = ListKeys
   }
   deriving (Show, Eq, Ord, Generic)
   deriving anyclass (FromJSON, ToJSON)
+  deriving (FromQueryParams, ToQueryParams) via Generically ListKeys
 
 type JSListKeyInit =
   JSDictionary
