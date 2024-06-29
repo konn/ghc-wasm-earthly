@@ -2,6 +2,7 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -34,7 +35,7 @@ module Network.Cloudflare.Worker.Crypto (
   JSObject (..),
 ) where
 
-import Control.Arrow ((&&&))
+import Control.Arrow ((&&&), (>>>))
 import Control.Exception.Safe (throwString)
 import Control.Monad (unless, when)
 import Data.Aeson (FromJSON (..))
@@ -90,7 +91,16 @@ fromCloudflarePubKey pk = do
 
 data Alg = RS256
   deriving (Show, Eq, Ord, Generic)
-  deriving anyclass (FromJSON, J.ToJSON)
+
+instance J.FromJSON Alg where
+  parseJSON =
+    J.withText "Alg" $
+      CI.mk >>> \case
+        "RS256" -> pure RS256
+        _ -> fail "Invalid Alg"
+
+instance J.ToJSON Alg where
+  toJSON = J.toJSON . show
 
 data TokenType = JWT
   deriving (Show, Eq, Ord, Generic)
