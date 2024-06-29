@@ -20,7 +20,9 @@ module Network.Cloudflare.Worker.Binding.KV (
   ListKeyResult (..),
   get,
   getWithMetadata,
+  ValueWithMetadata (..),
   put,
+  PutOptions (..),
 ) where
 
 import Control.Monad (forM, void, (<=<))
