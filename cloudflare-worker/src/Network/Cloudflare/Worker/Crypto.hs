@@ -182,7 +182,7 @@ validateRawJSON raw =
     then Left "JSON contains whitespaces"
     else Right ()
 
-data AppTokenHeader = AppTokenHeader {alg :: !Alg, kid :: !T.Text, typ :: !TokenType}
+data AppTokenHeader = AppTokenHeader {alg :: !Alg, kid :: !T.Text}
   deriving (Show, Eq, Ord, Generic)
   deriving (J.FromJSON, J.ToJSON)
 
