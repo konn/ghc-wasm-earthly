@@ -5,6 +5,7 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE LinearTypes #-}
 {-# LANGUAGE OverloadedLabels #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeData #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -24,6 +25,7 @@ module Network.Cloudflare.Worker.Binding.KV (
   ValueWithMetadata (..),
   put,
   PutOptions (..),
+  Cursor (..),
 ) where
 
 import Control.Monad (forM, void, (<=<))
@@ -35,7 +37,7 @@ import GHC.Generics (Generic, Generically (..))
 import GHC.Wasm.Object.Builtins
 import GHC.Wasm.Prim
 import GHC.Wasm.Web.JSON
-import Steward.Types (FromQueryParams, ToQueryParams)
+import Steward.Types (FromQueryParamString, FromQueryParams, ToQueryParamString, ToQueryParams)
 import System.IO.Unsafe (unsafePerformIO)
 import Wasm.Prelude.Linear qualified as PL
 
@@ -66,11 +68,16 @@ foreign import javascript safe "$1.delete($2)"
 data ListKeys = ListKeys
   { prefix :: !(Maybe String)
   , limit :: !(Maybe Word32)
-  , cursor :: !(Maybe String)
+  , cursor :: !(Maybe Cursor)
   }
   deriving (Show, Eq, Ord, Generic)
   deriving anyclass (FromJSON, ToJSON)
   deriving (FromQueryParams, ToQueryParams) via Generically ListKeys
+
+newtype Cursor = Cursor {cursor :: String}
+  deriving (Show, Eq, Ord, Generic)
+  deriving newtype (FromJSON, ToJSON)
+  deriving newtype (FromQueryParamString, ToQueryParamString)
 
 type JSListKeyInit =
   JSDictionary
@@ -81,7 +88,7 @@ type JSListKeyInit =
 
 data ListKeyResult = ListKeyResult
   { keys :: ![Key]
-  , cursor :: !(Maybe String)
+  , cursor :: !(Maybe Cursor)
   , list_complete :: !Bool
   }
   deriving (Show, Eq, Ord, Generic)
@@ -112,7 +119,7 @@ fromListKey :: ListKeys -> JSListKeyInit
 fromListKey ListKeys {..} = unsafePerformIO $ do
   let prefix' = toUSVString . toJSString <$> prefix
   let limit' = toJSPrim <$> limit
-  let cursor' = toUSVString . toJSString <$> cursor
+  let cursor' = toUSVString . toJSString . (.cursor) <$> cursor
   reflectDictionary $
     newDictionary
       ( setPartialField "cursor" (toNullable cursor')
