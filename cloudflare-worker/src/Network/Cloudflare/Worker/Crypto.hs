@@ -130,7 +130,7 @@ verifyJWT now keys toks = do
       J.eitherDecodeStrict' toks.header
   payload <-
     Bi.first ("Invalid Payload (JSON): " <>) $
-      J.eitherDecodeStrict' toks.header
+      J.eitherDecodeStrict' toks.payload
   key <-
     maybe (Left $ "Key not found: " <> T.unpack header.kid) pure $
       Map.lookup header.kid keys
