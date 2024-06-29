@@ -6,6 +6,7 @@
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 {- | Bindings to the Crypto API available in Cloudflare Workers
 and some utilities to verify Cloudflare Zero Trust JWT.
@@ -35,6 +36,7 @@ module Network.Cloudflare.Worker.Crypto (
   JSObject (..),
 ) where
 
+import Control.Applicative ((<|>))
 import Control.Arrow ((&&&), (>>>))
 import Control.Exception.Safe (throwString)
 import Control.Monad (unless, when)
@@ -54,6 +56,7 @@ import Data.Text qualified as T
 import Data.Time.Clock.POSIX (POSIXTime)
 import Data.Vector qualified as V
 import Data.Word (Word8)
+import GHC.Exts (IsList)
 import GHC.Generics (Generic)
 import GHC.IO (unsafePerformIO)
 import GHC.Wasm.Object.Builtins
@@ -196,7 +199,7 @@ data AppTokenHeader = AppTokenHeader {alg :: !Alg, kid :: !T.Text}
   deriving (J.FromJSON, J.ToJSON)
 
 data AppTokenPayload = AppTokenPayload
-  { aud :: ![T.Text]
+  { aud :: !Audiences
   , email :: !T.Text
   , exp :: !POSIXTime
   , iat :: !POSIXTime
@@ -208,6 +211,18 @@ data AppTokenPayload = AppTokenPayload
   , country :: !T.Text
   }
   deriving (Show, Eq, Ord, Generic)
+
+newtype Audiences = Audiences {aud :: [T.Text]}
+  deriving (Show, Eq, Ord, Generic)
+  deriving newtype (IsList)
+
+instance FromJSON Audiences where
+  parseJSON obj =
+    Audiences <$> J.parseJSON obj
+      <|> Audiences . pure <$> J.parseJSON obj
+
+instance J.ToJSON Audiences where
+  toJSON (Audiences xs) = J.toJSON xs
 
 appTokenOpts :: J.Options
 appTokenOpts = J.defaultOptions {J.fieldLabelModifier = T.unpack . T.dropWhileEnd (== '_') . T.pack}
@@ -295,7 +310,7 @@ verifyCloudflareJWTAssertion now aud keys req = do
           Req.getHeaders req
   parsed <- parseJWT val
   tok <- verifyJWT now keys parsed
-  if aud `elem` tok.payload.aud
+  if aud `elem` tok.payload.aud.aud
     then
       pure
         CloudflareUser
