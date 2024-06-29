@@ -32,11 +32,14 @@ module GHC.Wasm.Object.Builtins.Dictionary (
   Member (),
   Lookup,
   Lookup',
-  emptyDictionary,
-  ReifiedDictionary (),
-  PartialDictionary (),
   newDictionary,
+  PartialDictionary,
   setPartialField,
+  emptyDictionary,
+  newReifiedDictionary,
+  ReifiedDictionary (),
+  PartialReifiedDictionary (),
+  setReifiedPartialField,
   setReifiedDictField,
   KnownFields,
   membership,
@@ -188,8 +191,11 @@ type family Lookup f fs where
   Lookup f ('(f, a) ': fs) = 'Just a
   Lookup f ('(g, a) ': fs) = Lookup f fs
 
+type PartialReifiedDictionary :: Fields -> [Symbol] -> Type
+newtype PartialReifiedDictionary fs gs = DB (MV.MVector MV.RealWorld JSAny)
+
 type PartialDictionary :: Fields -> [Symbol] -> Type
-newtype PartialDictionary fs gs = DB (MV.MVector MV.RealWorld JSAny)
+newtype PartialDictionary fs gs = PD (JSDictionary fs)
 
 type family Keys fs where
   Keys '[] = '[]
@@ -204,9 +210,36 @@ newDictionary ::
   forall fs.
   (KnownFields fs) =>
   (PartialDictionary fs (RequiredKeys fs) %1 -> PartialDictionary fs '[]) %1 ->
-  ReifiedDictionary fs
+  JSDictionary fs
 {-# INLINE newDictionary #-}
-newDictionary = Unsafe.toLinear \k -> unsafeDupablePerformIO do
+newDictionary f =
+  let !(PD dic) = f js_new_partial
+   in dic
+
+setPartialField ::
+  forall fs gs x.
+  forall f ->
+  (Member f fs, x ~~ Lookup' f fs) =>
+  JSObject x ->
+  PartialDictionary fs gs %1 ->
+  PartialDictionary fs (Delete f gs)
+setPartialField f val (PD obj) =
+  PD
+    (js_set_partial obj (toJSString (symbolVal' (proxy# @f))) (upcast val))
+
+foreign import javascript unsafe "$1[$2] = $3"
+  js_set_partial :: JSDictionary fs %1 -> JSString -> JSAny -> JSDictionary fs
+
+foreign import javascript unsafe "Object()"
+  js_new_partial :: PartialDictionary fs (RequiredKeys fs)
+
+newReifiedDictionary ::
+  forall fs.
+  (KnownFields fs) =>
+  (PartialReifiedDictionary fs (RequiredKeys fs) %1 -> PartialReifiedDictionary fs '[]) %1 ->
+  ReifiedDictionary fs
+{-# INLINE newReifiedDictionary #-}
+newReifiedDictionary = Unsafe.toLinear \k -> unsafeDupablePerformIO do
   v <- MV.new (sLen (proxy# @fs))
   DB v' <- evaluate $ k (DB v)
   ReifiedDictionary <$> V.unsafeFreeze v'
@@ -226,15 +259,15 @@ setReifiedDictField ::
 setReifiedDictField f x (ReifiedDictionary v) =
   ReifiedDictionary $ v & ix (getIndex $ membership @f @fs) .~ unsafeCast x
 
-setPartialField ::
+setReifiedPartialField ::
   forall fs gs x.
   forall f ->
   (Member f fs, x ~~ Lookup' f fs) =>
   JSObject x ->
-  PartialDictionary fs gs %1 ->
-  PartialDictionary fs (Delete f gs)
-{-# NOINLINE setPartialField #-}
-setPartialField f x =
+  PartialReifiedDictionary fs gs %1 ->
+  PartialReifiedDictionary fs (Delete f gs)
+{-# NOINLINE setReifiedPartialField #-}
+setReifiedPartialField f x =
   Unsafe.toLinear \(DB v) -> unsafeDupablePerformIO do
     () <- MV.write v (getIndex (membership @f @fs)) (unsafeCast x)
     pure $ DB v
