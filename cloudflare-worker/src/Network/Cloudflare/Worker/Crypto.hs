@@ -39,7 +39,7 @@ module Network.Cloudflare.Worker.Crypto (
 import Control.Applicative ((<|>))
 import Control.Arrow ((&&&), (>>>))
 import Control.Exception.Safe (throwString)
-import Control.Monad (unless, when)
+import Control.Monad (forM_, unless, when)
 import Data.Aeson (FromJSON (..))
 import Data.Aeson qualified as J
 import Data.Aeson.Parser qualified as AA
@@ -162,7 +162,7 @@ verifyTimestamps now pay = do
     Left "Token issued in the future"
   when (now > pay.exp) do
     Left "Token expired"
-  when (now < pay.nbf) do
+  forM_ pay.nbf \nbf -> when (now < nbf) do
     Left "Token not yet valid"
 
 parseJWT :: BS.ByteString -> Either String RawJWTToken
@@ -203,7 +203,7 @@ data AppTokenPayload = AppTokenPayload
   , email :: !(Maybe T.Text)
   , exp :: !POSIXTime
   , iat :: !POSIXTime
-  , nbf :: !POSIXTime
+  , nbf :: !(Maybe POSIXTime)
   , iss :: !T.Text
   , type_ :: !T.Text
   , identity_nonce :: !(Maybe T.Text)
