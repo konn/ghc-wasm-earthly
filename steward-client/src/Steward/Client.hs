@@ -17,6 +17,7 @@ module Steward.Client (
   ServiceToken (..),
 
   -- * Internal functions
+  addCloudflareAccessHeaders,
   toStewardResponse,
   fromStewardRequest,
   makeStewardRequest,
@@ -64,16 +65,18 @@ withCloudflareServiceTokenAuth ::
   ClientT m a ->
   ClientT m a
 withCloudflareServiceTokenAuth tok = do
-  withRequestModifier \req -> do
-    pure
-      req
-        { H.requestHeaders =
-            (cfClientIdHeader, tok.clientID)
-              : (cfClientSecretHeader, tok.clientSecret)
-              : List.filter
-                ((`notElem` [cfClientSecretHeader, cfClientIdHeader]) . fst)
-                (H.requestHeaders req)
-        }
+  withRequestModifier \req -> pure $ addCloudflareAccessHeaders tok req
+
+addCloudflareAccessHeaders :: ServiceToken -> Request -> Request
+addCloudflareAccessHeaders tok req =
+  req
+    { H.requestHeaders =
+        (cfClientIdHeader, tok.clientID)
+          : (cfClientSecretHeader, tok.clientSecret)
+          : List.filter
+            ((`notElem` [cfClientSecretHeader, cfClientIdHeader]) . fst)
+            (H.requestHeaders req)
+    }
   where
     cfClientIdHeader = "CF-Access-Client-Id"
     cfClientSecretHeader = "CF-Access-Client-Secret"
