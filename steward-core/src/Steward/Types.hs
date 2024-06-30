@@ -607,9 +607,9 @@ instance (ToJSON a, FromJSON a, Routable m t) => Routable m (JSONBody a /> t) wh
     case matchRoute' (proxy# @t) req xs of
       NoMatch -> NoMatch
       Failed e -> Failed e
-      Parsed f -> case J.decode req.body of
-        Nothing -> Failed "Failed to decode JSON body"
-        Just a -> Parsed \g -> f (g a)
+      Parsed f -> case J.eitherDecode req.body of
+        Left err -> Failed $ "Failed to decode JSON body: " <> err
+        Right a -> Parsed \g -> f (g a)
 
 type Verb :: StdMethod -> Nat -> ResponseType -> Type
 type data Verb method status responseType
