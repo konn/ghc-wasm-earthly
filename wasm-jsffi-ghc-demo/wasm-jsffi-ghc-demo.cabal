@@ -51,7 +51,7 @@ common defaults
 library
   import: defaults
   hs-source-dirs: src
-  -- cabal-gild: discover src
+  -- cabal-gild: discover src --include=src/**/*.hs
   exposed-modules: Development.Wasm.Demo.Console
 
 executable console-log

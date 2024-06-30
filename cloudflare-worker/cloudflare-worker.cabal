@@ -72,7 +72,7 @@ library
     web-sys-hs,
 
   hs-source-dirs: src
-  -- cabal-gild: discover src
+  -- cabal-gild: discover src --include=src/**/*.hs
   exposed-modules:
     Language.WASM.JSVal.Convert
     Network.Cloudflare.Worker

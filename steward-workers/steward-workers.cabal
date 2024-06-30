@@ -58,7 +58,7 @@ common defaults
 
 library
   import: defaults
-  -- cabal-gild: discover src
+  -- cabal-gild: discover src --include=src/**/*.hs
   exposed-modules: Steward.Workers
   hs-source-dirs: src
   build-depends:

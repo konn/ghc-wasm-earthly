@@ -58,7 +58,7 @@ library
     ghc-options:
       -fobject-code
       -fplugin=GHC.Wasm.FFI.Plugin
-  -- cabal-gild: discover src
+  -- cabal-gild: discover src --include=src/**/*.hs
   exposed-modules:
     GHC.Wasm.Web.Generated.AbortSignal
     GHC.Wasm.Web.Generated.AbortSignal.Core

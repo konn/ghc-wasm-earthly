@@ -42,7 +42,7 @@ common defaults
 
 library
   import: defaults
-  -- cabal-gild: discover src
+  -- cabal-gild: discover src --include=src/**/*.hs
   exposed-modules:
     GHC.Wasm.Object.Builtins
     GHC.Wasm.Object.Builtins.Array

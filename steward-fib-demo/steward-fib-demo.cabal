@@ -48,14 +48,14 @@ common defaults
 
 library
   import: defaults
-  -- cabal-gild: discover src
+  -- cabal-gild: discover src --include=src/**/*.hs
   exposed-modules: Steward.Demo.Fib.Types
   hs-source-dirs: src
 
 executable steward-fib-demo-worker
   import: defaults
   main-is: Main.hs
-  -- cabal-gild: discover app/worker --exclude=app/worker/Main.hs
+  -- cabal-gild: discover app/worker --exclude=app/worker/Main.hs --include=app/worker/**/*.hs
   other-modules:
   hs-source-dirs: app/worker
   build-depends:
@@ -92,7 +92,7 @@ executable steward-fib-demo-client
   if os(wasi)
     buildable: False
   main-is: Main.hs
-  -- cabal-gild: discover app/client --exclude=app/client/Main.hs
+  -- cabal-gild: discover app/client --exclude=app/client/Main.hs --include=app/client/**/*.hs
   other-modules:
   hs-source-dirs: app/client
   build-depends:

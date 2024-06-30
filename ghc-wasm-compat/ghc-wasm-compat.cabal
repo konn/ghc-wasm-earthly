@@ -25,9 +25,9 @@ library
       src-wasm-internal
       src-wasm
 
-    -- cabal-gild: discover src-wasm
+    -- cabal-gild: discover src-wasm --include=src-wasm/**/*.hs
     exposed-modules: GHC.Wasm.FFI.Plugin
-    -- cabal-gild: discover src-wasm-internal
+    -- cabal-gild: discover src-wasm-internal --include=src-wasm-internal/**/*.hs
     other-modules: GHC.Wasm.Compat.Flags
   else
     build-depends: syb
@@ -35,12 +35,12 @@ library
       src-compat
       src-compat-internal
 
-    -- cabal-gild: discover src-compat
+    -- cabal-gild: discover src-compat --include=src-compat/**/*.hs
     exposed-modules:
       GHC.Wasm.FFI.Plugin
       GHC.Wasm.Prim
 
-    -- cabal-gild: discover src-compat-internal
+    -- cabal-gild: discover src-compat-internal --include=src-compat-internal/**/*.hs
     other-modules: GHC.Wasm.Compat.Flags
 
   default-language: Haskell2010

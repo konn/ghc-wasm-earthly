@@ -42,7 +42,7 @@ common defaults
 
 library
   import: defaults
-  -- cabal-gild: discover src --exclude=src/**/Internal.hs
+  -- cabal-gild: discover src --exclude=src/**/Internal.hs --include=src/**/*.hs
   exposed-modules:
     Steward.Client
     Steward.Client.Effectful

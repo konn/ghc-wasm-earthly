@@ -52,7 +52,7 @@ library
     ghc-wasm-compat,
     vector,
 
-  -- cabal-gild: discover src
+  -- cabal-gild: discover src --include=src/**/*.hs
   exposed-modules:
     Wasm.Control.Functor.Linear
     Wasm.Data.Array.Destination
