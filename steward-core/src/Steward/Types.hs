@@ -72,6 +72,7 @@ import Data.Aeson qualified as J
 import Data.ByteString qualified as BS
 import Data.ByteString.Char8 qualified as BS8
 import Data.ByteString.Lazy qualified as LBS
+import Data.ByteString.Lazy.Char8 qualified as LBS8
 import Data.CaseInsensitive qualified as CI
 import Data.DList (DList)
 import Data.DList qualified as DL
@@ -608,7 +609,7 @@ instance (ToJSON a, FromJSON a, Routable m t) => Routable m (JSONBody a /> t) wh
       NoMatch -> NoMatch
       Failed e -> Failed e
       Parsed f -> case J.eitherDecode req.body of
-        Left err -> Failed $ "Failed to decode JSON body: " <> err
+        Left err -> Failed $ "Failed to decode JSON body(" <> LBS8.unpack req.body <> "): " <> err
         Right a -> Parsed \g -> f (g a)
 
 type Verb :: StdMethod -> Nat -> ResponseType -> Type
