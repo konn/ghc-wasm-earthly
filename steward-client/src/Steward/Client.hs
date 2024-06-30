@@ -14,6 +14,7 @@ module Steward.Client (
   ClientEnv (..),
   withRequestModifier,
   withCloudflareServiceTokenAuth,
+  ServiceToken (..),
 
   -- * Internal functions
   toStewardResponse,
