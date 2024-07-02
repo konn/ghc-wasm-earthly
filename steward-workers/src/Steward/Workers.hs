@@ -47,6 +47,7 @@ import Data.CaseInsensitive qualified as CI
 import Data.Map.Strict qualified as Map
 import Data.Maybe (fromJust)
 import Data.String (fromString)
+import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
 import Data.Text.Lazy qualified as LT
 import Data.Text.Lazy.Encoding qualified as LTE
@@ -182,7 +183,7 @@ data WorkersException = InvalidMethod BS8.ByteString
 
 toStewardRequest :: (IOE :> es) => WorkerRequest -> Eff es StewardRequest
 toStewardRequest req = do
-  let uri = fromJust $ parseURI $ fromJSString $ Req.getUrl req
+  let uri = fromJust $ parseURI $ T.unpack $ Req.getUrl req
       secure = uri.uriScheme == "https:"
       host = BS8.pack (fromJust uri.uriAuthority).uriRegName
       port = maybe "" (BS8.pack . (.uriPort)) uri.uriAuthority

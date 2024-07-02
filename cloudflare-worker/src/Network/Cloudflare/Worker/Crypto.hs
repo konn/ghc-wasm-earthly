@@ -60,7 +60,6 @@ import GHC.Exts (IsList)
 import GHC.Generics (Generic)
 import GHC.IO (unsafePerformIO)
 import GHC.Wasm.Object.Builtins
-import GHC.Wasm.Prim
 import GHC.Wasm.Web.Generated.AlgorithmIdentifier (AlgorithmIdentifier)
 import GHC.Wasm.Web.Generated.Crypto
 import GHC.Wasm.Web.Generated.CryptoKey (CryptoKey)
@@ -74,8 +73,8 @@ import Network.Cloudflare.Worker.Request qualified as Req
 import Streaming.ByteString qualified as Q
 import Wasm.Data.Function.Linear qualified as PL
 
-randomUUID :: IO String
-randomUUID = fromJSString . convertToJSString <$> js_fun_randomUUID__DOMString crypto
+randomUUID :: IO T.Text
+randomUUID = toText <$> js_fun_randomUUID__DOMString crypto
 
 fromCloudflarePubKey :: CloudflarePubKey -> IO CryptoKey
 fromCloudflarePubKey pk = do
@@ -83,20 +82,20 @@ fromCloudflarePubKey pk = do
   fmap unsafeCast . await
     =<< js_fun_importKey_KeyFormat_object_AlgorithmIdentifier_boolean_sequence_KeyUsage_Promise_any
       subtleCrypto
-      (toDOMString False $ toJSString "jwk")
+      "jwk"
       (upcast jwk)
       rs256
       False
-      (toSequence $ V.singleton $ toDOMString False $ toJSString "verify")
+      (toSequence $ V.singleton "verify")
 
 toJWK :: CloudflarePubKey -> JsonWebKey
 toJWK pk =
   newDictionary
-    ( setPartialField "n" (nonNull $ toDOMString False $ toJSString $ T.unpack $ pk.pubkeyN.rawBE)
-        PL.. setPartialField "e" (nonNull $ toDOMString False $ toJSString $ T.unpack $ pk.pubkeyE.rawBE)
-        PL.. setPartialField "kty" (toDOMString False $ toJSString "RSA")
-        PL.. setPartialField "use" (nonNull $ toDOMString False $ toJSString "sig")
-        PL.. setPartialField "alg" (nonNull $ toDOMString False $ toJSString "RS256")
+    ( setPartialField "n" (nonNull $ fromText $ pk.pubkeyN.rawBE)
+        PL.. setPartialField "e" (nonNull $ fromText pk.pubkeyE.rawBE)
+        PL.. setPartialField "kty" "RSA"
+        PL.. setPartialField "use" (nonNull "sig")
+        PL.. setPartialField "alg" (nonNull "RS256")
     )
 
 data Alg = RS256
@@ -245,7 +244,7 @@ verifyRS256 pk sig msg = unsafePerformIO do
       fmap (fromJSPrim . unsafeCast @_ @(JSPrimClass Bool)) . await
         =<< js_fun_verify_AlgorithmIdentifier_CryptoKey_BufferSource_BufferSource_Promise_any
           subtleCrypto
-          (inject $ toDOMString False $ toJSString "RSASSA-PKCS1-v1_5")
+          (inject ("RSASSA-PKCS1-v1_5" :: DOMString))
           key
           (inject sig')
           (inject msg')

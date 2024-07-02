@@ -69,6 +69,7 @@ library
     reflection,
     streaming,
     text,
+    text-short,
     total,
     vector,
     wasm-linear-base,

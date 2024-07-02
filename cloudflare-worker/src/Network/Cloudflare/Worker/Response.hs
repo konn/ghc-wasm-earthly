@@ -92,7 +92,7 @@ foreign import javascript unsafe "$1.statusText = $2"
   js_set_status_text :: WorkerResponse -> JSString -> IO ()
 
 getUrl :: WorkerResponse -> T.Text
-getUrl = T.pack . fromJSString . convertToJSString . unsafePerformIO . js_get_url . upcast
+getUrl = toText . unsafePerformIO . js_get_url . upcast
 
 newResponse :: SimpleResponseInit -> IO WorkerResponse
 newResponse resp = do

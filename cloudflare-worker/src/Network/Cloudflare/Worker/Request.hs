@@ -43,7 +43,6 @@ import Data.ByteString qualified as BS
 import Data.Text qualified as T
 import Data.Word
 import GHC.Wasm.Object.Builtins
-import GHC.Wasm.Prim
 import GHC.Wasm.Web.Generated.FormData
 import GHC.Wasm.Web.Generated.Headers
 import GHC.Wasm.Web.Generated.ReadableStream
@@ -65,7 +64,7 @@ type WorkerRequest = JSObject WorkerRequestClass
 newRequest :: Maybe T.Text -> Maybe WorkerRequestInit -> IO WorkerRequest
 newRequest mbody minit =
   js_new_request
-    (toNullable $ toUSVString . toJSString . T.unpack <$> mbody)
+    (toNullable $ fromText <$> mbody)
     (toNullable minit)
 
 foreign import javascript unsafe "new Request($1, $2)"
@@ -125,8 +124,8 @@ type MinifyInitClass = JSDictionaryClass MinifyInitFields
 
 type MinifyInit = JSDictionary MinifyInitFields
 
-getUrl :: WorkerRequest -> JSString
-getUrl = unsafePerformIO . fmap convertToJSString . js_get_url . upcast
+getUrl :: WorkerRequest -> T.Text
+getUrl = unsafePerformIO . fmap toText . js_get_url . upcast
 
 type WorkerIncomingRequestCfFields =
   '[ '("asn", JSPrimClass Word32)

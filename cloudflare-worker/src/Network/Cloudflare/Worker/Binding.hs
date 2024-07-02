@@ -26,6 +26,7 @@ module Network.Cloudflare.Worker.Binding (
 import Data.Aeson qualified as J
 import Data.Kind (Constraint)
 import Data.Maybe (fromJust, fromMaybe)
+import Data.Text qualified as T
 import GHC.Exts (proxy#)
 import GHC.TypeError (Unsatisfiable)
 import GHC.TypeLits
@@ -73,10 +74,10 @@ getSecret ::
   forall l ->
   (KnownSymbol l, ListMember l secrets) =>
   Bindings envs secrets bindingss ->
-  String
+  T.Text
 getSecret l b =
   let key = symbolVal' @l proxy#
-   in maybe (error $ "Secret not found: " <> show key) (fromJSString . convertToJSString) $
+   in maybe (error $ "Secret not found: " <> show key) toText $
         fromNullable $
           js_get_secret b $
             toJSString key
