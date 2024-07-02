@@ -24,7 +24,7 @@ build:
   COPY --keep-ts . .
   RUN --mount ${MOUNT_GLOBAL_STORE} \
       --mount ${MOUNT_DIST_NEWSTYLE} \
-      ${CABAL} update --index-state=2024-06-28T07:25:12Z
+      ${CABAL} update "hackage.haskell.org,2024-06-28T07:25:12Z"
   RUN --mount ${MOUNT_GLOBAL_STORE} \
       --mount ${MOUNT_DIST_NEWSTYLE} \
       ${CABAL} build --only-dependencies ${target}
@@ -46,7 +46,9 @@ optimised-wasm:
   ARG wasm=${outdir}.wasm
   RUN mkdir -p dist/
   COPY (+build/dist/${wasm}.orig --target=${target} --outdir=${outdir} --wasm=${wasm}.orig) ./dist/
-  RUN wizer --allow-wasi --wasm-bulk-memory true --init-func _initialize -o dist/${wasm} dist/${wasm}.orig
+  # Disables GC; we have to unset PWD and pass --inherit-env true to wizer.
+  ENV GHCRTS=-S -I0 -A1G
+  RUN unset PWD && wizer --inherit-env true --allow-wasi --wasm-bulk-memory true --init-func _initialize -o dist/${wasm} dist/${wasm}.orig
   RUN wasm-opt -Oz dist/${wasm} -o dist/${wasm}
   RUN wasm-tools strip -o dist/${wasm} dist/${wasm}
   COPY (+build/dist/ghc_wasm_jsffi.js --target=${target} --outdir=${outdir} --wasm=${wasm}.orig) ./dist/
