@@ -72,7 +72,7 @@ library
     web-sys-hs,
 
   hs-source-dirs: src
-  -- cabal-gild: discover src --include=src/**/*.hs
+  -- cabal-gild: discover src
   exposed-modules:
     Language.WASM.JSVal.Convert
     Network.Cloudflare.Worker
@@ -90,6 +90,8 @@ executable hello-worker
   build-depends: cloudflare-worker
   main-is: Main.hs
   hs-source-dirs: app
+  -- cabal-gild: discover app --exclude=app/Main.hs
+  other-modules:
   ghc-options: -O2
   build-depends:
     streaming,

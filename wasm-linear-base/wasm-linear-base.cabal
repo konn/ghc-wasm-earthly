@@ -52,7 +52,7 @@ library
     ghc-wasm-compat,
     vector,
 
-  -- cabal-gild: discover src --include=src/**/*.hs
+  -- cabal-gild: discover src
   exposed-modules:
     Wasm.Control.Functor.Linear
     Wasm.Data.Array.Destination
@@ -80,8 +80,10 @@ library
 
 executable wasm-linear-base-exe
   import: defaults
-  main-is: Main.hs
   hs-source-dirs: app
+  main-is: Main.hs
+  -- cabal-gild: discover app --exclude=app/Main.hs
+  other-modules:
   ghc-options:
     -threaded
     -rtsopts
@@ -92,8 +94,10 @@ executable wasm-linear-base-exe
 test-suite wasm-linear-base-test
   import: defaults
   type: exitcode-stdio-1.0
-  main-is: Test.hs
   hs-source-dirs: test
+  main-is: Test.hs
+  -- cabal-gild: discover test --exclude=test/Test.hs
+  other-modules:
   ghc-options:
     -threaded
     -O2

@@ -48,14 +48,14 @@ common defaults
 
 library
   import: defaults
-  -- cabal-gild: discover src --include=src/**/*.hs
+  -- cabal-gild: discover src
   exposed-modules: Steward.Demo.Fib.Types
   hs-source-dirs: src
 
 executable steward-fib-demo-worker
   import: defaults
   main-is: Main.hs
-  -- cabal-gild: discover app/worker --exclude=app/worker/Main.hs --include=app/worker/**/*.hs
+  -- cabal-gild: discover app/worker --exclude=app/worker/Main.hs
   other-modules:
   hs-source-dirs: app/worker
   build-depends:
@@ -74,12 +74,15 @@ executable steward-fib-demo-worker
     transformers,
     vector,
 
+  ghc-options:
+    -rtsopts
+    -O2
+
   if os(wasi)
     ghc-options:
       -no-hs-main
       -optl-mexec-model=reactor
       "-optl-Wl,--export=handlers"
-      -O2
   else
     build-depends: ghc-wasm-compat
     ghc-options:
@@ -92,7 +95,7 @@ executable steward-fib-demo-client
   if os(wasi)
     buildable: False
   main-is: Main.hs
-  -- cabal-gild: discover app/client --exclude=app/client/Main.hs --include=app/client/**/*.hs
+  -- cabal-gild: discover app/client --exclude=app/client/Main.hs
   other-modules:
   hs-source-dirs: app/client
   build-depends:

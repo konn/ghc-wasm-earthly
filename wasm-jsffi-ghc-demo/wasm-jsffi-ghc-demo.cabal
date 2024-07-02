@@ -11,8 +11,8 @@ license: BSD-3-Clause
 license-file: LICENSE
 build-type: Simple
 tested-with:
-  ghc ==9.8.4
   ghc ==9.10.0.20240413
+  ghc ==9.10.1
 
 data-dir: data
 extra-doc-files:
@@ -51,7 +51,7 @@ common defaults
 library
   import: defaults
   hs-source-dirs: src
-  -- cabal-gild: discover src --include=src/**/*.hs
+  -- cabal-gild: discover src
   exposed-modules: Development.Wasm.Demo.Console
 
 executable console-log

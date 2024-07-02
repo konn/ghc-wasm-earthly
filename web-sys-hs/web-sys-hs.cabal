@@ -11,8 +11,8 @@ license: BSD-3-Clause
 license-file: LICENSE
 build-type: Simple
 tested-with:
-  ghc ==9.8.4
   ghc ==9.10.0.20240413
+  ghc ==9.10.1
 
 extra-doc-files:
   CHANGELOG.md
@@ -58,7 +58,7 @@ library
     ghc-options:
       -fobject-code
       -fplugin=GHC.Wasm.FFI.Plugin
-  -- cabal-gild: discover src --include=src/**/*.hs
+  -- cabal-gild: discover src
   exposed-modules:
     GHC.Wasm.Web.Generated.AbortSignal
     GHC.Wasm.Web.Generated.AbortSignal.Core
@@ -1166,8 +1166,10 @@ library
 
 executable web-sys-hs-exe
   import: defaults
-  main-is: Main.hs
   hs-source-dirs: app
+  main-is: Main.hs
+  -- cabal-gild: discover app --exclude=app/Main.hs
+  other-modules:
   ghc-options:
     -threaded
     -rtsopts
@@ -1179,6 +1181,8 @@ test-suite web-sys-hs-test
   import: defaults
   type: exitcode-stdio-1.0
   main-is: Test.hs
+  -- cabal-gild: discover test --exclude=test/Test.hs
+  other-modules:
   hs-source-dirs: test
   ghc-options:
     -threaded

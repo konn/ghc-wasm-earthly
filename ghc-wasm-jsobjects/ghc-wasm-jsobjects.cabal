@@ -11,7 +11,7 @@ license: BSD-3-Clause
 license-file: LICENSE
 build-type: Simple
 tested-with:
-  ghc ==9.8.4 || ==9.10.0.20240412
+  ghc ==9.10.1 || ==9.10.0.20240412
 
 extra-doc-files:
   CHANGELOG.md
@@ -42,7 +42,7 @@ common defaults
 
 library
   import: defaults
-  -- cabal-gild: discover src --include=src/**/*.hs
+  -- cabal-gild: discover src
   exposed-modules:
     GHC.Wasm.Object.Builtins
     GHC.Wasm.Object.Builtins.Array
@@ -82,6 +82,8 @@ library
 executable ghc-wasm-jsobjects-exe
   import: defaults
   main-is: Main.hs
+  -- cabal-gild: discover app --exclude=app/Main.hs
+  other-modules:
   hs-source-dirs: app
   ghc-options:
     -threaded
@@ -93,8 +95,10 @@ executable ghc-wasm-jsobjects-exe
 test-suite ghc-wasm-jsobjects-test
   import: defaults
   type: exitcode-stdio-1.0
-  main-is: Test.hs
   hs-source-dirs: test
+  main-is: Test.hs
+  -- cabal-gild: discover test --exclude=test/Test.hs
+  other-modules:
   ghc-options:
     -threaded
     -O2
