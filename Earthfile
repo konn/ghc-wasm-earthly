@@ -46,8 +46,9 @@ optimised-wasm:
   ARG wasm=${outdir}.wasm
   RUN mkdir -p dist/
   COPY (+build/dist/${wasm}.orig --target=${target} --outdir=${outdir} --wasm=${wasm}.orig) ./dist/
-  # Disables GC; we have to unset PWD and pass --inherit-env true to wizer.
-  ENV GHCRTS=-S -I0 -A1G
+  # Uncommenting the following line virtually disables GC; we have to unset PWD and pass --inherit-env true to wizer.
+  # Unfortunately, the resulting binary is too large for Cloudflare Workers (Free Plan)...
+  # ENV GHCRTS=-S -I0 -A1G
   RUN unset PWD && wizer --inherit-env true --allow-wasi --wasm-bulk-memory true --init-func _initialize -o dist/${wasm} dist/${wasm}.orig
   RUN wasm-opt -Oz dist/${wasm} -o dist/${wasm}
   RUN wasm-tools strip -o dist/${wasm} dist/${wasm}
