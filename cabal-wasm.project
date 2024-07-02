@@ -26,9 +26,6 @@ package QuickCheck
 package reflection
   flags: -template-haskell
 
-packages: https://ghc.gitlab.haskell.org/head.hackage/package/text-short-0.1.5.tar.gz
-packages: https://ghc.gitlab.haskell.org/head.hackage/package/lens-5.2.3.tar.gz
-
 source-repository-package
   type: git
   location: https://github.com/deepflowinc/effectful-extras.git
