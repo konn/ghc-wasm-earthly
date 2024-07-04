@@ -43,7 +43,7 @@ fetch req _ _ = do
 buildResponseBody :: Req.WorkerRequest -> HtmlT IO ()
 buildResponseBody req = do
   let method = toStr $ Req.getMethod req
-      url = fromJSString $ Req.getUrl req
+      url = Req.getUrl req
       hdrs = Req.getHeaders req
   doctype_
   html_ $ do
