@@ -25,7 +25,8 @@ module GHC.Wasm.Web.Generated.MediaStream (
         js_fun_removeTrack_MediaStreamTrack_undefined,
         js_fun_clone__MediaStream, js_fun_assignId_DOMString_undefined,
         js_get_id, js_get_active, js_get_onaddtrack, js_set_onaddtrack,
-        js_get_onremovetrack, js_set_onremovetrack, js_get_currentTime
+        js_get_onremovetrack, js_set_onremovetrack, js_get_currentTime,
+        js_static_MediaStream_countUnderlyingStreams__Promise_long
     ) where
 import Data.Int
 import Data.Word
@@ -73,3 +74,5 @@ foreign import javascript unsafe "$1.onremovetrack = $2" js_set_onremovetrack
   :: MediaStream -> (EventHandler -> (IO ()))
 foreign import javascript unsafe "$1.currentTime" js_get_currentTime
   :: MediaStream -> (IO Double)
+foreign import javascript safe "MediaStream.countUnderlyingStreams()" js_static_MediaStream_countUnderlyingStreams__Promise_long
+  :: IO (Promise (JSPrimClass Int32))

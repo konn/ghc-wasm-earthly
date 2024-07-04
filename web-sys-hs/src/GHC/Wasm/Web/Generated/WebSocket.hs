@@ -28,7 +28,8 @@ module GHC.Wasm.Web.Generated.WebSocket (
         js_set_onopen, js_get_onerror, js_set_onerror, js_get_onclose,
         js_set_onclose, js_get_extensions, js_get_protocol,
         js_get_onmessage, js_set_onmessage, js_get_binaryType,
-        js_set_binaryType
+        js_set_binaryType,
+        js_static_WebSocket_createServerWebSocket_DOMString_sequence_DOMString_nsITransportProvider_DOMString_WebSocket
     ) where
 import Data.Int
 import Data.Word
@@ -97,3 +98,7 @@ foreign import javascript unsafe "$1.binaryType" js_get_binaryType
   :: WebSocket -> (IO BinaryType)
 foreign import javascript unsafe "$1.binaryType = $2" js_set_binaryType
   :: WebSocket -> (BinaryType -> (IO ()))
+foreign import javascript unsafe "WebSocket.createServerWebSocket($1,$2,$3,$4)" js_static_WebSocket_createServerWebSocket_DOMString_sequence_DOMString_nsITransportProvider_DOMString_WebSocket
+  :: DOMString
+     -> (Sequence DOMStringClass
+         -> (NsITransportProvider -> (DOMString -> (IO WebSocket))))

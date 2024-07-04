@@ -732,7 +732,7 @@ generateInterfaceMainModule name Attributed {entry = ifs} = skipNonTarget name d
       let hsFunName
             | V.length ifs.constructors /= 1 = toConstructorName hsTyName args
             | otherwise = "js_cons_" <> hsTyName
-          jsFun = Call $ "new " <> hsTyName
+          jsFun = Call $ "new " <> name
           returnType = ioTy `appTy` tyConOrVar (toTypeName hsTyName)
           ffiDec = renderJSFFIImport $ toJSFFIImport JSFFIImportSeed {async = False, ..}
       Writer.tell
@@ -866,8 +866,32 @@ generateInterfaceMainModule name Attributed {entry = ifs} = skipNonTarget name d
           }
     -- FIXME: Implement this
     genStaticAttributes = pure ()
-    -- FIXME: Implement this
-    genStaticOperations = pure ()
+    genStaticOperations =
+      V.forM_ ifs.staticOperations \Attributed {entry = reg} -> do
+        case reg of
+          RegularOperation retTy (Just jsFunName) args -> do
+            let hsFunName =
+                  "js_static_"
+                    <> name
+                    <> "_"
+                    <> toHaskellIdentifier jsFunName
+                    <> "_"
+                    <> toHaskellIdentifier args
+                    <> "_"
+                    <> toHaskellIdentifier retTy
+                jsFun =
+                  WithArgs \as ->
+                    let argSep = T.intercalate "," as
+                        fun = toHaskellIdentifier jsFunName
+                     in [trimming|${name}.${fun}(${argSep})|]
+                returnType = ioTy `appTy` toHaskellType retTy
+                ffiDec = renderJSFFIImport $ toJSFFIImport JSFFIImportSeed {async = isAsyncJSType retTy, ..}
+            Writer.tell
+              MainModuleFragments
+                { mainExports = DL.singleton (varName, hsFunName)
+                , decs = DL.singleton ffiDec
+                }
+          _ -> pure ()
 
 generateConstantFragments ::
   ( Reader CodeGenEnv :> es

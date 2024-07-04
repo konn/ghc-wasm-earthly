@@ -22,7 +22,8 @@ module GHC.Wasm.Web.Generated.Notification (
         js_get_lang, js_get_body, js_get_tag, js_get_image, js_get_icon,
         js_get_badge, js_get_vibrate, js_get_timestamp, js_get_renotify,
         js_get_silent, js_get_requireInteraction, js_get_data,
-        js_get_actions
+        js_get_actions,
+        js_static_Notification_requestPermission_nullable_NotificationPermissionCallback_Promise_NotificationPermission
     ) where
 import Data.Int
 import Data.Word
@@ -88,3 +89,6 @@ foreign import javascript unsafe "$1.data" js_get_data
   :: Notification -> (IO JSAny)
 foreign import javascript unsafe "$1.actions" js_get_actions
   :: Notification -> (IO (FrozenArray NotificationActionClass))
+foreign import javascript safe "Notification.requestPermission($1)" js_static_Notification_requestPermission_nullable_NotificationPermissionCallback_Promise_NotificationPermission
+  :: Nullable NotificationPermissionCallbackClass
+     -> (IO (Promise NotificationPermissionClass))

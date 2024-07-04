@@ -21,7 +21,9 @@ module GHC.Wasm.Web.Generated.Response (
         js_fun_formData__Promise_FormData, js_fun_json__Promise_JSON,
         js_fun_text__Promise_USVString, js_get_type, js_get_url,
         js_get_redirected, js_get_status, js_get_ok, js_get_statusText,
-        js_get_headers, js_get_bodyUsed, js_get_body
+        js_get_headers, js_get_bodyUsed, js_get_body,
+        js_static_Response_error__Response,
+        js_static_Response_redirect_USVString_nullable_short_Response
     ) where
 import Data.Int
 import Data.Word
@@ -72,3 +74,7 @@ foreign import javascript unsafe "$1.bodyUsed" js_get_bodyUsed
   :: Response -> (IO Bool)
 foreign import javascript unsafe "$1.body" js_get_body
   :: Response -> (IO (Nullable ReadableStreamClass))
+foreign import javascript unsafe "Response.error()" js_static_Response_error__Response
+  :: IO Response
+foreign import javascript unsafe "Response.redirect($1,$2)" js_static_Response_redirect_USVString_nullable_short_Response
+  :: USVString -> (Nullable (JSPrimClass Word16) -> (IO Response))

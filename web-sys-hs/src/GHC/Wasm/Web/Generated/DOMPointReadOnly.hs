@@ -16,7 +16,8 @@
 {-# LANGUAGE TypeData #-}
 module GHC.Wasm.Web.Generated.DOMPointReadOnly (
         DOMPointReadOnly, DOMPointReadOnlyClass, js_cons_DOMPointReadOnly,
-        js_fun_toJSON__object, js_get_x, js_get_y, js_get_z, js_get_w
+        js_fun_toJSON__object, js_get_x, js_get_y, js_get_z, js_get_w,
+        js_static_DOMPointReadOnly_fromPoint_nullable_DOMPointInit_DOMPointReadOnly
     ) where
 import Data.Int
 import Data.Word
@@ -40,3 +41,5 @@ foreign import javascript unsafe "$1.z" js_get_z
   :: DOMPointReadOnly -> (IO Double)
 foreign import javascript unsafe "$1.w" js_get_w
   :: DOMPointReadOnly -> (IO Double)
+foreign import javascript unsafe "DOMPointReadOnly.fromPoint($1)" js_static_DOMPointReadOnly_fromPoint_nullable_DOMPointInit_DOMPointReadOnly
+  :: Nullable DOMPointInitClass -> (IO DOMPointReadOnly)

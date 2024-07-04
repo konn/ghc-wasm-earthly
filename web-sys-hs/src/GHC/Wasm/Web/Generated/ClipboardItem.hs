@@ -17,7 +17,8 @@
 module GHC.Wasm.Web.Generated.ClipboardItem (
         ClipboardItem, ClipboardItemClass, js_cons_ClipboardItem,
         js_fun_getType_DOMString_Promise_Blob, js_get_presentationStyle,
-        js_get_lastModified, js_get_delayed, js_get_types
+        js_get_lastModified, js_get_delayed, js_get_types,
+        js_static_ClipboardItem_createDelayed_Record_DOMString_ClipboardItemDelayedCallback_nullable_ClipboardItemOptions_ClipboardItem
     ) where
 import Data.Int
 import Data.Word
@@ -43,3 +44,6 @@ foreign import javascript unsafe "$1.delayed" js_get_delayed
   :: ClipboardItem -> (IO Bool)
 foreign import javascript unsafe "$1.types" js_get_types
   :: ClipboardItem -> (IO (FrozenArray DOMStringClass))
+foreign import javascript unsafe "ClipboardItem.createDelayed($1,$2)" js_static_ClipboardItem_createDelayed_Record_DOMString_ClipboardItemDelayedCallback_nullable_ClipboardItemOptions_ClipboardItem
+  :: JSRecord DOMStringClass ClipboardItemDelayedCallbackClass
+     -> (Nullable ClipboardItemOptionsClass -> (IO ClipboardItem))

@@ -16,7 +16,8 @@
 {-# LANGUAGE TypeData #-}
 module GHC.Wasm.Web.Generated.DOMPoint (
         DOMPoint, DOMPointClass, js_cons_DOMPoint, js_get_x, js_set_x,
-        js_get_y, js_set_y, js_get_z, js_set_z, js_get_w, js_set_w
+        js_get_y, js_set_y, js_get_z, js_set_z, js_get_w, js_set_w,
+        js_static_DOMPoint_fromPoint_nullable_DOMPointInit_DOMPoint
     ) where
 import Data.Int
 import Data.Word
@@ -47,3 +48,5 @@ foreign import javascript unsafe "$1.w" js_get_w
   :: DOMPoint -> (IO Double)
 foreign import javascript unsafe "$1.w = $2" js_set_w
   :: DOMPoint -> (Double -> (IO ()))
+foreign import javascript unsafe "DOMPoint.fromPoint($1)" js_static_DOMPoint_fromPoint_nullable_DOMPointInit_DOMPoint
+  :: Nullable DOMPointInitClass -> (IO DOMPoint)
