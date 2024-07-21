@@ -50,6 +50,7 @@ library
     GHC.Wasm.Object.Builtins.AsyncIterator
     GHC.Wasm.Object.Builtins.BigInt
     GHC.Wasm.Object.Builtins.Buffer
+    GHC.Wasm.Object.Builtins.Date
     GHC.Wasm.Object.Builtins.Dictionary
     GHC.Wasm.Object.Builtins.Iterable
     GHC.Wasm.Object.Builtins.Iterator
@@ -71,6 +72,7 @@ library
     streaming,
     text,
     text-short,
+    time,
     total,
     vector,
     wasm-linear-base,

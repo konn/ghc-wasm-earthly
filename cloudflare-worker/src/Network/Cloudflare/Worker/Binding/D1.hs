@@ -123,6 +123,8 @@ import GHC.Wasm.Prim
 import Wasm.Prelude.Linear qualified as PL
 import Prelude hiding (all)
 
+-- TODO: JSON-related interops https://developers.cloudflare.com/d1/build-with-d1/query-json/
+
 ----------------
 -- Core types
 ----------------

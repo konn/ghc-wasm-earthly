@@ -67,6 +67,7 @@ library
     text,
     time,
     time-effectful,
+    total,
     transformers,
     vector,
     wasm-linear-base,
@@ -80,6 +81,7 @@ library
     Network.Cloudflare.Worker.Binding
     Network.Cloudflare.Worker.Binding.D1
     Network.Cloudflare.Worker.Binding.KV
+    Network.Cloudflare.Worker.Binding.R2
     Network.Cloudflare.Worker.Crypto
     Network.Cloudflare.Worker.FetchAPI
     Network.Cloudflare.Worker.Handler

@@ -17,12 +17,14 @@ module GHC.Wasm.Object.Builtins (
   module GHC.Wasm.Object.Builtins.Record,
   module GHC.Wasm.Object.Builtins.Sequence,
   module GHC.Wasm.Object.Builtins.String,
+  module GHC.Wasm.Object.Builtins.Date,
 ) where
 
 import GHC.Wasm.Object.Builtins.Array
 import GHC.Wasm.Object.Builtins.AsyncIterable
 import GHC.Wasm.Object.Builtins.BigInt
 import GHC.Wasm.Object.Builtins.Buffer
+import GHC.Wasm.Object.Builtins.Date
 import GHC.Wasm.Object.Builtins.Dictionary
 import GHC.Wasm.Object.Builtins.Iterable
 import GHC.Wasm.Object.Builtins.Promise
