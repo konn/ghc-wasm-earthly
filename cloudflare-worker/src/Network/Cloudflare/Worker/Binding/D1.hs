@@ -9,6 +9,7 @@
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE OverloadedRecordDot #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeData #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -23,6 +24,7 @@ module Network.Cloudflare.Worker.Binding.D1 (
   Statement,
   StatementClass,
   D1ValueClass,
+  D1Error (..),
 
   -- * Values and Rows
   D1Value,
@@ -96,9 +98,11 @@ module Network.Cloudflare.Worker.Binding.D1 (
   D1ExecResultFields,
 ) where
 
+import Control.Exception
 import Control.Monad ((<=<))
 import Data.ByteString qualified as BS
 import Data.ByteString.Lazy qualified as LBS
+import Data.CaseInsensitive qualified as CI
 import Data.Coerce (coerce)
 import Data.Int (Int16, Int32, Int8)
 import Data.Map.Strict (Map)
@@ -717,6 +721,29 @@ exec d1 rawQry = deferWith viewD1ExecResult =<< exec' d1 (fromText rawQry)
 exec' :: D1 -> USVString -> IO (Promise D1ExecResultClass)
 exec' = js_exec
 
+data D1Error
+  = D1Error {d1ErrorMessage :: !T.Text}
+  | D1TypeError {d1ErrorMessage :: !T.Text}
+  | D1ColumnNotFound {d1ErrorMessage :: !T.Text}
+  | D1DumpError {d1ErrorMessage :: !T.Text}
+  | D1ExecError {d1ErrorMessage :: !T.Text}
+  deriving (Show, Eq, Ord, Generic)
+
+instance Exception D1Error where
+  toException err =
+    toException $ JSException $ unJSObject $ fromText @USVStringClass err.d1ErrorMessage
+  fromException exc = case fromException exc of
+    Just (JSException obj) ->
+      let msg = toText $ js_exc_msg obj
+       in case CI.mk $ T.takeWhile (/= ':') msg of
+            "D1_ERROR" -> Just $ D1Error msg
+            "D1_TYPE_ERROR" -> Just $ D1TypeError msg
+            "D1_COLUMN_NOTFOUND" -> Just $ D1ColumnNotFound msg
+            "D1_DUMP_ERROR" -> Just $ D1DumpError msg
+            "D1_EXEC_ERROR" -> Just $ D1ExecError msg
+            _ -> Nothing
+    _ -> Nothing
+
 foreign import javascript unsafe "$1.prepare($2)"
   js_d1_prepare :: D1 -> JSString -> IO PreparedStatement
 
@@ -779,3 +806,6 @@ foreign import javascript unsafe "new Object()"
 
 foreign import javascript unsafe "$2[$1]"
   js_row_get :: JSString -> D1Row -> D1Value
+
+foreign import javascript unsafe "$1.message"
+  js_exc_msg :: JSVal -> USVString
