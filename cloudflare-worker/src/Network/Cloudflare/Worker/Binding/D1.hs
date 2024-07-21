@@ -1,15 +1,18 @@
 {-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE LinearTypes #-}
+{-# LANGUAGE MagicHash #-}
 {-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeData #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE UnliftedDatatypes #-}
 {-# LANGUAGE NoFieldSelectors #-}
 
@@ -33,7 +36,13 @@ module Network.Cloudflare.Worker.Binding.D1 (
   D1RowClass,
   D1RowView (..),
   ToD1Row (..),
+  GenericToD1Row,
+  genericToD1Row,
+  genericToD1RowView,
   FromD1Row (..),
+  GenericFromD1Row,
+  genericFromD1Row,
+  genericFromD1RowView,
   viewD1Row,
   unviewD1Row,
 
@@ -89,18 +98,25 @@ module Network.Cloudflare.Worker.Binding.D1 (
 
 import Control.Monad ((<=<))
 import Data.ByteString qualified as BS
+import Data.ByteString.Lazy qualified as LBS
+import Data.Coerce (coerce)
 import Data.Int (Int16, Int32, Int8)
 import Data.Map.Strict (Map)
+import Data.Map.Strict qualified as Map
 import Data.Text qualified as T
+import Data.Text.Lazy qualified as LT
 import Data.Vector qualified as V
 import Data.Word
 import Effectful.Concurrent.Async (Async)
-import GHC.Exts (noinline)
-import GHC.Generics (Generic)
+import GHC.Exts (noinline, proxy#)
+import GHC.Generics (Generic (..), Generically (..), K1 (..), M1 (..), Meta (..), S, (:*:) (..), (:+:))
 import GHC.IO.Unsafe (unsafeDupablePerformIO, unsafePerformIO)
+import GHC.TypeError (Unsatisfiable, unsatisfiable)
+import GHC.TypeLits
 import GHC.Wasm.Object.Builtins
 import GHC.Wasm.Object.Builtins.Buffer qualified as Buffer
 import GHC.Wasm.Prim
+import Wasm.Prelude.Linear qualified as PL
 import Prelude hiding (all)
 
 ----------------
@@ -204,12 +220,59 @@ viewD1Row row = unsafeDupablePerformIO do
   dic <- fromJSRecord row
   pure $ D1RowView $ viewD1Value <$> dic
 
+type GenericFromD1Row a = (Generic a, GFromD1Row (Rep a))
+
+instance (GenericFromD1Row a) => FromD1Row (Generically a) where
+  parseD1Row = fmap Generically . genericFromD1Row
+  {-# INLINE parseD1Row #-}
+  parseD1RowView = fmap Generically . genericFromD1RowView
+  {-# INLINE parseD1RowView #-}
+
+genericFromD1Row :: (GenericFromD1Row a) => D1Row -> Either String a
+genericFromD1Row = fmap to . gparseD1Row
+
+genericFromD1RowView :: (GenericFromD1Row a) => D1RowView -> Either String a
+genericFromD1RowView = fmap to . gparseD1RowView . (.getD1RowView)
+
 class FromD1Row a where
-  {-# MINIMAL parseD1Row | parseD1RowView #-}
   parseD1Row :: D1Row -> Either String a
-  parseD1Row = parseD1RowView . viewD1Row
+  default parseD1Row :: (GenericFromD1Row a) => D1Row -> Either String a
+  parseD1Row = genericFromD1Row
   parseD1RowView :: D1RowView -> Either String a
-  parseD1RowView = parseD1Row . unviewD1Row
+  default parseD1RowView :: (GenericFromD1Row a) => D1RowView -> Either String a
+  parseD1RowView = genericFromD1RowView
+
+class GFromD1Row a where
+  gparseD1Row :: D1Row -> Either String (a ())
+  gparseD1RowView :: Map T.Text D1ValueView -> Either String (a ())
+
+instance
+  {-# OVERLAPPING #-}
+  (ms ~ 'Just s, KnownSymbol s, FromD1Value c) =>
+  GFromD1Row (M1 S ('MetaSel ms a b x) (K1 i c))
+  where
+  gparseD1Row =
+    fmap (M1 . K1) . parseD1Value . js_row_get (toJSString $ symbolVal' @s proxy#)
+  gparseD1RowView =
+    let sel = symbolVal' @s proxy#
+     in maybe
+          (Left $ "Column not found: " <> sel)
+          (fmap (M1 . K1) . parseD1ValueView)
+          . Map.lookup (T.pack sel)
+
+instance {-# OVERLAPPABLE #-} (GFromD1Row f) => GFromD1Row (M1 i c f) where
+  gparseD1Row = fmap M1 . gparseD1Row
+  gparseD1RowView = fmap M1 . gparseD1RowView
+
+instance (GFromD1Row f, GFromD1Row g) => GFromD1Row (f :*: g) where
+  gparseD1Row row = do
+    (:*:) <$> gparseD1Row row <*> gparseD1Row row
+  gparseD1RowView dic = do
+    (:*:) <$> gparseD1RowView dic <*> gparseD1RowView dic
+
+instance (Unsatisfiable ('Text "Sum type cannot be parsed from a row!")) => GFromD1Row (f :+: g) where
+  gparseD1Row = unsatisfiable
+  gparseD1RowView = unsatisfiable
 
 instance FromD1Row D1Row where
   parseD1Row = Right
@@ -219,12 +282,65 @@ instance FromD1Row D1RowView where
   parseD1Row = Right . viewD1Row
   parseD1RowView = Right
 
+type GenericToD1Row a = (Generic a, GToD1Row (Rep a))
+
+allocD1Row :: (PartialRow %1 -> PartialRow) %1 -> D1Row
+allocD1Row f =
+  f js_new_row PL.& \case
+    PartialRow a -> a
+
+genericToD1RowView :: (GenericToD1Row a) => a -> D1RowView
+{-# INLINE genericToD1RowView #-}
+genericToD1RowView x = D1RowView $ gtoD1RowView (from x) mempty
+
+genericToD1Row :: (GenericToD1Row a) => a -> D1Row
+{-# INLINE genericToD1Row #-}
+genericToD1Row x = allocD1Row (gtoD1Row $ from x)
+
+instance (GenericToD1Row a) => ToD1Row (Generically a) where
+  toD1Row = genericToD1Row . coerce @(Generically a) @a
+  {-# INLINE toD1Row #-}
+  toD1RowView = genericToD1RowView . coerce @(Generically a) @a
+  {-# INLINE toD1RowView #-}
+
+newtype PartialRow = PartialRow D1Row
+
+class GToD1Row f where
+  gtoD1Row :: f () -> PartialRow %1 -> PartialRow
+  gtoD1RowView :: f () -> Map T.Text D1ValueView -> Map T.Text D1ValueView
+
+instance
+  {-# OVERLAPPING #-}
+  (ms ~ 'Just s, KnownSymbol s, ToD1Value c) =>
+  GToD1Row (M1 S ('MetaSel ms a b x) (K1 i c))
+  where
+  gtoD1Row (M1 (K1 x)) =
+    js_partial_set (toJSString $ symbolVal' @s proxy#) (toD1Value x)
+  gtoD1RowView (M1 (K1 x)) =
+    Map.insert (T.pack $ symbolVal' @s proxy#) (toD1ValueView x)
+
+instance {-# OVERLAPPABLE #-} (GToD1Row f) => GToD1Row (M1 i c f) where
+  gtoD1Row = gtoD1Row . unM1
+  gtoD1RowView = gtoD1RowView . unM1
+
+instance
+  (Unsatisfiable ('Text "Sum type cannot be encoded to a row!")) =>
+  GToD1Row (f :+: g)
+  where
+  gtoD1Row = unsatisfiable
+  gtoD1RowView = unsatisfiable
+
+instance (GToD1Row f, GToD1Row g) => GToD1Row (f :*: g) where
+  gtoD1Row (f :*: g) = gtoD1Row f PL.. gtoD1Row g
+  gtoD1RowView (f :*: g) = gtoD1RowView f . gtoD1RowView g
+
 class ToD1Row a where
-  {-# MINIMAL toD1Row | toD1RowView #-}
   toD1Row :: a -> D1Row
-  toD1Row = unviewD1Row . toD1RowView
+  default toD1Row :: (GenericToD1Row a) => a -> D1Row
+  toD1Row = genericToD1Row
   toD1RowView :: a -> D1RowView
-  toD1RowView = viewD1Row . toD1Row
+  default toD1RowView :: (GenericToD1Row a) => a -> D1RowView
+  toD1RowView = genericToD1RowView
 
 instance ToD1Row D1Row where
   toD1Row = id
@@ -434,6 +550,89 @@ instance ToD1Value Float where
   toD1ValueView = toD1ValueView . realToFrac @_ @Double
   {-# INLINE toD1ValueView #-}
 
+instance ToD1Value T.Text where
+  toD1Value = upcast . inject @USVStringClass @D1ValueAlts . fromText
+  {-# INLINE toD1Value #-}
+  toD1ValueView = D1Text
+  {-# INLINE toD1ValueView #-}
+
+instance FromD1Value T.Text where
+  parseD1ValueView = \case
+    D1Text txt -> Right txt
+    _ -> Left "Expected a text"
+  {-# INLINE parseD1ValueView #-}
+  parseD1Value = nullable (Left "Expected a text") (Right . toText) . js_decode_string
+  {-# INLINE parseD1Value #-}
+
+instance ToD1Value LT.Text where
+  toD1Value = toD1Value . LT.toStrict
+  {-# INLINE toD1Value #-}
+  toD1ValueView = toD1ValueView . LT.toStrict
+  {-# INLINE toD1ValueView #-}
+
+instance FromD1Value LT.Text where
+  parseD1ValueView = fmap LT.fromStrict . parseD1ValueView
+  {-# INLINE parseD1ValueView #-}
+  parseD1Value = fmap LT.fromStrict . parseD1Value
+  {-# INLINE parseD1Value #-}
+
+instance ToD1Value BS.ByteString where
+  toD1Value bs =
+    upcast $
+      inject @(JSByteArrayClass Word8) @D1ValueAlts $
+        noinline $
+          unsafePerformIO $
+            useByteStringAsJSByteArray bs pure
+  toD1ValueView = D1Blob
+  {-# INLINE toD1ValueView #-}
+
+instance ToD1Value String where
+  toD1Value = toD1Value . T.pack
+  {-# INLINE toD1Value #-}
+  toD1ValueView = toD1ValueView . T.pack
+  {-# INLINE toD1ValueView #-}
+
+instance FromD1Value String where
+  parseD1ValueView = fmap T.unpack . parseD1ValueView
+  {-# INLINE parseD1ValueView #-}
+  parseD1Value = fmap T.unpack . parseD1Value
+  {-# INLINE parseD1Value #-}
+
+instance FromD1Value BS.ByteString where
+  parseD1ValueView = \case
+    D1Blob bs -> Right bs
+    _ -> Left "Expected a blob"
+  {-# INLINE parseD1ValueView #-}
+  parseD1Value =
+    nullable
+      (Left "Expected a blob")
+      ( Right
+          . Buffer.toByteString @Word8
+          . noinline (unsafePerformIO . fromArrayBuffer)
+      )
+      . js_decode_arrbuf
+  {-# INLINE parseD1Value #-}
+
+instance FromD1Value LBS.ByteString where
+  parseD1ValueView = fmap LBS.fromStrict . parseD1ValueView
+  {-# INLINE parseD1ValueView #-}
+  parseD1Value = fmap LBS.fromStrict . parseD1Value
+  {-# INLINE parseD1Value #-}
+
+instance (ToD1Value a) => ToD1Value (Maybe a) where
+  toD1Value = maybe (upcast jsNull) toD1Value
+  {-# INLINE toD1Value #-}
+  toD1ValueView = maybe D1Null toD1ValueView
+  {-# INLINE toD1ValueView #-}
+
+instance (FromD1Value a) => FromD1Value (Maybe a) where
+  parseD1ValueView = \case
+    D1Null -> Right Nothing
+    x -> fmap Just $ parseD1ValueView x
+  {-# INLINE parseD1ValueView #-}
+  parseD1Value = nullable (Right Nothing) (fmap Just . parseD1Value . upcast)
+  {-# INLINE parseD1Value #-}
+
 type D1MetadataFields =
   '[ '("duration", JSPrimClass Double)
    , '("rows_read", NullableClass (JSPrimClass Word32))
@@ -539,6 +738,12 @@ foreign import javascript unsafe "if (typeof $1 === 'number' && Number.isInteger
 foreign import javascript unsafe "if (typeof $1 === 'number') { if (Number.isInteger($1)) { return null } else { return $1; } } else { return null; }"
   js_decode_double :: JSObject c -> Nullable (JSPrimClass Double)
 
+foreign import javascript unsafe "if (typeof $1 === 'string') { return $1; } else { return null; }"
+  js_decode_string :: JSObject c -> Nullable USVStringClass
+
+foreign import javascript unsafe "if ($1 instanceof ArrayBuffer) { return $1; } else { return null; }"
+  js_decode_arrbuf :: JSObject c -> Nullable ArrayBufferClass
+
 foreign import javascript unsafe "typeof $1 === 'string'"
   js_is_string :: JSObject c -> Bool
 
@@ -565,3 +770,12 @@ foreign import javascript safe "$1.run()"
 
 foreign import javascript safe "$1.exec()"
   js_exec :: D1 -> USVString -> IO (Promise D1ExecResultClass)
+
+foreign import javascript unsafe "$3[$1] = $2; return $3"
+  js_partial_set :: JSString -> D1Value -> PartialRow %1 -> PartialRow
+
+foreign import javascript unsafe "new Object()"
+  js_new_row :: PartialRow
+
+foreign import javascript unsafe "$2[$1]"
+  js_row_get :: JSString -> D1Row -> D1Value
