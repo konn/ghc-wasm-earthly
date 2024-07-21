@@ -28,6 +28,16 @@ module Network.Cloudflare.Worker.Binding.R2 (
   getWith,
   RawGetOptions,
   GetOptionsClass,
+  GetOptionsFields,
+  put,
+  PutBody,
+  PutBodyClass,
+  putWith,
+  RawPutOptions,
+  PutOptionsClass,
+  PutOptionsFields,
+  delete,
+  deleteMany,
 
   -- * Object Metadata
   R2Object,
@@ -37,6 +47,11 @@ module Network.Cloudflare.Worker.Binding.R2 (
   getObjectETagRaw,
   getObjectHTTPETag,
   getObjectCustomMetadata,
+  RawStorageClass,
+  StorageClass (..),
+  RawStorageClassClass,
+  fromRawStorageClass,
+  toRawStorageClass,
   getObjectStorageClass,
   writeObjectHttpMetadata,
 
@@ -60,8 +75,8 @@ module Network.Cloudflare.Worker.Binding.R2 (
   R2SuffixRangeClass,
 
   -- * Conditionals
-  R2ConditionalClass,
-  RawR2Conditional,
+  ConditionalClass,
+  RawConditional,
 
   -- * Checksums
   R2Checksums,
@@ -75,6 +90,7 @@ import Data.ByteString qualified as BS
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Text.Encoding qualified as TE
+import Data.Vector qualified as V
 import Data.Word
 import GHC.Generics (Generic (..))
 import GHC.IO.Unsafe (unsafeDupablePerformIO)
@@ -150,6 +166,10 @@ type R2SuffixRangeClass =
   JSDictionaryClass
     '[ '("suffix", JSPrimClass Word64)]
 
+type RawStorageClassClass = EnumClass '["Standard", "InfrequentAccess"]
+
+type RawStorageClass = JSObject RawStorageClassClass
+
 type R2ObjectFields =
   '[ '("key", JSByteStringClass)
    , '("version", JSByteStringClass)
@@ -161,7 +181,7 @@ type R2ObjectFields =
    , '("customMetadata", JSRecordClass JSByteStringClass JSByteStringClass)
    , '("range", R2RangeClass)
    , '("checksums", R2ChecksumsClass)
-   , '("storageClass", EnumClass '["Standard", "InfrequentAccess"])
+   , '("storageClass", RawStorageClassClass)
    ]
 
 asR2ObjFields :: (r2obj <: R2ObjectClass) => JSObject r2obj -> JSDictionary R2ObjectFields
@@ -195,13 +215,18 @@ getObjectCustomMetadata =
       )
 
 getObjectStorageClass :: (r2Obj <: R2ObjectClass) => JSObject r2Obj -> StorageClass
-getObjectStorageClass = asStorageClass . unsafeDupablePerformIO . getDictField "storageClass" . asR2ObjFields
+getObjectStorageClass = fromRawStorageClass . unsafeDupablePerformIO . getDictField "storageClass" . asR2ObjFields
 
-asStorageClass :: JSEnum '["Standard", "InfrequentAccess"] -> StorageClass
-asStorageClass =
+fromRawStorageClass :: RawStorageClass -> StorageClass
+fromRawStorageClass =
   _case
     & onEnum #"Standard" Standard
     & onEnum #"InfrequentAccess" InfrequentAccess
+
+toRawStorageClass :: StorageClass -> RawStorageClass
+toRawStorageClass = \case
+  Standard -> #"Standard"
+  InfrequentAccess -> #"InfrequentAccess"
 
 data StorageClass = Standard | InfrequentAccess
   deriving stock (Eq, Show, Generic)
@@ -227,15 +252,48 @@ decBody obj =
     then Right $ unsafeCast obj
     else Left $ unsafeCast obj
 
-type GetOptionsClass =
-  JSDictionaryClass
-    '[ '("onlyIf", NullableClass (UnionClass '[R2ConditionalClass, HeadersClass]))
-     , '("range", NullableClass R2RangeClass)
-     ]
+type GetOptionsClass = JSDictionaryClass GetOptionsFields
+
+type GetOptionsFields =
+  '[ '("onlyIf", NullableClass (UnionClass '[ConditionalClass, HeadersClass]))
+   , '("range", NullableClass R2RangeClass)
+   ]
 
 type RawGetOptions = JSObject GetOptionsClass
 
-type R2ConditionalClass =
+type PutBodyClass = NullableClass (UnionClass '[ReadableStreamClass, ArrayBufferClass, ArrayBufferViewClass, DOMStringClass, BlobClass])
+
+type PutBody = JSObject PutBodyClass
+
+type PutOptionsFields =
+  '[ '("onlyIf", NullableClass (UnionClass '[ConditionalClass, HeadersClass]))
+   , '("httpMetadata", NullableClass (UnionClass '[R2HTTPMetadataClass, HeadersClass]))
+   , '( "customMetadata"
+      , NullableClass (JSRecordClass JSByteStringClass JSByteStringClass)
+      )
+   , '("md5", NullableClass (UnionClass '[ArrayBufferClass, JSByteStringClass]))
+   , '("sha1", NullableClass (UnionClass '[ArrayBufferClass, JSByteStringClass]))
+   , '("sha256", NullableClass (UnionClass '[ArrayBufferClass, JSByteStringClass]))
+   , '("sha384", NullableClass (UnionClass '[ArrayBufferClass, JSByteStringClass]))
+   , '("sha512", NullableClass (UnionClass '[ArrayBufferClass, JSByteStringClass]))
+   , '("storageClass", NullableClass RawStorageClassClass)
+   ]
+
+type PutOptionsClass = JSDictionaryClass PutOptionsFields
+
+type RawPutOptions = JSObject PutOptionsClass
+
+put :: R2 -> BS.ByteString -> PutBody -> IO (Async (Maybe R2Object))
+put r2 key body = do
+  key' <- fromHaskellByteString key
+  deferWith fromNullable =<< js_put r2 key' body none
+
+putWith :: R2 -> BS.ByteString -> PutBody -> RawPutOptions -> IO (Async (Maybe R2Object))
+putWith r2 key body opts = do
+  key' <- fromHaskellByteString key
+  deferWith fromNullable =<< js_put r2 key' body (nonNull opts)
+
+type ConditionalClass =
   JSDictionaryClass
     '[ '("etagMatches", NullableClass JSByteStringClass)
      , '("etagDoesNotMatch", NullableClass JSByteStringClass)
@@ -243,7 +301,13 @@ type R2ConditionalClass =
      , '("uploadedAfter", NullableClass DateClass)
      ]
 
-type RawR2Conditional = JSObject R2ConditionalClass
+type RawConditional = JSObject ConditionalClass
+
+delete :: R2 -> BS.ByteString -> IO (Async ())
+delete r2 = deferWith (const ()) <=< js_deleteOne r2 <=< fromHaskellByteString
+
+deleteMany :: R2 -> V.Vector BS.ByteString -> IO (Async ())
+deleteMany r2 = deferWith (const ()) <=< js_deleteMany r2 . toSequence <=< mapM fromHaskellByteString
 
 foreign import javascript unsafe "$1.body"
   getBody :: R2ObjectBody -> IO ReadableStream
@@ -281,3 +345,23 @@ foreign import javascript safe "$1.get($2, $3)"
 
 foreign import javascript unsafe "$1.hasOwnProperty('body')"
   js_has_body :: Union '[R2ObjectClass, R2ObjectBodyClass] -> Bool
+
+foreign import javascript safe "$1.put($2, $3, $4)"
+  js_put ::
+    R2 ->
+    JSByteString ->
+    PutBody ->
+    Nullable PutOptionsClass ->
+    IO (Promise (NullableClass R2ObjectClass))
+
+foreign import javascript safe "$1.delete($2)"
+  js_deleteOne ::
+    R2 ->
+    JSByteString ->
+    IO (Promise UndefinedClass)
+
+foreign import javascript safe "$1.delete($2)"
+  js_deleteMany ::
+    R2 ->
+    Sequence JSByteStringClass ->
+    IO (Promise UndefinedClass)
