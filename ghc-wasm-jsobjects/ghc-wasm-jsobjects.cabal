@@ -61,6 +61,7 @@ library
 
   hs-source-dirs: src
   build-depends:
+    async,
     bytestring,
     containers,
     ghc-wasm-compat,

@@ -29,6 +29,7 @@ common defaults
 
   build-depends:
     aeson,
+    async,
     base >=4.7 && <5,
     bytestring,
     containers,
@@ -77,6 +78,7 @@ library
     Language.WASM.JSVal.Convert
     Network.Cloudflare.Worker
     Network.Cloudflare.Worker.Binding
+    Network.Cloudflare.Worker.Binding.D1
     Network.Cloudflare.Worker.Binding.KV
     Network.Cloudflare.Worker.Crypto
     Network.Cloudflare.Worker.FetchAPI

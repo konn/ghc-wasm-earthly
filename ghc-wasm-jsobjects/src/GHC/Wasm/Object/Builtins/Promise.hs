@@ -1,3 +1,4 @@
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TypeData #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -10,8 +11,14 @@ module GHC.Wasm.Object.Builtins.Promise (
   Promise,
   upcastPromise,
   await,
+  awaitWith,
+  awaitWithM,
+  deferWithM,
+  deferWith,
 ) where
 
+import Control.Concurrent.Async (Async, async)
+import Control.Monad ((<=<))
 import GHC.Exts (UnliftedType)
 import GHC.Wasm.Object.Core
 
@@ -27,6 +34,18 @@ upcastPromise = unsafeAsObject . unJSObject
 
 await :: Promise a -> IO (JSObject a)
 await = js_await
+
+awaitWith :: (JSObject a -> b) -> Promise a -> IO b
+awaitWith f = fmap f . await
+
+awaitWithM :: (JSObject a -> IO b) -> Promise a -> IO b
+awaitWithM f = f <=< await
+
+deferWithM :: (JSObject a -> IO b) -> Promise a -> IO (Async b)
+deferWithM f = async . f <=< await
+
+deferWith :: (JSObject a -> b) -> Promise a -> IO (Async b)
+deferWith f = async . fmap f . await
 
 foreign import javascript safe "await $1"
   js_await :: Promise a -> IO (JSObject a)

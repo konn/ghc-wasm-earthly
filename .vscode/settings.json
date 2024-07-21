@@ -5,7 +5,7 @@
         "cmd": "find . -not -path '**/dist-newstyle/**' -and \\( -name '*.cabal' -or -name 'cabal*.project*' \\) -exec cabal-gild --io {} \\;",
         "isAsync": true,
         // FIXME: Remove cabals from the list once HLS with cabal-gild support is released.
-        "match": "(\\.l?hs|cabal.*\\.project.*|\\.cabal)$"
+        "match": "(\\.l?hs|cabal.*\\.project.*)$"
       }
     ]
   },
@@ -13,6 +13,5 @@
     "cabal*.project*": "cabal"
   },
   "deno.enable": true,
-  "haskell.toolchain": { "cabal": "3.12.0.0-prerelease" },
   "haskell.sessionLoading": "multipleComponents"
 }
