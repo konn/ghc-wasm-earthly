@@ -38,6 +38,15 @@ module Network.Cloudflare.Worker.Binding.R2 (
   PutOptionsFields,
   delete,
   deleteMany,
+  list,
+  list',
+  RawListOptions,
+  R2ObjectsView (..),
+  ListOptionsFields,
+  RawListOptionsClass,
+  R2ObjectsFields,
+  R2ObjectsClass,
+  R2Objects,
 
   -- * Object Metadata
   R2Object,
@@ -309,6 +318,56 @@ delete r2 = deferWith (const ()) <=< js_deleteOne r2 <=< fromHaskellByteString
 deleteMany :: R2 -> V.Vector BS.ByteString -> IO (Async ())
 deleteMany r2 = deferWith (const ()) <=< js_deleteMany r2 . toSequence <=< mapM fromHaskellByteString
 
+type ListOptionsFields =
+  '[ '("limit", NullableClass (JSPrimClass Word16))
+   , '("prefix", NullableClass JSByteStringClass)
+   , '("cursor", NullableClass JSByteStringClass)
+   , '("delimiter", NullableClass JSByteStringClass)
+   , '("include", NullableClass (SequenceClass JSByteStringClass))
+   ]
+
+type RawListOptionsClass = JSDictionaryClass ListOptionsFields
+
+type RawListOptions = JSObject RawListOptionsClass
+
+type R2ObjectsFields =
+  '[ '("objects", SequenceClass R2ObjectClass)
+   , '("truncated", JSPrimClass Bool)
+   , '("cursor", NullableClass JSByteStringClass)
+   , '("delimiterPrefixes", SequenceClass JSByteStringClass)
+   ]
+
+type R2ObjectsClass = JSDictionaryClass R2ObjectsFields
+
+type R2Objects = JSObject R2ObjectsClass
+
+data R2ObjectsView = R2ObjectsView
+  { objects :: !(V.Vector R2Object)
+  , truncated :: !Bool
+  , cursor :: !(Maybe BS.ByteString)
+  , delimiterPrefixes :: !(V.Vector BS.ByteString)
+  }
+  deriving (Generic)
+
+list :: R2 -> Maybe RawListOptions -> IO (Async R2ObjectsView)
+list r2 mopts = deferWithM go =<< js_list r2 (toNullable mopts)
+  where
+    go :: R2Objects -> IO R2ObjectsView
+    go objs = do
+      objects <- toVector =<< getDictField "objects" objs
+      truncated <- fromJSPrim <$> getDictField "truncated" objs
+      cursor <-
+        nullable (pure Nothing) (fmap Just . toHaskellByteString)
+          =<< getDictField "cursor" objs
+      delimiterPrefixes <-
+        mapM toHaskellByteString
+          =<< toVector
+          =<< getDictField "delimiterPrefixes" objs
+      pure R2ObjectsView {..}
+
+list' :: R2 -> Nullable RawListOptionsClass -> IO (Promise R2ObjectsClass)
+list' r2 = js_list r2
+
 foreign import javascript unsafe "$1.body"
   getBody :: R2ObjectBody -> IO ReadableStream
 
@@ -365,3 +424,9 @@ foreign import javascript safe "$1.delete($2)"
     R2 ->
     Sequence JSByteStringClass ->
     IO (Promise UndefinedClass)
+
+foreign import javascript safe "$1.list($2)"
+  js_list ::
+    R2 ->
+    Nullable RawListOptionsClass ->
+    IO (Promise R2ObjectsClass)
