@@ -45,10 +45,12 @@ type instance SuperclassOf WorkersCacheClass = 'Nothing
 
 type WorkersCache = JSObject WorkersCacheClass
 
+-- TODO: Use linearity to force clone
 put :: WorkerRequest -> WorkerResponse -> IO (Promise UndefinedClass)
 put = putTo defaultCache
 
-foreign import javascript safe "$1.put($2, $3)"
+-- TODO: Use linearity to force clone
+foreign import javascript safe "$1.put($2, $3.clone())"
   putTo :: WorkersCache -> WorkerRequest -> WorkerResponse -> IO (Promise UndefinedClass)
 
 type WorkersCacheOptionsFields =
