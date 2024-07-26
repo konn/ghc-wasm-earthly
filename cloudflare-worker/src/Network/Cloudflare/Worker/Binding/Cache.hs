@@ -84,7 +84,7 @@ foreign import javascript safe "$1.delete($2, $3)"
     Nullable WorkersCacheOptionsClass ->
     IO (Promise (JSPrimClass Bool))
 
-foreign import javascript safe "$1.then((value) => { if (!x) { return null; } else { return x; } })"
+foreign import javascript safe "$1.then((x) => { if (!x) { return null; } else { return x; } })"
   undefinedToNullPromise :: Promise (UnionClass '[a, UndefinedClass]) -> IO (Promise (NullableClass a))
 
 foreign import javascript unsafe "caches.default"
