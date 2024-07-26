@@ -30,6 +30,7 @@ module Network.Cloudflare.Worker.Response (
   setStatusText,
   newResponse',
   newResponse,
+  toHeaders,
 ) where
 
 import Data.ByteString.Char8 qualified as BS
