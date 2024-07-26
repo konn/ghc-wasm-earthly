@@ -652,7 +652,7 @@ instance
     | otherwise = NoMatch
   matchRoute' _ _ _ = NoMatch
 
-data ResponseType = JSON Type | PlainText | NoContent | HTML
+data ResponseType = JSON Type | PlainText | NoContent | HTML | RawBlob
   deriving (Generic)
 
 type IsResponseType :: ResponseType -> Constraint

@@ -36,8 +36,10 @@ module Network.Cloudflare.Worker.Response (
 import Data.ByteString.Char8 qualified as BS
 import Data.ByteString.Char8 qualified as BS8
 import Data.Map.Strict (Map)
+import Data.Map.Strict qualified as Map
 import Data.Maybe (fromJust)
 import Data.Text qualified as T
+import Data.Text.Encoding qualified as TE
 import Data.Word
 import GHC.Generics (Generic)
 import GHC.Wasm.Object.Builtins
@@ -120,11 +122,11 @@ newResponse' mbody minit =
     (toNullable mbody)
     (toNullable minit)
 
-toHeaders :: Map T.Text T.Text -> IO Headers
+toHeaders :: Map BS.ByteString BS.ByteString -> IO Headers
 toHeaders dic = do
   hdrs0 <-
-    toJSRecord @JSByteStringClass $
-      fromJust . toJSByteString . toJSString . T.unpack <$> dic
+    toJSRecord @JSByteStringClass
+      =<< mapM fromHaskellByteString (Map.mapKeys TE.decodeUtf8 dic)
   js_cons_Headers $ nonNull $ inject hdrs0
 
 type ResponseBody = JSObject ResponseBodyClass
@@ -145,7 +147,7 @@ data SimpleResponseInit = SimpleResponseInit
   { body :: !T.Text
   , status :: !Word16
   , statusText :: !BS.ByteString
-  , headers :: !(Map T.Text T.Text)
+  , headers :: !(Map BS.ByteString BS.ByteString)
   }
   deriving (Show, Eq, Ord, Generic)
 
