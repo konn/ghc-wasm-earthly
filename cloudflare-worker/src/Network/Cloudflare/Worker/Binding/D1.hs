@@ -109,6 +109,8 @@ import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Text qualified as T
 import Data.Text.Lazy qualified as LT
+import Data.Time (UTCTime)
+import Data.Time.Format.ISO8601 (iso8601ParseM, iso8601Show)
 import Data.Vector qualified as V
 import Data.Word
 import Effectful.Concurrent.Async (Async)
@@ -645,6 +647,29 @@ instance (FromD1Value a) => FromD1Value (Maybe a) where
   {-# INLINE parseD1ValueView #-}
   parseD1Value = nullable (Right Nothing) (fmap Just . parseD1Value . upcast)
   {-# INLINE parseD1Value #-}
+
+instance ToD1Value UTCTime where
+  toD1Value = toD1Value . iso8601Show
+  {-# INLINE toD1Value #-}
+  toD1ValueView = toD1ValueView . iso8601Show
+  {-# INLINE toD1ValueView #-}
+
+instance FromD1Value UTCTime where
+  parseD1Value = runTry . iso8601ParseM <=< parseD1Value
+  {-# INLINE parseD1Value #-}
+  parseD1ValueView = runTry . iso8601ParseM <=< parseD1ValueView
+  {-# INLINE parseD1ValueView #-}
+
+runTry :: Try a -> Either String a
+runTry = (.runTry)
+
+newtype Try a = Try {runTry :: Either String a}
+  deriving (Show, Eq, Ord, Generic)
+  deriving newtype (Functor, Applicative, Monad)
+
+instance MonadFail Try where
+  fail = Try . Left
+  {-# INLINE fail #-}
 
 type D1MetadataFields =
   '[ '("duration", JSPrimClass Double)
