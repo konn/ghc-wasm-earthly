@@ -16,6 +16,8 @@ module Network.Cloudflare.Worker.Response (
   ReifiedWorkerResponseInit,
   WorkerResponseInitClass,
   SimpleResponseInit (..),
+  ResponseBodyClass,
+  ResponseBody,
   getBody,
   setBody,
   getBodyUsed,
@@ -39,9 +41,11 @@ import Data.Word
 import GHC.Generics (Generic)
 import GHC.Wasm.Object.Builtins
 import GHC.Wasm.Prim
+import GHC.Wasm.Web.Generated.FormData (FormDataClass)
 import GHC.Wasm.Web.Generated.Headers
 import GHC.Wasm.Web.Generated.ReadableStream
 import GHC.Wasm.Web.Generated.Response
+import GHC.Wasm.Web.Generated.URLSearchParams (URLSearchParamsClass)
 import GHC.Wasm.Web.Generated.WebSocket (WebSocketClass)
 import System.IO.Unsafe (unsafePerformIO)
 import Wasm.Prelude.Linear qualified as PL
@@ -98,7 +102,7 @@ newResponse :: SimpleResponseInit -> IO WorkerResponse
 newResponse resp = do
   headers <- toHeaders resp.headers
   empty <- emptyObject
-  newResponse' (Just resp.body) . Just $
+  newResponse' (Just $ inject $ fromText @USVStringClass resp.body) . Just $
     newDictionary
       ( setPartialField "status" (toJSPrim resp.status)
           PL.. setPartialField
@@ -109,10 +113,10 @@ newResponse resp = do
           PL.. setPartialField "encodeBody" (fromJust $ toJSByteString $ toJSString "automatic")
       )
 
-newResponse' :: Maybe T.Text -> Maybe WorkerResponseInit -> IO WorkerResponse
+newResponse' :: Maybe ResponseBody -> Maybe WorkerResponseInit -> IO WorkerResponse
 newResponse' mbody minit =
   js_new_response
-    (toNullable $ toUSVString . toJSString . T.unpack <$> mbody)
+    (toNullable mbody)
     (toNullable minit)
 
 toHeaders :: Map T.Text T.Text -> IO Headers
@@ -122,8 +126,19 @@ toHeaders dic = do
       fromJust . toJSByteString . toJSString . T.unpack <$> dic
   js_cons_Headers $ nonNull $ inject hdrs0
 
+type ResponseBody = JSObject ResponseBodyClass
+
+type ResponseBodyClass =
+  UnionClass
+    '[ BufferSourceClass
+     , FormDataClass
+     , ReadableStreamClass
+     , URLSearchParamsClass
+     , USVStringClass
+     ]
+
 foreign import javascript unsafe "new Response($1, $2)"
-  js_new_response :: Nullable USVStringClass -> Nullable WorkerResponseInitClass -> IO WorkerResponse
+  js_new_response :: Nullable ResponseBodyClass -> Nullable WorkerResponseInitClass -> IO WorkerResponse
 
 data SimpleResponseInit = SimpleResponseInit
   { body :: !T.Text
