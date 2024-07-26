@@ -516,6 +516,13 @@ instance FromD1Value Word16 where
     Nothing -> Left "Expected an integer"
   {-# INLINE parseD1Value #-}
 
+instance FromD1Value Word32 where
+  parseD1ValueView = fmap (fromIntegral @Int32) . parseD1ValueView
+  parseD1Value p = case fromNullable $ js_decode_int p of
+    Just x -> Right $ fromIntegral $ fromJSPrim x
+    Nothing -> Left "Expected an integer"
+  {-# INLINE parseD1Value #-}
+
 instance ToD1Value Word16 where
   toD1Value = toD1Value . fromIntegral @_ @Int32
   {-# INLINE toD1Value #-}
