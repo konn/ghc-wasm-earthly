@@ -89,6 +89,9 @@ module Network.Cloudflare.Worker.Binding.D1 (
   D1MetricsFields,
   D1MetricsView (..),
 
+  -- ** Batch run
+  batch,
+
   -- ** Executes a raw queries.
   exec,
   exec',
@@ -749,6 +752,11 @@ firstColumns' ::
   IO (Promise (NullableClass (SequenceClass D1ValueClass)))
 firstColumns' = js_first_with_cols
 
+batch :: D1 -> V.Vector Statement -> IO (Async (V.Vector (D1ResultView D1RowView)))
+batch d1 stmts =
+  deferWithM (fmap (V.map (fromResults viewD1Row)) . toVector)
+    =<< js_batch d1 (toSequence stmts)
+
 exec :: D1 -> T.Text -> IO (Async D1ExecResultView)
 exec d1 rawQry = deferWith viewD1ExecResult =<< exec' d1 (fromText rawQry)
 
@@ -831,6 +839,9 @@ foreign import javascript safe "$1.run()"
 
 foreign import javascript safe "$1.exec()"
   js_exec :: D1 -> USVString -> IO (Promise D1ExecResultClass)
+
+foreign import javascript safe "$1.batch($2)"
+  js_batch :: D1 -> Sequence StatementClass -> IO (Promise (SequenceClass (D1ResultClass D1RowClass)))
 
 foreign import javascript unsafe "$3[$1] = $2; return $3"
   js_partial_set :: JSString -> D1Value -> PartialRow %1 -> PartialRow
