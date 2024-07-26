@@ -173,7 +173,7 @@ fromStewardResponse resp = liftIO do
     SimpleResponseInit
       { statusText = resp.status.statusMessage
       , status = fromIntegral resp.status.statusCode
-      , headers = Map.fromList $ map (Bi.bimap (TE.decodeUtf8 . CI.original) TE.decodeUtf8) $ resp.headers
+      , headers = Map.fromList $ map (Bi.first CI.original) $ resp.headers
       , body = LT.toStrict $ LTE.decodeUtf8 resp.body
       }
 
