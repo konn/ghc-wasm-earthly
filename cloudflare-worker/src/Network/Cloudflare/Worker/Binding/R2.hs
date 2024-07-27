@@ -334,7 +334,7 @@ type R2ObjectsFields =
   '[ '("objects", SequenceClass R2ObjectClass)
    , '("truncated", JSPrimClass Bool)
    , '("cursor", NullableClass JSByteStringClass)
-   , '("delimiterPrefixes", SequenceClass JSByteStringClass)
+   , '("delimitedPrefixes", SequenceClass JSByteStringClass)
    ]
 
 type R2ObjectsClass = JSDictionaryClass R2ObjectsFields
@@ -345,7 +345,7 @@ data R2ObjectsView = R2ObjectsView
   { objects :: !(V.Vector R2Object)
   , truncated :: !Bool
   , cursor :: !(Maybe BS.ByteString)
-  , delimiterPrefixes :: !(V.Vector BS.ByteString)
+  , delimitedPrefixes :: !(V.Vector BS.ByteString)
   }
   deriving (Generic)
 
@@ -359,10 +359,10 @@ list r2 mopts = deferWithM go =<< js_list r2 (toNullable mopts)
       cursor <-
         nullable (pure Nothing) (fmap Just . toHaskellByteString)
           =<< getDictField "cursor" objs
-      delimiterPrefixes <-
+      delimitedPrefixes <-
         mapM toHaskellByteString
           =<< toVector
-          =<< getDictField "delimiterPrefixes" objs
+          =<< getDictField "delimitedPrefixes" objs
       pure R2ObjectsView {..}
 
 list' :: R2 -> Nullable RawListOptionsClass -> IO (Promise R2ObjectsClass)
