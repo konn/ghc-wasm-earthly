@@ -37,6 +37,8 @@ module GHC.Wasm.Object.Builtins.String (
   IsJSUnicodeString (..),
 ) where
 
+import Control.DeepSeq
+import Control.Exception (evaluate)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Internal as BS
 import qualified Data.ByteString.Short.Internal as SBS
@@ -161,10 +163,10 @@ jsUnicodeStrToText :: JSObject str -> T.Text
 {-# NOINLINE jsUnicodeStrToText #-}
 jsUnicodeStrToText str = unsafePerformIO do
   let !len = js_jsstr_len str
-  !bs <- allocaArray (len * 3) \buf -> do
+  allocaArray (len * 3) \buf -> do
     actualBytes <- js_encode_utf8_str str buf len
-    SBS.createFromPtr buf actualBytes
-  pure $ ST.toText $ STU.fromShortByteStringUnsafe bs
+    bs <- SBS.createFromPtr buf actualBytes
+    evaluate $ force $ ST.toText $ STU.fromShortByteStringUnsafe bs
 
 textToJSUnicodeStr :: T.Text -> JSObject str
 {-# NOINLINE textToJSUnicodeStr #-}

@@ -65,6 +65,7 @@ library
     async,
     bytestring,
     containers,
+    deepseq,
     ghc-wasm-compat,
     lens,
     primitive,
