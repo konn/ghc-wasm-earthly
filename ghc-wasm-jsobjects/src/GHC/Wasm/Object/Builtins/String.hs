@@ -163,8 +163,10 @@ jsUnicodeStrToText :: JSObject str -> T.Text
 {-# NOINLINE jsUnicodeStrToText #-}
 jsUnicodeStrToText str = unsafePerformIO do
   let !len = js_jsstr_len str
+  consoleLog $ toJSString $ "jsUnicodeStrToText: len: " <> show len
   allocaArray (len * 3) \buf -> do
     actualBytes <- js_encode_utf8_str str buf len
+    consoleLog $ toJSString $ "jsUnicodeStrToText: actualBytes: " <> show actualBytes
     bs <- SBS.createFromPtr buf actualBytes
     evaluate $ force $ ST.toText $ STU.fromShortByteStringUnsafe bs
 
@@ -172,6 +174,9 @@ textToJSUnicodeStr :: T.Text -> JSObject str
 {-# NOINLINE textToJSUnicodeStr #-}
 textToJSUnicodeStr txt = unsafePerformIO $ T.withCStringLen txt \(cstr, len) ->
   js_decode_utf8_str cstr len
+
+foreign import javascript unsafe "console.log($1)"
+  consoleLog :: JSString -> IO ()
 
 foreign import javascript unsafe "(new TextDecoder()).decode(new Uint8Array(__exports.memory.buffer, $1, $2))"
   js_decode_utf8_str :: Ptr CChar -> Int -> IO (JSObject str)
