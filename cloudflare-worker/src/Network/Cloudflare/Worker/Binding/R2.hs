@@ -383,7 +383,7 @@ foreign import javascript safe "$1.text()"
 foreign import javascript safe "$1.blob()"
   getBodyBlob :: R2ObjectBody -> IO (Promise BlobClass)
 
-foreign import javascript safe "$1.blob()"
+foreign import javascript safe "$1.writeHttpMetadata($2)"
   js_ffi_write_obj_md :: R2Object -> Headers -> IO ()
 
 foreign import javascript safe "$1.head($2)"
