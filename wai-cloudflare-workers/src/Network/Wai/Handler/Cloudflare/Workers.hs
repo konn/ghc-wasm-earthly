@@ -10,7 +10,7 @@
 module Network.Wai.Handler.Cloudflare.Workers (run) where
 
 import Control.Concurrent.MVar
-import Control.Exception.Safe (Exception (displayException), tryAny)
+import Control.Exception.Safe (Exception (displayException), SomeException, handleAny)
 import qualified Data.Bifunctor as Bi
 import qualified Data.ByteString.Char8 as BS8
 import qualified Data.CaseInsensitive as CI
@@ -39,22 +39,22 @@ import System.IO.Unsafe (unsafePerformIO)
 import Text.Read (readMaybe)
 
 run :: Application -> FetchHandler e
-run app cfReq env ctx = do
+run app cfReq env ctx = handleAny reportError do
   respVar <- newEmptyMVar
   req' <- toWaiReq env ctx cfReq
-  eith <- tryAny $ app req' \resp -> do
-    putMVar respVar =<< fromWaiResp resp
-    pure ResponseReceived
-  case eith of
-    Right ResponseReceived -> takeMVar respVar
-    Left e -> do
-      Resp.newResponse
-        Resp.SimpleResponseInit
-          { body = "Exception: " <> T.pack (displayException e)
-          , status = 500
-          , statusText = "Internal Server Error"
-          , headers = fromList [("Content-Type", "text/plain")]
-          }
+  ResponseReceived <- app req' \resp ->
+    ResponseReceived <$ putMVar respVar resp
+  fromWaiResp =<< takeMVar respVar
+
+reportError :: SomeException -> IO Resp.WorkerResponse
+reportError e =
+  Resp.newResponse
+    Resp.SimpleResponseInit
+      { body = "Exception: " <> T.pack (displayException e)
+      , status = 500
+      , statusText = "Internal Server Error"
+      , headers = fromList [("Content-Type", "text/plain")]
+      }
 
 fromWaiResp :: Response -> IO Resp.WorkerResponse
 fromWaiResp = undefined
