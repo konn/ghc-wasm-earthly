@@ -598,6 +598,12 @@ library
     GHC.Wasm.Web.Generated.MediaSessionActionHandler.Core
     GHC.Wasm.Web.Generated.MediaSessionPlaybackState
     GHC.Wasm.Web.Generated.MediaSessionPlaybackState.Core
+    GHC.Wasm.Web.Generated.MediaSource
+    GHC.Wasm.Web.Generated.MediaSource.Core
+    GHC.Wasm.Web.Generated.MediaSourceEndOfStreamError
+    GHC.Wasm.Web.Generated.MediaSourceEndOfStreamError.Core
+    GHC.Wasm.Web.Generated.MediaSourceReadyState
+    GHC.Wasm.Web.Generated.MediaSourceReadyState.Core
     GHC.Wasm.Web.Generated.MediaStream
     GHC.Wasm.Web.Generated.MediaStream.Core
     GHC.Wasm.Web.Generated.MediaStreamConstraints
@@ -950,6 +956,8 @@ library
     GHC.Wasm.Web.Generated.SourceBuffer.Core
     GHC.Wasm.Web.Generated.SourceBufferAppendMode
     GHC.Wasm.Web.Generated.SourceBufferAppendMode.Core
+    GHC.Wasm.Web.Generated.SourceBufferList
+    GHC.Wasm.Web.Generated.SourceBufferList.Core
     GHC.Wasm.Web.Generated.SpeechSynthesis
     GHC.Wasm.Web.Generated.SpeechSynthesis.Core
     GHC.Wasm.Web.Generated.SpeechSynthesisUtterance
@@ -1008,6 +1016,8 @@ library
     GHC.Wasm.Web.Generated.U2FSignCallback.Core
     GHC.Wasm.Web.Generated.URI
     GHC.Wasm.Web.Generated.URI.Core
+    GHC.Wasm.Web.Generated.URL
+    GHC.Wasm.Web.Generated.URL.Core
     GHC.Wasm.Web.Generated.URLSearchParams
     GHC.Wasm.Web.Generated.URLSearchParams.Core
     GHC.Wasm.Web.Generated.USB
