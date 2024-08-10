@@ -8,12 +8,15 @@
 module GHC.Wasm.Web.ReadableStream (
   toReadableStream,
   fromReadableStream,
+  getReader,
+  popReader,
   module GHC.Wasm.Web.Generated.ReadableStream,
 ) where
 
 import Control.Exception (finally)
 import Control.Monad ((<=<))
 import Control.Monad.Trans.Class (lift)
+import qualified Data.ByteString as BS
 import Data.Word
 import GHC.Wasm.Object.Builtins
 import GHC.Wasm.Web.Generated.ReadableStream
@@ -67,16 +70,18 @@ foreign import javascript unsafe "new ReadableStream({ start(ctrl) { $1(ctrl); }
 
 fromReadableStream :: ReadableStream -> Q.ByteStream IO ()
 fromReadableStream =
-  fromReadResult
-    <=< lift
-      . ( fmap (unsafeCast @_ @(ReadableStreamDefaultReaderClass))
-            . flip
-              js_fun_getReader_nullable_ReadableStreamGetReaderOptions_ReadableStreamReader
-              none
-        )
+  Q.reread popReader
+    <=< lift . getReader
 
-fromReadResult :: ReadableStreamDefaultReader -> Q.ByteStream IO ()
-fromReadResult = Q.reread \inp -> do
+getReader :: ReadableStream -> IO ReadableStreamDefaultReader
+getReader =
+  fmap (unsafeCast @_ @(ReadableStreamDefaultReaderClass))
+    . flip
+      js_fun_getReader_nullable_ReadableStreamGetReaderOptions_ReadableStreamReader
+      none
+
+popReader :: ReadableStreamDefaultReader -> IO (Maybe BS.ByteString)
+popReader inp = do
   resl <- await =<< js_fun_read__Promise_ReadableStreamReadResult inp
   done <- getDictField "done" resl
   value <-

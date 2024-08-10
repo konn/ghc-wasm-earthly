@@ -1,5 +1,16 @@
 with-compiler: wasm32-wasi-ghc-9.10.0.20240412
-packages: **/*.cabal
+packages:
+  cloudflare-worker/cloudflare-worker.cabal
+  ghc-wasm-*/*.cabal
+  network-ghc-wasm/network.cabal
+  servant-*/*.cabal
+  steward-*/*.cabal
+  wasm-jsffi-ghc-demo/*.cabal
+  wasm-linear-base/*.cabal
+  web-sys-hs/*.cabal
+  webidl-*/*.cabal
+  wai-cloudflare-workers/*.cabal
+
 import: cabal-common.project
 optimization: False
 index-state: hackage.haskell.org 2024-06-10T20:40:29Z
