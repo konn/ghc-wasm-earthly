@@ -122,6 +122,12 @@ As of 2024-04-20, HLS doesn't compile with GHC 9.10 (even if almost all plugins 
 It might not be too hard to fix it, but I would rather use GHC 9.8 on the host.
 The situation should be resolved once HLS supports GHC 9.10.
 
+## Notes on Routers for Cloudflare Worker
+
+Although this repository contains some implementation of a Servant-Workers bridge, it is not encouraged to use it.
+It currently converts ReadableStream from/to Haskell-side streaming mechanisms to use with WAI-types, which makes interop with R2 and/or Caching API of Workers fragile.
+We decided to develop Steward, which is a subset of Servant's Generic interface and designed (incompletely) to work both with Workers and client.
+
 ## Prior Works
 
 ### GHC WASM Backend + JSFFI
@@ -145,3 +151,4 @@ https://github.com/Lugendre/earthly-haskell
 ### Cloudflare Worker with Haskell
 
 [Stack Builders](https://blog.cloudflare.com/cloudflare-worker-with-webassembly-and-haskell) already achieved this with Asterius.
+
