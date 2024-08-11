@@ -160,12 +160,12 @@ foreign import javascript unsafe "wrapper"
 
 foreign import javascript unsafe "new (class _ extends ReadableStream {\
   \constructor() {\
-    \this.__ref = $1;\
     \super({\
       \start: (ctrl) => { $2(this.__ref, ctrl) }, \
       \cancel: (ctrl) => { $3(this.__ref, ctrl) }, \
       \type: 'bytes' \
-    \})\
+    \});\
+    \this.__ref = $1;\
   \}})"
   js_new_CustomReadableStream_push ::
     StablePtr a ->
@@ -175,12 +175,12 @@ foreign import javascript unsafe "new (class _ extends ReadableStream {\
 
 foreign import javascript unsafe "new (class _ extends ReadableStream {\
   \constructor() {\
-    \this.__ref = $1;\
     \super({\
       \pull: (ctrl) => { $2(this.__ref, ctrl) }, \
       \cancel: (ctrl) => { $3(this.__ref, ctrl) }, \
       \type: 'bytes' \
-    \})\
+    \});\
+    \this.__ref = $1;\
   \}})"
   js_new_CustomReadableStream_pull ::
     StablePtr a ->
