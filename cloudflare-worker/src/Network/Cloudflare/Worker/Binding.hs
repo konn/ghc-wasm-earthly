@@ -21,6 +21,9 @@ module Network.Cloudflare.Worker.Binding (
   getEnv,
   getSecret,
   getBinding,
+  ListMember,
+  Member,
+  Lookup',
 ) where
 
 import Data.Aeson qualified as J

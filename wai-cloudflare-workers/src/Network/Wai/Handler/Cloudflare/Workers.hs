@@ -7,12 +7,27 @@
 {-# LANGUAGE ViewPatterns #-}
 {-# OPTIONS_GHC -Wno-deprecations #-}
 
-module Network.Wai.Handler.Cloudflare.Workers (run) where
+module Network.Wai.Handler.Cloudflare.Workers (
+  run,
 
+  -- * Utilities
+  toWorkerResponse,
+  fromWorkerRequest,
+
+  -- * Re-exports
+  JSObject (..),
+  FetchHandler,
+) where
+
+import Control.Concurrent.Async (async, cancel)
 import Control.Concurrent.MVar
-import Control.Exception.Safe (Exception (displayException), SomeException, handleAny)
+import Control.Concurrent.STM (atomically)
+import Control.Concurrent.STM.TBMChan (closeTBMChan, newTBMChanIO, readTBMChan, writeTBMChan)
+import Control.Exception.Safe (Exception (displayException), SomeException, finally, handleAny, throwString)
 import qualified Data.Bifunctor as Bi
+import qualified Data.ByteString.Builder as BB
 import qualified Data.ByteString.Char8 as BS8
+import qualified Data.ByteString.Lazy as LBS
 import qualified Data.CaseInsensitive as CI
 import qualified Data.Char as C
 import Data.Generics.Labels ()
@@ -29,22 +44,25 @@ import Network.Cloudflare.Worker.Handler.Fetch
 import Network.Cloudflare.Worker.Request (WorkerIncomingRequestCf)
 import qualified Network.Cloudflare.Worker.Request as Req
 import qualified Network.Cloudflare.Worker.Response as Resp
+import Network.HTTP.Types.Header (ResponseHeaders)
+import Network.HTTP.Types.Status
 import Network.HTTP.Types.URI (decodePathSegments, parseQuery)
 import Network.HTTP.Types.Version
 import Network.Socket (SockAddr (..), tupleToHostAddress, tupleToHostAddress6)
 import Network.URI (URI (..), parseURI)
 import Network.Wai
-import Network.Wai.Internal (Request (..), ResponseReceived (..))
+import Network.Wai.Internal (Request (..), Response (..), ResponseReceived (..))
 import System.IO.Unsafe (unsafePerformIO)
 import Text.Read (readMaybe)
+import qualified Wasm.Prelude.Linear as PL
 
 run :: Application -> FetchHandler e
 run app cfReq env ctx = handleAny reportError do
   respVar <- newEmptyMVar
-  req' <- toWaiReq env ctx cfReq
+  req' <- fromWorkerRequest env ctx cfReq
   ResponseReceived <- app req' \resp ->
     ResponseReceived <$ putMVar respVar resp
-  fromWaiResp =<< takeMVar respVar
+  toWorkerResponse =<< takeMVar respVar
 
 reportError :: SomeException -> IO Resp.WorkerResponse
 reportError e =
@@ -56,11 +74,55 @@ reportError e =
       , headers = fromList [("Content-Type", "text/plain")]
       }
 
-fromWaiResp :: Response -> IO Resp.WorkerResponse
-fromWaiResp = undefined
+toWorkerResponse :: Response -> IO Resp.WorkerResponse
+toWorkerResponse ResponseFile {} =
+  throwString "ResponseFile is not supported in Workers"
+toWorkerResponse (ResponseBuilder stt hdrs bdy) = do
+  let lbs = BB.toLazyByteString bdy
+  body <-
+    if LBS.null lbs
+      then pure Nothing
+      else Just <$> RS.fromLazyByteString lbs
+  responseWithBody stt hdrs body
+toWorkerResponse (ResponseStream stt hdrs stream) = do
+  ch <- newTBMChanIO 128
+  token <-
+    async $
+      stream (atomically . writeTBMChan ch) mempty
+        `finally` atomically (closeTBMChan ch)
+  body <-
+    Just
+      <$> RS.newPullReadableStream
+        ( \(ch', _) ctrl -> do
+            mch <- atomically (readTBMChan ch')
+            case mch of
+              Nothing -> RS.closeStream ctrl
+              Just bs -> do
+                mapM_ (flip RS.enqueueBS ctrl) $ LBS.toChunks $ BB.toLazyByteString bs
+        )
+        (\(ch', tok) _ -> cancel tok >> atomically (closeTBMChan ch'))
+        (ch, token)
+  responseWithBody stt hdrs body
+toWorkerResponse ResponseRaw {} = throwString "ResponseRaw is not supported in Workers"
 
-toWaiReq :: JSObject e -> FetchContext -> Req.WorkerRequest -> IO Request
-toWaiReq e ctx wreq = do
+responseWithBody :: Status -> ResponseHeaders -> Maybe ReadableStream -> IO Resp.WorkerResponse
+responseWithBody stt hdrs body = do
+  headers <- Resp.toHeaders $ fromList $ map (Bi.first CI.original) hdrs
+  empty <- emptyObject
+  sttMsg <- fromHaskellByteString stt.statusMessage
+  auto <- fromHaskellByteString "automatic"
+  Resp.newResponse'
+    (inject <$> body)
+    $ Just
+    $ newDictionary
+      PL.$ setPartialField "headers" (inject headers)
+      PL.. setPartialField "status" (toJSPrim $ fromIntegral stt.statusCode)
+      PL.. setPartialField "statusText" sttMsg
+      PL.. setPartialField "cf" empty
+      PL.. setPartialField "encodeBody" auto
+
+fromWorkerRequest :: JSObject e -> FetchContext -> Req.WorkerRequest -> IO Request
+fromWorkerRequest e ctx wreq = do
   let cf = Req.getCloudflare wreq
   requestMethod <- toHaskellByteString $ Req.getMethod wreq
   proto <- toText <$> getDictField "httpProtocol" cf

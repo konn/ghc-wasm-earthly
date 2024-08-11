@@ -18,6 +18,7 @@ active-repositories: hackage.haskell.org
 allow-newer:
   base,
   bytestring,
+  Cabal,
   containers,
   deepseq,
   filepath,
@@ -45,3 +46,9 @@ source-repository-package
     effectful-lens
     time-effectful
     random-effectful
+
+source-repository-package
+  type: git
+  tag: cd8b8c6fc981cf998f0444997896f7404e1e0b3d
+  location: https://github.com/konn/servant
+  subdir: servant-server

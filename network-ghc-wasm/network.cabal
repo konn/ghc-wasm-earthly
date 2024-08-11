@@ -1,6 +1,6 @@
 cabal-version: 3.4
 name: network
-version: 3.2.1.0
+version: 3.1.0.0
 description: Please see the README on GitHub at <https://github.com/konn/ghc-wasm-earthly/network-ghc-wasm#readme>
 homepage: https://github.com/konn/ghc-wasm-earthly#readme
 bug-reports: https://github.com/konn/ghc-wasm-earthly/issues

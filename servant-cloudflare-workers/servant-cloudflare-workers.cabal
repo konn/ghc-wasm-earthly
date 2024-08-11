@@ -1,7 +1,7 @@
 cabal-version: 3.4
-name: wai-cloudflare-workers
+name: servant-cloudflare-workers
 version: 0.1.0.0
-description: Please see the README on GitHub at <https://github.com/konn/ghc-wasm-earthly/wai-cloudflare-workers#readme>
+description: Please see the README on GitHub at <https://github.com/konn/ghc-wasm-earthly/servant-cloudflare-workers#readme>
 homepage: https://github.com/konn/ghc-wasm-earthly#readme
 bug-reports: https://github.com/konn/ghc-wasm-earthly/issues
 author: Hiromi ISHII
@@ -20,11 +20,11 @@ extra-doc-files:
 source-repository head
   type: git
   location: https://github.com/konn/ghc-wasm-earthly
-  subdir: wai-cloudflare-workers
+  subdir: servant-cloudflare-workers
 
 common defaults
-  autogen-modules: Paths_wai_cloudflare_workers
-  other-modules: Paths_wai_cloudflare_workers
+  autogen-modules: Paths_servant_cloudflare_workers
+  other-modules: Paths_servant_cloudflare_workers
   ghc-options:
     -Wall
     -Wcompat
@@ -50,28 +50,39 @@ common defaults
 library
   import: defaults
   build-depends:
-    async,
+    aeson,
     bytestring,
-    case-insensitive,
     cloudflare-worker,
-    generic-lens,
+    effectful,
     ghc-wasm-jsobjects,
-    http-types,
-    lens,
-    network,
-    network-uri,
+    mtl,
     safe-exceptions,
-    stm,
-    stm-chans,
+    servant,
+    servant-server,
     text,
-    unordered-containers,
-    vault,
+    transformers,
+    unliftio-core,
     wai,
-    wasm-linear-base,
+    wai-cloudflare-workers,
     web-sys-hs,
 
   hs-source-dirs: src
   -- cabal-gild: discover src --exclude=src/**/Internal.hs --exclude=src/**/Internal/**/*.hs
-  exposed-modules: Network.Wai.Handler.Cloudflare.Workers
+  exposed-modules: Servant.Workers
   -- cabal-gild: discover src --include=src/**/Internal.hs --include=src/**/Internal/**/*.hs
   other-modules:
+
+executable servant-workers-demo
+  import: defaults
+  hs-source-dirs: app
+  main-is: Main.hs
+  -- cabal-gild: discover app --exclude=app/Main.hs
+  other-modules:
+  ghc-options: -O2
+  build-depends: servant-cloudflare-workers
+
+  if os(wasi)
+    ghc-options:
+      -no-hs-main
+      -optl-mexec-model=reactor
+      "-optl-Wl,--export=handlers"

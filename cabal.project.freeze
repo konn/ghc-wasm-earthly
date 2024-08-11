@@ -36,6 +36,7 @@ constraints:
   comonad ==5.0.8,
   comonad +containers +distributive +indexed-traversable,
   conduit ==1.3.5,
+  constraints == 0.14.2,
   containers ==0.7,
   contravariant ==1.5.5,
   contravariant +semigroups +statevar +tagged,
@@ -204,4 +205,4 @@ source-repository-package
     time-effectful
     random-effectful
 
-allow-newer: base, template-haskell, containers
+allow-newer: base, template-haskell, containers, filepath, Cabal, bytestring, text
