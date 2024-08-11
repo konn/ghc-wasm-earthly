@@ -101,6 +101,8 @@ executable hello-worker
   build-depends:
     streaming,
     streaming-bytestring,
+    wasm-linear-base,
+    web-sys-hs,
 
   if os(wasi)
     ghc-options:
