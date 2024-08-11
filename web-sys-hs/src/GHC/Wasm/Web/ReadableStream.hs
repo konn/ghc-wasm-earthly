@@ -74,7 +74,7 @@ closeStream :: StreamController -> IO ()
 closeStream = js_cls
 
 enqueueBS :: BS.ByteString -> StreamController -> IO ()
-enqueueBS bs = useByteStringAsJSByteArray bs . js_enq
+enqueueBS bs ctrl = useByteStringAsJSByteArray bs (js_enq ctrl <=< js_copy_bytes)
 
 newPushReadableStream ::
   StartStream a ->
@@ -145,6 +145,9 @@ type CancelStream a = a -> USVString -> IO ()
 
 foreign import javascript unsafe "$1.enqueue($2)"
   js_enq :: StreamController -> Uint8Array -> IO ()
+
+foreign import javascript unsafe "new Uint8Array($1)"
+  js_copy_bytes :: Uint8Array -> IO Uint8Array
 
 foreign import javascript unsafe "$1.close()"
   js_cls :: StreamController -> IO ()

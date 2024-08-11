@@ -11,11 +11,14 @@ import Data.Aeson qualified as J
 import Data.Aeson.Key qualified as AK
 import Data.Aeson.KeyMap qualified as AKM
 import Data.ByteString.Char8 qualified as BS8
+import Data.ByteString.Lazy qualified as LBS
 import Data.Map.Strict qualified as Map
 import Data.Text.Lazy qualified as LT
 import Data.Text.Lazy.Encoding qualified as LTE
+import Data.Word (Word8)
 import GHC.Wasm.Object.Builtins
 import GHC.Wasm.Prim
+import GHC.Wasm.Web.ReadableStream qualified as RS
 import Lucid
 import Network.Cloudflare.Worker.Handler
 import Network.Cloudflare.Worker.Handler.Fetch (FetchHandler)
@@ -23,6 +26,7 @@ import Network.Cloudflare.Worker.Request qualified as Req
 import Network.Cloudflare.Worker.Response
 import Streaming (lift)
 import Streaming.ByteString qualified as Q
+import Wasm.Prelude.Linear qualified as PL
 
 foreign export javascript "handlers" handlers :: IO JSHandlers
 
@@ -31,14 +35,23 @@ handlers = toJSHandlers Handlers {fetch}
 
 fetch :: FetchHandler AnyClass
 fetch req _ _ = do
-  body <- fmap LT.toStrict $ renderTextT $ buildResponseBody req
-  newResponse
-    SimpleResponseInit
-      { statusText = "Ok"
-      , status = 200
-      , headers = Map.fromList [("Content-Type", "text/html")]
-      , ..
-      }
+  body <-
+    LBS.toStrict
+      <$> renderBST (buildResponseBody req)
+  hdrs <- toHeaders $ Map.fromList [("Content-Type", "text/html")]
+  empty <- emptyObject
+  auto <- fromHaskellByteString "automatic"
+  ok <- fromHaskellByteString "Ok"
+  useByteStringAsJSByteArray @Word8 body \buf ->
+    newResponse'
+      (Just $ inject buf)
+      $ Just
+      $ newDictionary
+        PL.$ setPartialField "status" (toJSPrim 200)
+        PL.. setPartialField "statusText" ok
+        PL.. setPartialField "headers" (inject hdrs)
+        PL.. setPartialField "cf" empty
+        PL.. setPartialField "encodeBody" auto
 
 buildResponseBody :: Req.WorkerRequest -> HtmlT IO ()
 buildResponseBody req = do
