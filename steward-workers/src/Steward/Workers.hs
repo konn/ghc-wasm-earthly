@@ -18,6 +18,7 @@
 module Steward.Workers (
   Worker,
   runWorker,
+  runWorker',
   getContext,
   getWorkerEnv,
   getCloudflareJSON,
@@ -27,6 +28,7 @@ module Steward.Workers (
   getCloudflarePublicKeys,
   CloudflareTunnelConfig (..),
   withCloudflareTunnelAuth,
+  fromStewardResponse,
 
   -- * Re-exports
   JSObject (..),
@@ -48,7 +50,6 @@ import Data.Map.Strict qualified as Map
 import Data.Maybe (fromJust)
 import Data.String (fromString)
 import Data.Text qualified as T
-import Data.Text.Encoding qualified as TE
 import Data.Text.Lazy qualified as LT
 import Data.Text.Lazy.Encoding qualified as LTE
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
@@ -57,7 +58,6 @@ import Effectful.Dispatch.Static
 import Effectful.Time (Clock, getCurrentTime)
 import GHC.Generics (Generic)
 import GHC.Wasm.Object.Builtins
-import GHC.Wasm.Prim (fromJSString)
 import Network.Cloudflare.Worker.Binding
 import Network.Cloudflare.Worker.Crypto (CloudflareAudienceID, CloudflarePubKeys, CloudflareUser, TeamName, verifyCloudflareJWTAssertion)
 import Network.Cloudflare.Worker.Crypto qualified as Crypto
@@ -154,6 +154,12 @@ runWorker :: Eff '[Worker e, IOE] StewardResponse -> FetchHandler e
 runWorker act req env context = runEff $ handleAny toErrorResp do
   req' <- toStewardRequest req
   fromStewardResponse
+    =<< evalStaticRep WorkerEnv {rawRequest = req, request = req', ..} act
+
+runWorker' :: Eff '[Worker e, IOE] (Either Resp.WorkerResponse StewardResponse) -> FetchHandler e
+runWorker' act req env context = runEff $ handleAny toErrorResp do
+  req' <- toStewardRequest req
+  either pure fromStewardResponse
     =<< evalStaticRep WorkerEnv {rawRequest = req, request = req', ..} act
 
 toErrorResp :: SomeException -> Eff '[IOE] WorkerResponse
