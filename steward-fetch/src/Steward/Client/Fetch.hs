@@ -98,6 +98,7 @@ instance MonadClient ClientM where
               setPartialField "body" (nonNull (nonNull $ inject mbody))
                 PL.. setPartialField "method" (nonNull meth)
                 PL.. setPartialField "headers" (nonNull $ inject reqHeaders)
+      consoleLog =<< stringify reqInit
       await =<< fetcher (unsafeCast url) (nonNull reqInit)
     statusCode <- liftIO $ Resp.js_get_status resp
     statusText <-
@@ -137,3 +138,9 @@ foreign import javascript safe "fetch($1, $2)"
 
 foreign import javascript safe "$1.fetch($2, $3)"
   js_fetch_of :: JSObject a -> Fetcher
+
+foreign import javascript unsafe "console.log($1)"
+  consoleLog :: USVString -> IO ()
+
+foreign import javascript unsafe "JSON.stringify($1)"
+  stringify :: JSObject a -> IO USVString
