@@ -79,6 +79,7 @@ library
     Language.WASM.JSVal.Convert
     Network.Cloudflare.Worker
     Network.Cloudflare.Worker.Binding
+    Network.Cloudflare.Worker.Binding.Assets
     Network.Cloudflare.Worker.Binding.Cache
     Network.Cloudflare.Worker.Binding.D1
     Network.Cloudflare.Worker.Binding.KV
