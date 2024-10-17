@@ -28,6 +28,8 @@ module Steward.Workers (
   getCloudflarePublicKeys,
   CloudflareTunnelConfig (..),
   withCloudflareTunnelAuth,
+  withCloudflareTunnelAuth',
+  AuthResult (..),
   fromStewardResponse,
 
   -- * Re-exports
@@ -118,25 +120,40 @@ withCloudflareTunnelAuth ::
   (CloudflareUser -> Eff es Bool) ->
   (CloudflareUser -> Eff es StewardResponse) ->
   Eff es StewardResponse
-withCloudflareTunnelAuth cfg check act = do
+withCloudflareTunnelAuth cfg check act = withCloudflareTunnelAuth' @e cfg check \case
+  Authorised user -> act user
+  Unauthorised user ->
+    pure $
+      StewardResponse (Status 403 "Forbidden") [] $
+        "User not allowed to access: " <> fromString (show user)
+  AuthError err ->
+    pure $
+      StewardResponse
+        (Status 401 "Unauthorized")
+        []
+        ("Invalid CloudflareTunnel: " <> fromString err)
+
+data AuthResult = AuthError String | Authorised CloudflareUser | Unauthorised CloudflareUser
+  deriving (Show, Eq, Ord, Generic)
+
+withCloudflareTunnelAuth' ::
+  forall e es a.
+  (Worker e :> es, Clock :> es) =>
+  CloudflareTunnelConfig ->
+  (CloudflareUser -> Eff es Bool) ->
+  (AuthResult -> Eff es a) ->
+  Eff es a
+withCloudflareTunnelAuth' cfg check act = do
   WorkerEnv {rawRequest} <- getStaticRep @(Worker e)
   now <- utcTimeToPOSIXSeconds <$> getCurrentTime
   keys <- getCloudflarePublicKeys @e cfg.teamName
   case verifyCloudflareJWTAssertion now cfg.appAudienceID keys rawRequest of
-    Left err ->
-      pure $
-        StewardResponse
-          (Status 401 "Unauthorized")
-          []
-          ("Invalid CloudflareTunnel: " <> fromString err)
+    Left err -> act $ AuthError err
     Right user -> do
       authorized <- check user
       if authorized
-        then act user
-        else
-          pure $
-            StewardResponse (Status 403 "Forbidden") [] $
-              "User not allowed to access: " <> fromString (show user)
+        then act $ Authorised user
+        else act $ Unauthorised user
 
 getCloudflarePublicKeys :: (Worker e :> es) => String -> Eff es CloudflarePubKeys
 getCloudflarePublicKeys = unsafeEff_ . Crypto.getCloudflarePublicKeys
