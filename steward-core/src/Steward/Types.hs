@@ -65,7 +65,7 @@ module Steward.Types (
 ) where
 
 import Control.Exception.Safe (Exception, MonadThrow, throwM)
-import Control.Lens ((%~), (&), (.~))
+import Control.Lens ((%~), (&), (?~))
 import Control.Monad ((<=<))
 import Data.Aeson (FromJSON, ToJSON)
 import Data.Aeson qualified as J
@@ -311,7 +311,7 @@ data PartialRequest = PartialRequest
   { pathInfo :: ![T.Text]
   , queryString :: !DQuery
   , method :: !StdMethod
-  , body :: !LBS.ByteString
+  , body :: !(Maybe LBS.ByteString)
   , headers :: !RequestHeaders
   }
   deriving (Generic)
@@ -442,7 +442,7 @@ instance (PreRoutable t) => PreRoutable (RawRequestBody /> t) where
   type RouteArgs (RawRequestBody /> t) = LBS.ByteString ': RouteArgs t
   type ResponseSeed (RawRequestBody /> t) = ResponseSeed t
   buildRequest' _ (a :- xs) =
-    buildRequest' (proxy# @t) xs & #body .~ a
+    buildRequest' (proxy# @t) xs & #body ?~ a
   decodeResponseBody' _ = decodeResponseBody' @t proxy#
 
 instance (Routable m t) => Routable m (RawRequestBody /> t) where
@@ -600,7 +600,7 @@ instance (ToJSON a, PreRoutable t) => PreRoutable (JSONBody a /> t) where
   type ResponseSeed (JSONBody a /> t) = ResponseSeed t
   buildRequest' _ (a :- xs) =
     buildRequest' (proxy# @t) xs
-      & #body .~ J.encode a
+      & #body ?~ J.encode a
   decodeResponseBody' _ = decodeResponseBody' @t proxy#
 
 instance (ToJSON a, FromJSON a, Routable m t) => Routable m (JSONBody a /> t) where
@@ -626,7 +626,7 @@ instance
       { pathInfo = []
       , queryString = mempty
       , method = methodVal meth
-      , body = mempty
+      , body = Nothing
       , headers = []
       }
   decodeResponseBody' _ = decodeResponseType' (proxy# @responseType)

@@ -87,7 +87,7 @@ instance MonadClient ClientM where
             TE.decodeUtf8 $
               renderQuery True $
                 F.toList preq.queryString
-    resp <- liftIO $ useByteStringAsJSByteArray @Word8 (LBS.toStrict preq.body) \mbody -> do
+    resp <- liftIO $ maybe ($ Nothing) (\s k -> useByteStringAsJSByteArray @Word8 (LBS.toStrict s) (k . Just)) preq.body \mbody -> do
       reqHeaders <-
         toJSRecord @JSByteStringClass @JSByteStringClass
           . Map.fromList
@@ -95,7 +95,7 @@ instance MonadClient ClientM where
       meth <- liftIO $ fromHaskellByteString $ BS8.pack $ show preq.method
       let reqInit =
             newDictionary @RequestInitFields do
-              setPartialField "body" (if LBS.null preq.body then none else nonNull (nonNull $ inject mbody))
+              setPartialField "body" (maybe none (nonNull . nonNull . inject) mbody)
                 PL.. setPartialField "method" (nonNull meth)
                 PL.. setPartialField "headers" (nonNull $ inject reqHeaders)
       consoleLog =<< stringify reqInit

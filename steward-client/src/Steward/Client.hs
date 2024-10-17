@@ -132,7 +132,7 @@ fromStewardRequest uri req =
               BB.byteString (BS8.dropWhileEnd (== '/') r.path)
                 <> encodePathSegments req.pathInfo
       , H.queryString = renderQuery True (F.toList req.queryString)
-      , H.requestBody = H.RequestBodyLBS req.body
+      , H.requestBody = maybe (H.RequestBodyBS "") H.RequestBodyLBS req.body
       }
 
 data StewardClientError = StatusCodeException Status LBS.ByteString
