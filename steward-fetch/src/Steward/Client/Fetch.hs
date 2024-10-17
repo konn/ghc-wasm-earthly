@@ -18,9 +18,9 @@ import Control.Monad (unless)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Reader (ReaderT, ask, runReaderT)
 import qualified Data.Bitraversable as Bi
-import qualified Data.ByteString as LBS
 import qualified Data.ByteString.Builder as BB
 import qualified Data.ByteString.Char8 as BS8
+import qualified Data.ByteString.Lazy as LBS
 import qualified Data.CaseInsensitive as CI
 import qualified Data.Foldable as F
 import qualified Data.Map.Strict as Map
@@ -95,7 +95,7 @@ instance MonadClient ClientM where
       meth <- liftIO $ fromHaskellByteString $ BS8.pack $ show preq.method
       let reqInit =
             newDictionary @RequestInitFields do
-              setPartialField "body" (nonNull (nonNull $ inject mbody))
+              setPartialField "body" (if LBS.null preq.body then none else nonNull (nonNull $ inject mbody))
                 PL.. setPartialField "method" (nonNull meth)
                 PL.. setPartialField "headers" (nonNull $ inject reqHeaders)
       consoleLog =<< stringify reqInit
