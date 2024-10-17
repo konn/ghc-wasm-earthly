@@ -1,13 +1,14 @@
 VERSION 0.8
-ARG --global GHC_VER=9.10.0.20240412
-FROM --platform=linux/amd64 ghcr.io/konn/ghc-wasm-earthly:${GHC_VER}
+ARG --global GHC_VER=9.10.1
+ARG --global CABAL_VER=3.12.1.0
+# FROM --platform=linux/amd64 ghcr.io/konn/ghc-wasm-earthly:${GHC_VER}
+FROM DOCKERFILE --platform=linux/amd64 --build-arg CABAL=${CABAL_VER} --build-arg GHC=${GHC_VER} -f ./Dockerfile -
 WORKDIR /workdir
 
 ENV GHC=wasm32-wasi-ghc
 ENV CABAL=wasm32-wasi-cabal --project-file=cabal-wasm.project --with-ghc=wasm32-wasi-ghc --with-ghc-pkg=wasm32-wasi-ghc-pkg --with-hsc2hs=wasm32-wasi-hsc2hs
 
 base-image:
-  FROM DOCKERFILE --platform=linux/amd64 --build-arg GHC=${GHC_VER} -f ./Dockerfile -
   SAVE IMAGE --push ghcr.io/konn/ghc-wasm-earthly:${GHC_VER}
 
 hello:

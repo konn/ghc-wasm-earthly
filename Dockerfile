@@ -1,9 +1,14 @@
-FROM --platform=linux/amd64 haskell:9.8-slim-buster AS haskell-tools
+ARG GHC=9.10.1
+ARG CABAL=3.12.1.0
+
+FROM --platform=linux/amd64 haskell:${GHC}-slim-buster AS haskell-tools
+ARG GHC
+ARG CABAL
 RUN cabal update && cabal install alex happy
 
 FROM --platform=linux/amd64 debian:bookworm-slim
-ARG GHC=9.10.0.20240412
-ARG CABAL=3.11.0.0.2024.4.19
+ARG GHC
+ARG CABAL
 
 RUN apt-get update && \
     apt-get -y install --no-install-recommends git sudo jq bc make automake rsync htop curl build-essential lsb-release pkg-config libffi-dev libgmp-dev software-properties-common libssl-dev libtinfo-dev libsystemd-dev zlib1g-dev make g++ wget libncursesw5 libtool autoconf zstd unzip bash zip && \
@@ -31,12 +36,12 @@ RUN . ~/.ghc-wasm/env && \
 WORKDIR /root
 RUN rm -rf /root/work-wasm
 
-RUN cabal v2-update 'hackage.haskell.org,2024-04-22T06:16:57Z'
+RUN cabal v2-update 'hackage.haskell.org,2024-10-17T03:31:31Z'
 
 # Copies toolings from haskell-tools
 COPY --from=haskell-tools /root/.local/bin/alex /usr/bin/alex
 COPY --from=haskell-tools /root/.local/bin/happy /usr/bin/happy
-COPY --from=haskell-tools /root/.local/state/cabal/store/ghc-9.8.2 /root/.local/state/cabal/store/ghc-9.8.2
+COPY --from=haskell-tools /root/.local/state/cabal/store/ghc-9.10.1 /root/.local/state/cabal/store/ghc-9.10.1
 
 # So just copy-and-pasting the content of .ghc-wasm env here instead.
 ENV PATH=/root/.ghc-wasm/wasm-run/bin:$PATH
