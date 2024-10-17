@@ -78,6 +78,18 @@ instance MonadClient ClientM where
               LBS.toStrict $
                 BB.toLazyByteString $
                   encodePathSegments preq.pathInfo
+    liftIO $
+      consoleLog $
+        fromText $
+          T.pack $
+            "new URL"
+              <> show
+                ( TE.decodeUtf8 $
+                    LBS.toStrict $
+                      BB.toLazyByteString $
+                        encodePathSegments preq.pathInfo
+                , T.pack base
+                )
     url <- liftIO $ js_cons_URL path $ nonNull $ fromText $ T.pack base
     liftIO $ do
       unless (null preq.queryString) $
@@ -137,3 +149,6 @@ foreign import javascript safe "fetch($1, $2)"
 
 foreign import javascript safe "$1.fetch($2, $3)"
   js_fetch_of :: JSObject a -> Fetcher
+
+foreign import javascript unsafe "console.log($1)"
+  consoleLog :: USVString -> IO ()
