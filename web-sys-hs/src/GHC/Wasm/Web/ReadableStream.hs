@@ -162,14 +162,14 @@ foreign import javascript unsafe "wrapper"
   js_mk_CancelRawStream :: CancelRawStream a -> IO (JSCancelRawStream a)
 
 foreign import javascript unsafe "new (class _ extends ReadableStream {\
-  \constructor() {\
+  \constructor(ref) {\
     \super({\
-      \start: (ctrl) => { $2(this.__ref, ctrl) }, \
-      \cancel: (ctrl) => { $3(this.__ref, ctrl) }, \
+      \start: (ctrl) => { $2(ref, ctrl) }, \
+      \cancel: (ctrl) => { $3(ref, ctrl) }, \
       \type: 'bytes' \
     \});\
-    \this.__ref = $1;\
-  \}})"
+    \this.__ref = ref;\
+  \}})($1)"
   js_new_CustomReadableStream_push ::
     StablePtr a ->
     JSStartRawStream a ->
@@ -177,14 +177,14 @@ foreign import javascript unsafe "new (class _ extends ReadableStream {\
     IO ReadableStream
 
 foreign import javascript unsafe "new (class _ extends ReadableStream {\
-  \constructor() {\
+  \constructor(ref) {\
     \super({\
-      \pull: (ctrl) => { $2(this.__ref, ctrl) }, \
-      \cancel: (ctrl) => { $3(this.__ref, ctrl) }, \
+      \pull: (ctrl) => { $2(ref, ctrl) }, \
+      \cancel: (ctrl) => { $3(ref, ctrl) }, \
       \type: 'bytes' \
     \});\
-    \this.__ref = $1;\
-  \}})"
+    \this.__ref = ref;\
+  \}})($1)"
   js_new_CustomReadableStream_pull ::
     StablePtr a ->
     JSPullRawStream a ->
