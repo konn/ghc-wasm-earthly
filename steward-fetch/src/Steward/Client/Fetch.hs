@@ -26,6 +26,7 @@ import qualified Data.Foldable as F
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
+import Data.Word (Word8)
 import GHC.Wasm.Object.Builtins
 import qualified GHC.Wasm.Web.Generated.Headers as Headers
 import GHC.Wasm.Web.Generated.RequestInfo (RequestInfo)
@@ -34,7 +35,7 @@ import GHC.Wasm.Web.Generated.RequestInit.Core (RequestInitFields)
 import GHC.Wasm.Web.Generated.Response (ResponseClass)
 import qualified GHC.Wasm.Web.Generated.Response as Resp
 import GHC.Wasm.Web.Generated.URL (js_cons_URL, js_set_search)
-import GHC.Wasm.Web.ReadableStream (fromReadableStream, toReadableStream)
+import GHC.Wasm.Web.ReadableStream (fromReadableStream)
 import qualified Network.HTTP.Types as H
 import Network.HTTP.Types.URI (encodePathSegments, renderQuery)
 import Steward.Types
@@ -86,19 +87,18 @@ instance MonadClient ClientM where
             TE.decodeUtf8 $
               renderQuery True $
                 F.toList preq.queryString
-    mbody <- liftIO $ fmap inject . toReadableStream . Q.fromLazy $ preq.body
-    reqHeaders <-
-      liftIO $
+    resp <- liftIO $ useByteStringAsJSByteArray @Word8 (LBS.toStrict preq.body) \mbody -> do
+      reqHeaders <-
         toJSRecord @JSByteStringClass @JSByteStringClass
           . Map.fromList
           =<< mapM (Bi.bitraverse (pure . TE.decodeUtf8 . CI.original) fromHaskellByteString) preq.headers
-    meth <- liftIO $ fromHaskellByteString $ BS8.pack $ show preq.method
-    let reqInit =
-          newDictionary @RequestInitFields do
-            setPartialField "body" (nonNull (nonNull mbody))
-              PL.. setPartialField "method" (nonNull meth)
-              PL.. setPartialField "headers" (nonNull $ inject reqHeaders)
-    resp <- liftIO $ await =<< fetcher (unsafeCast url) (nonNull reqInit)
+      meth <- liftIO $ fromHaskellByteString $ BS8.pack $ show preq.method
+      let reqInit =
+            newDictionary @RequestInitFields do
+              setPartialField "body" (nonNull (nonNull $ inject mbody))
+                PL.. setPartialField "method" (nonNull meth)
+                PL.. setPartialField "headers" (nonNull $ inject reqHeaders)
+      await =<< fetcher (unsafeCast url) (nonNull reqInit)
     statusCode <- liftIO $ Resp.js_get_status resp
     statusText <-
       liftIO $
