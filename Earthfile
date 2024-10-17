@@ -5,18 +5,24 @@ ARG --global CABAL_VER=3.12.1.0
 FROM DOCKERFILE --platform=linux/amd64 --build-arg CABAL=${CABAL_VER} --build-arg GHC=${GHC_VER} -f ./Dockerfile -
 WORKDIR /workdir
 
-ENV GHC=wasm32-wasi-ghc
-ENV CABAL=wasm32-wasi-cabal --project-file=cabal-wasm.project --with-ghc=wasm32-wasi-ghc --with-ghc-pkg=wasm32-wasi-ghc-pkg --with-hsc2hs=wasm32-wasi-hsc2hs
+ENV GHC=wasm32-wasi-ghc-${GHC_VER}
+ENV CABAL=wasm32-wasi-cabal --project-file=cabal-wasm.project \
+--with-compiler=wasm32-wasi-ghc-${GHC_VER} \
+--with-ghc=wasm32-wasi-ghc-${GHC_VER} \
+--with-ghc-pkg=wasm32-wasi-ghc-pkg-${GHC_VER} \
+--with-hc-pkg=wasm32-wasi-ghc-pkg-${GHC_VER} \
+--with-hsc2hs=wasm32-wasi-hsc2hs-${GHC_VER}
 
 base-image:
   SAVE IMAGE --push ghcr.io/konn/ghc-wasm-earthly:${GHC_VER}
 
 hello:
   COPY --keep-ts ./hello/hello.hs .
-  RUN wasm32-wasi-ghc --make hello.hs
+  RUN ${GHC} --make hello.hs
   SAVE ARTIFACT hello.wasm AS LOCAL _build/hello.wasm
 
 build:
+  FROM +base-image
   ARG target
   ARG outdir=$(echo ${target} | cut -d: -f3)
   ARG wasm=${outdir}.wasm
@@ -25,7 +31,7 @@ build:
   COPY --keep-ts . .
   RUN --mount ${MOUNT_GLOBAL_STORE} \
       --mount ${MOUNT_DIST_NEWSTYLE} \
-      ${CABAL} update "hackage.haskell.org,2024-06-28T07:25:12Z"
+      ${CABAL} update "hackage.haskell.org,2024-10-17T03:31:31Z"
   RUN --mount ${MOUNT_GLOBAL_STORE} \
       --mount ${MOUNT_DIST_NEWSTYLE} \
       ${CABAL} build --only-dependencies ${target}
