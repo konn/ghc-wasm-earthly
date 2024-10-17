@@ -33,7 +33,7 @@ import GHC.Wasm.Web.Generated.RequestInit (RequestInitClass)
 import GHC.Wasm.Web.Generated.RequestInit.Core (RequestInitFields)
 import GHC.Wasm.Web.Generated.Response (ResponseClass)
 import qualified GHC.Wasm.Web.Generated.Response as Resp
-import GHC.Wasm.Web.Generated.URL (URL, js_set_search)
+import GHC.Wasm.Web.Generated.URL (js_cons_URL, js_set_search)
 import GHC.Wasm.Web.ReadableStream (fromReadableStream, toReadableStream)
 import qualified Network.HTTP.Types as H
 import Network.HTTP.Types.URI (encodePathSegments, renderQuery)
@@ -78,19 +78,7 @@ instance MonadClient ClientM where
               LBS.toStrict $
                 BB.toLazyByteString $
                   encodePathSegments preq.pathInfo
-    liftIO $
-      consoleLog $
-        fromText $
-          T.pack $
-            "new URL"
-              <> show
-                ( TE.decodeUtf8 $
-                    LBS.toStrict $
-                      BB.toLazyByteString $
-                        encodePathSegments preq.pathInfo
-                , T.pack base
-                )
-    url <- liftIO $ js_cons_URL_async path $ nonNull $ fromText $ T.pack base
+    url <- liftIO $ js_cons_URL path $ nonNull $ fromText $ T.pack base
     liftIO $ do
       unless (null preq.queryString) $
         js_set_search url $
@@ -149,10 +137,3 @@ foreign import javascript safe "fetch($1, $2)"
 
 foreign import javascript safe "$1.fetch($2, $3)"
   js_fetch_of :: JSObject a -> Fetcher
-
-foreign import javascript unsafe "console.log($1)"
-  consoleLog :: USVString -> IO ()
-
-foreign import javascript safe "new URL($1,$2)"
-  js_cons_URL_async ::
-    USVString -> (Nullable USVStringClass -> (IO URL))
