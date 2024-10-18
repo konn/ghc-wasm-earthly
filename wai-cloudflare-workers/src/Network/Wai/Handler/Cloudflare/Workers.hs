@@ -33,6 +33,7 @@ import qualified Data.Char as C
 import Data.Generics.Labels ()
 import qualified Data.HashMap.Strict as HM
 import Data.Maybe (fromMaybe)
+import Data.String
 import qualified Data.Text as T
 import Data.Vault.Lazy (Key, newKey)
 import qualified Data.Vault.Lazy as Vault
@@ -68,7 +69,7 @@ reportError :: SomeException -> IO Resp.WorkerResponse
 reportError e =
   Resp.newResponse
     Resp.SimpleResponseInit
-      { body = "Exception: " <> T.pack (displayException e)
+      { body = Just $ fromString $ "Exception: " <> displayException e
       , status = 500
       , statusText = "Internal Server Error"
       , headers = fromList [("Content-Type", "text/plain")]

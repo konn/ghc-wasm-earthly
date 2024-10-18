@@ -187,7 +187,7 @@ toErrorResp exc =
         { statusText = "Internal Server Error"
         , status = 500
         , headers = mempty
-        , body = fromString $ displayException exc
+        , body = Just $ fromString $ displayException exc
         }
 
 fromStewardResponse :: (IOE :> es) => StewardResponse -> Eff es WorkerResponse
@@ -197,7 +197,7 @@ fromStewardResponse resp = liftIO do
       { statusText = resp.status.statusMessage
       , status = fromIntegral resp.status.statusCode
       , headers = Map.fromList $ map (Bi.first CI.original) $ resp.headers
-      , body = LT.toStrict $ LTE.decodeUtf8 resp.body
+      , body = Just $ Resp.WorkerResponseLBS resp.body
       }
 
 data WorkersException = InvalidMethod BS8.ByteString

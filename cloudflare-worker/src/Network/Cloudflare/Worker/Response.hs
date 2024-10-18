@@ -16,6 +16,8 @@ module Network.Cloudflare.Worker.Response (
   ReifiedWorkerResponseInit,
   WorkerResponseInitClass,
   SimpleResponseInit (..),
+  WorkerResponseBody (..),
+  fromWorkerResponseBody,
   ResponseBodyClass,
   ResponseBody,
   getBody,
@@ -35,9 +37,11 @@ module Network.Cloudflare.Worker.Response (
 
 import Data.ByteString.Char8 qualified as BS
 import Data.ByteString.Char8 qualified as BS8
+import Data.ByteString.Lazy qualified as LBS
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (fromJust)
+import Data.String
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
 import Data.Word
@@ -50,6 +54,7 @@ import GHC.Wasm.Web.Generated.ReadableStream
 import GHC.Wasm.Web.Generated.Response
 import GHC.Wasm.Web.Generated.URLSearchParams (URLSearchParamsClass)
 import GHC.Wasm.Web.Generated.WebSocket (WebSocketClass)
+import GHC.Wasm.Web.ReadableStream (fromLazyByteString)
 import System.IO.Unsafe (unsafePerformIO)
 import Wasm.Prelude.Linear qualified as PL
 
@@ -105,7 +110,8 @@ newResponse :: SimpleResponseInit -> IO WorkerResponse
 newResponse resp = do
   headers <- toHeaders resp.headers
   empty <- emptyObject
-  newResponse' (Just $ inject $ fromText @USVStringClass resp.body) . Just $
+  body <- mapM fromWorkerResponseBody resp.body
+  newResponse' body . Just $
     newDictionary
       ( setPartialField "status" (toJSPrim resp.status)
           PL.. setPartialField
@@ -115,6 +121,14 @@ newResponse resp = do
           PL.. setPartialField "cf" empty
           PL.. setPartialField "encodeBody" (fromJust $ toJSByteString $ toJSString "automatic")
       )
+
+fromWorkerResponseBody :: WorkerResponseBody -> IO ResponseBody
+fromWorkerResponseBody (WorkerResponseLBS lbs) =
+  inject <$> fromLazyByteString lbs
+fromWorkerResponseBody (WorkerResponseBS bs) =
+  useByteStringAsJSByteArray @Word8 bs $ pure . inject
+fromWorkerResponseBody (WorkerResponseStream stream) = pure $ inject stream
+fromWorkerResponseBody (WorkerResponseRaw stream) = pure stream
 
 newResponse' :: Maybe ResponseBody -> Maybe WorkerResponseInit -> IO WorkerResponse
 newResponse' mbody minit =
@@ -143,13 +157,23 @@ type ResponseBodyClass =
 foreign import javascript unsafe "new Response($1, $2)"
   js_new_response :: Nullable ResponseBodyClass -> Nullable WorkerResponseInitClass -> IO WorkerResponse
 
+data WorkerResponseBody
+  = WorkerResponseLBS !LBS.ByteString
+  | WorkerResponseBS !BS.ByteString
+  | WorkerResponseStream !ReadableStream
+  | WorkerResponseRaw !ResponseBody
+  deriving (Generic)
+
+instance IsString WorkerResponseBody where
+  fromString = WorkerResponseRaw . inject . fromText @USVStringClass . T.pack
+
 data SimpleResponseInit = SimpleResponseInit
-  { body :: !T.Text
+  { body :: !(Maybe WorkerResponseBody)
   , status :: !Word16
   , statusText :: !BS.ByteString
   , headers :: !(Map BS.ByteString BS.ByteString)
   }
-  deriving (Show, Eq, Ord, Generic)
+  deriving (Generic)
 
 type WorkerResponseInitFields =
   '[ '("status", JSPrimClass Word16)

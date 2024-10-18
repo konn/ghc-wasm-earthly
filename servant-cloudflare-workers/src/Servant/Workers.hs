@@ -65,12 +65,14 @@ data WorkersEnv e = WorkersEnv
   , context :: !FetchContext
   }
 
+{- 
 serveR2 ::
   forall r2 ->
   (Member r2 bindings) =>
   String ->
   ServerT RawM (Workers (BindingsClass vars ss bindings))
 serveR2 s prefix waiReq withResp = _
+ -}
 
 waitUntil :: Promise c -> Workers e ()
 waitUntil p = do
