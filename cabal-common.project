@@ -3,8 +3,8 @@ constraints:
   servant-client-core == 0.20,
   constraints == 0.14.2,
 
-source-repository-package
-  type: git
-  tag: cd8b8c6fc981cf998f0444997896f7404e1e0b3d
-  location: https://github.com/konn/servant
-  subdir: servant-server
+-- source-repository-package
+--   type: git
+--   tag: cd8b8c6fc981cf998f0444997896f7404e1e0b3d
+--   location: https://github.com/konn/servant
+--   subdir: servant-server

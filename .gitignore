@@ -88,3 +88,4 @@ _build
 *.wasm
 workspace
 node_modules
+.wrangler

@@ -9,6 +9,7 @@
 module GHC.Wasm.Object.Builtins.Promise (
   PromiseClass,
   Promise,
+  newPromise,
   upcastPromise,
   await,
   awaitWith,
@@ -49,3 +50,6 @@ deferWith f = async . fmap f . await
 
 foreign import javascript safe "await $1"
   js_await :: Promise a -> IO (JSObject a)
+
+foreign import javascript unsafe "new Promise((resolve) => {resolve($1)})"
+  newPromise :: JSObject a -> IO (Promise a)
