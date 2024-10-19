@@ -32,11 +32,11 @@ source-repository-package
   location: https://github.com/amesgen/splitmix
   tag: 83b906c4bcdc2720546f1779a16eb65e8e12ecba
 
-package QuickCheck
-  flags: -templateHaskell
-
 package reflection
   flags: -template-haskell
+
+package QuickCheck
+  flags: -templateHaskell
 
 source-repository-package
   type: git

@@ -82,7 +82,7 @@ getHeaders = js_get_headers . upcast
 setHeaders :: WorkerResponse -> Headers -> IO ()
 setHeaders = js_set_headers
 
-foreign import javascript unsafe "$1.body = $2"
+foreign import javascript unsafe "$1.headers = $2"
   js_set_headers :: WorkerResponse -> Headers -> IO ()
 
 getStatus :: WorkerResponse -> IO Word16
