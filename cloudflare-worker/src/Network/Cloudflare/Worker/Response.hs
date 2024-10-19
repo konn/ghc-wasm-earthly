@@ -124,7 +124,7 @@ newResponse resp = do
 
 fromWorkerResponseBody :: WorkerResponseBody -> IO ResponseBody
 fromWorkerResponseBody (WorkerResponseLBS lbs) =
-  inject <$> fromLazyByteString lbs
+  useByteStringAsJSByteArray @Word8 (LBS.toStrict lbs) $ pure . inject
 fromWorkerResponseBody (WorkerResponseBS bs) =
   useByteStringAsJSByteArray @Word8 bs $ pure . inject
 fromWorkerResponseBody (WorkerResponseStream stream) = pure $ inject stream
