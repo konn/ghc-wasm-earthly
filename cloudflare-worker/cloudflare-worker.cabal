@@ -60,7 +60,6 @@ library
     effectful,
     ghc-wasm-jsobjects,
     safe-exceptions,
-    steward-core,
     streaming,
     streaming-attoparsec,
     streaming-bytestring,
