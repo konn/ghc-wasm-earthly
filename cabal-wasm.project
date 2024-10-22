@@ -3,13 +3,11 @@ packages:
   cloudflare-worker/cloudflare-worker.cabal
   ghc-wasm-*/*.cabal
   network-ghc-wasm/network.cabal
-  servant-*/*.cabal
   steward-*/*.cabal
   wasm-jsffi-ghc-demo/*.cabal
   wasm-linear-base/*.cabal
   web-sys-hs/*.cabal
   webidl-*/*.cabal
-  wai-cloudflare-workers/*.cabal
 
 import: cabal-common.project
 optimization: False
