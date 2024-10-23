@@ -14,6 +14,9 @@ module Language.WASM.JSVal.Convert (
   -- * Deriving Modifiers
   ViaJSON (..),
   GenericToWasmJSON,
+  genericToWasmJSON,
+  GenericFromWasmJSON,
+  genericFromWasmJSON,
 ) where
 
 import Data.Aeson (ToJSON, Value, toJSON)
@@ -70,6 +73,15 @@ genericToWasmJSON x = case gwriteToObj @(Rep a) of
   ProdEncoder n f -> Control.do
     DJSArray.JSArray val <- DJSArray.allocIO n (f (from x))
     Control.pure (Unsafe.toLinear unsafeAsObject val)
+
+type GenericFromWasmJSON a = (Generic a, GFromWasmJSON (Rep a))
+
+instance (GenericFromWasmJSON a) => FromWasmJSON (Generically a) where
+  fromWasmJSON = genericFromWasmJSON
+  {-# INLINE fromWasmJSON #-}
+
+genericFromWasmJSON :: forall a. (GenericFromWasmJSON a) => JSON -> IO (Maybe (Generically a))
+genericFromWasmJSON val = fmap (Generically . to) <$> gfromWasmJSON @(Rep a) val
 
 newtype PartialJSON = PartialJSON JSON
   deriving (PL.ConsumableM LIO.IO) via JSVal
