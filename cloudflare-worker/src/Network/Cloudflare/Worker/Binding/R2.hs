@@ -50,6 +50,7 @@ module Network.Cloudflare.Worker.Binding.R2 (
 
   -- * Object Metadata
   R2Object,
+  R2ObjectClass,
   getObjectKey,
   getObjectVersion,
   getObjectSize,
