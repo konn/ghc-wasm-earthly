@@ -87,6 +87,7 @@ module Network.Cloudflare.Worker.Binding.D1 (
   run',
   D1Metrics,
   D1MetricsFields,
+  D1MetricsClass,
   D1MetricsView (..),
 
   -- ** Batch run
