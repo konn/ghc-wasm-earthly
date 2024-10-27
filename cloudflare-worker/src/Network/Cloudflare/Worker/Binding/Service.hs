@@ -15,28 +15,31 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeData #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeFamilyDependencies #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE UnliftedDatatypes #-}
 {-# LANGUAGE NoFieldSelectors #-}
 {-# OPTIONS_GHC -Wno-redundant-constraints #-}
 
 -- | Service Binding for custom RPC between Cloudflare Workers.
-module Network.Cloudflare.Worker.Binding.Service (
-  Fun (..),
-  ServiceClass,
-  Service,
-  call,
-  ToServiceBinding (..),
-  genericToServiceBinding,
-  GenericToServiceBinding,
-  ToJSFun (..),
-  KnownJSFun (..),
-  FromFun,
-  IsServiceArg (..),
-  ViaJSPrim (..),
-  ViaJSON (..),
-) where
+module Network.Cloudflare.Worker.Binding.Service {- (
+                                                   Fun (..),
+                                                   ServiceBindingException(..),
+                                                   ServiceClass,
+                                                   Service,
+                                                   call,
+                                                   ToServiceBinding (..),
+                                                   genericToServiceBinding,
+                                                   GenericToServiceBinding,
+                                                   ToJSFun (..),
+                                                   KnownJSFunSig (..),
+                                                   FromFun,
+                                                   IsServiceArg (..),
+                                                   ViaJSPrim (..),
+                                                   ViaJSON (..),
+                                                 )  -} where
 
+import Control.Exception.Safe (Exception, throwIO)
 import Control.Monad (join, (<=<))
 import Control.Monad.Trans.Except (ExceptT (..), runExceptT)
 import Data.Aeson (FromJSON, ToJSON)
@@ -55,60 +58,123 @@ import GHC.Wasm.Prim
 import GHC.Wasm.Web.JSON
 import Language.WASM.JSVal.Convert
 
-type data Fun = Return Prototype | Prototype :~> Fun
+type data FunSig = Return Type | Type :~> FunSig
 
-infixr 5 :~>
+type data JSFunSig = ReturnJS Prototype | Prototype :~>> JSFunSig
 
-type family FromFun fun where
-  FromFun (Return f) = IO (Promise f)
-  FromFun (f :~> fun) = JSObject f -> FromFun fun
+type (~>) = (:~>)
 
-type data ServiceClass :: [(Symbol, Fun)] -> Prototype
+infixr 5 :~>, :~>>, ~>
+
+data FunMode = Caller | Defn
+
+data ServiceBindingException
+  = FunResultDecodeFailure !String
+  | FunArgDecodeFailure !String
+  deriving (Show, Eq, Ord, Generic)
+  deriving anyclass (Exception)
+
+type family ToHsRet mode a where
+  ToHsRet Caller a = Promised (ServiceArg a) a
+  ToHsRet Defn a = JSObject (ServiceArg a)
+
+type family FromFunSig mode fn where
+  FromFunSig mode (Return a) = IO (ToHsRet mode a)
+  FromFunSig mode (a :~> b) = a -> FromFunSig mode b
+
+type family ToJSFunSig fn = js where
+  ToJSFunSig (Return a) = ReturnJS (ServiceArg a)
+  ToJSFunSig (a :~> b) = ServiceArg a :~>> ToJSFunSig b
+
+type KnownFunSig :: FunSig -> Constraint
+class (KnownJSFunSig (ToJSFunSig fn)) => KnownFunSig fn where
+  encodeJSFun# :: Proxy# fn -> FromFunSig Defn fn -> ToHaskellFunSig Defn (ToJSFunSig fn)
+  decodeFun# :: Proxy# fn -> ToHaskellFunSig Caller (ToJSFunSig fn) -> FromFunSig Caller fn
+  joinHsFun# :: Proxy# fn -> Proxy# mode -> IO (FromFunSig mode fn) -> FromFunSig mode fn
+
+joinHsFun :: forall mode fn -> (KnownFunSig fn) => IO (FromFunSig mode fn) -> FromFunSig mode fn
+{-# INLINE joinHsFun #-}
+joinHsFun mode fn = joinHsFun# (proxy# @fn) (proxy# @mode)
+
+instance (IsServiceArg a) => KnownFunSig (Return a) where
+  encodeJSFun# _ = (encodeServiceArg =<<)
+  {-# INLINE encodeJSFun# #-}
+  decodeFun# _ =
+    fmap $
+      Promised $
+        either (throwIO . FunResultDecodeFailure) pure
+          <=< parseServiceArg @a
+  {-# INLINE decodeFun# #-}
+  joinHsFun# _ _ = join
+  {-# INLINE joinHsFun# #-}
+
+instance (IsServiceArg a, KnownFunSig bs) => KnownFunSig (a :~> bs) where
+  encodeJSFun# _ f x = joinJsFun Defn (ToJSFunSig bs) do
+    xhs <- either (throwIO . FunArgDecodeFailure) pure =<< parseServiceArg @a x
+    pure $ encodeJSFun# (proxy# @bs) $! f xhs
+
+  decodeFun# _ f x = joinHsFun Caller bs do
+    xjs <- encodeServiceArg x
+    pure $ decodeFun# (proxy# @bs) (f xjs)
+
+  joinHsFun# _ (_ :: Proxy# mode) f x = joinHsFun mode bs $ ($ x) <$> f
+  {-# INLINE joinHsFun# #-}
+
+type family JSRetFor mode a where
+  JSRetFor Caller a = PromiseClass a
+  JSRetFor Defn a = a
+
+type family ToHaskellFunSig mode fn where
+  ToHaskellFunSig mode (ReturnJS a) = IO (JSObject (JSRetFor mode a))
+  ToHaskellFunSig mode (a :~>> b) = JSObject a -> ToHaskellFunSig mode b
+
+joinJsFun :: forall mode fn -> (KnownJSFunSig fn) => IO (ToHaskellFunSig mode fn) -> ToHaskellFunSig mode fn
+{-# INLINE joinJsFun #-}
+joinJsFun mode fn = joinJsFun# (proxy# @fn) (proxy# @mode)
+
+type KnownJSFunSig :: JSFunSig -> Constraint
+class KnownJSFunSig fn where
+  marshalJSFun :: ToHaskellFunSig Defn fn -> IO (JSObject (JSFunClass fn))
+  unmarshalFun :: JSFun fn -> ToHaskellFunSig Caller fn
+  joinJsFun# :: Proxy# fn -> Proxy# mode -> IO (ToHaskellFunSig mode fn) -> ToHaskellFunSig mode fn
+
+instance KnownJSFunSig (ReturnJS f) where
+  marshalJSFun = coerce
+  unmarshalFun = js_return_fun
+  joinJsFun# _ _ = join
+
+instance (KnownJSFunSig fs) => KnownJSFunSig (f :~>> fs) where
+  marshalJSFun f = js_ffi_fun_arrow @f @fs $ marshalJSFun . f
+  unmarshalFun jsf x = unmarshalFun $ js_ffi_app_fun jsf x
+  joinJsFun# _ (_ :: Proxy# mode) f x = joinJsFun mode fs $ ($ x) <$> f
+
+type data ServiceClass :: [(Symbol, FunSig)] -> Prototype
 
 type Service fs = JSObject (ServiceClass fs)
 
-type data JSFunClass :: Fun -> Prototype
+type data JSFunClass :: JSFunSig -> Prototype
 
 type JSFun fn = JSObject (JSFunClass fn)
-
-instance
-  ( KnownSymbol l
-  , Member l fs
-  , x ~ FromFun (Lookup' l fs)
-  , KnownJSFun (Lookup' l fs)
-  ) =>
-  HasField l (Service fs) x
-  where
-  getField = call l
-
-call ::
-  forall fs x.
-  forall l ->
-  ( KnownSymbol l
-  , Member l fs
-  , x ~ FromFun (Lookup' l fs)
-  , KnownJSFun (Lookup' l fs)
-  ) =>
-  Service fs ->
-  x
-call l svs =
-  joinFun @(Lookup' l fs) proxy# $ do
-    unmarshalFun <$> js_cal_raw @fs @(Lookup' l fs) svs (toJSString $ symbolVal' @l proxy#)
 
 {- | N.B. Generic class involves curry/uncurrying on each function argument.
 If you have a function with many arguments, this can lead to performance degression.
 In such cases, we recommend to write the instance manually.
 -}
 class ToServiceBinding a where
-  type Signature a :: [(Symbol, Fun)]
-  type Signature a = GSignature (Rep a)
+  type Signature a :: [(Symbol, FunSig)]
+
+  -- type Signature a = GSignature (Rep a)
   toServiceBinding :: a -> IO (JSObject (ServiceClass (Signature a)))
+
+{-
   default toServiceBinding ::
     (GenericToServiceBinding a) =>
     a ->
     IO (JSObject (ServiceClass (Signature a)))
   toServiceBinding = genericToServiceBinding
+-}
 
+{-
 type GenericToServiceBinding a = (Generic a, GToServiceBinding (Rep a), Signature a ~ GSignature (Rep a))
 
 genericToServiceBinding ::
@@ -123,6 +189,10 @@ genericToServiceBinding a = do
 class GToServiceBinding f where
   type GSignature f :: [(Symbol, Fun)]
   gwriteField :: ServiceSink (GSignature f) -> f a -> IO ()
+
+instance GToServiceBinding U1 where
+  type GSignature U1 = '[]
+  gwriteField _ _ = pure ()
 
 castSink :: forall fs fs0. ServiceSink fs0 -> ServiceSink fs
 castSink = ServiceSink . unsafeCast . (.runServiceSink)
@@ -154,7 +224,7 @@ toJSFun :: (ToJSFun a) => a -> IO (JSFun (JSFunOf a))
 toJSFun = marshalJSFun . toFromFun
 
 type ToJSFun :: Type -> Constraint
-class (KnownJSFun (JSFunOf a)) => ToJSFun a where
+class (KnownJSFunSig (JSFunOf a)) => ToJSFun a where
   toFromFun :: a -> FromFun (JSFunOf a)
 
 type family AsJSRet a where
@@ -197,69 +267,54 @@ instance
   ToJSFun (a -> b)
   where
   toFromFun f = \x -> toFromFun $ f $ fromJSPrim x
-
-type KnownJSFun :: Fun -> Constraint
-class KnownJSFun fn where
-  marshalJSFun :: FromFun fn -> IO (JSObject (JSFunClass fn))
-  unmarshalFun :: JSFun fn -> FromFun fn
-  joinFun :: Proxy# fn -> IO (FromFun fn) -> FromFun fn
-
-instance KnownJSFun (Return f) where
-  marshalJSFun = coerce
-  unmarshalFun = js_return_fun
-  joinFun _ = join
-
-instance (KnownJSFun fs) => KnownJSFun (f :~> fs) where
-  marshalJSFun f = js_ffi_fun_arrow @f @fs $ marshalJSFun . f
-  unmarshalFun jsf x = unmarshalFun $ js_ffi_app_fun jsf x
-  joinFun _ f x = joinFun @fs (proxy#) $ ($ x) <$> f
+ -}
 
 class IsServiceArg a where
-  type AsServiceArg a :: Prototype
-  toServiceArg :: a -> IO (JSObject (AsServiceArg a))
-  parseServiceArg :: JSObject (AsServiceArg a) -> IO (Either String a)
+  type ServiceArg a :: Prototype
+  encodeServiceArg :: a -> IO (JSObject (ServiceArg a))
+  parseServiceArg :: JSObject (ServiceArg a) -> IO (Either String a)
 
 instance (FromJSON a, ToJSON a) => IsServiceArg (ViaJSON a) where
-  type AsServiceArg (ViaJSON a) = JSONClass
-  toServiceArg = encodeJSON . runViaJSON
-  {-# INLINE toServiceArg #-}
+  type ServiceArg (ViaJSON a) = JSONClass
+  encodeServiceArg = encodeJSON . runViaJSON
+  {-# INLINE encodeServiceArg #-}
   parseServiceArg = fmap (fmap ViaJSON) . eitherDecodeJSON
   {-# INLINE parseServiceArg #-}
 
 instance IsServiceArg (JSObject a) where
-  type AsServiceArg (JSObject a) = a
-  toServiceArg = pure
-  {-# INLINE toServiceArg #-}
+  type ServiceArg (JSObject a) = a
+  encodeServiceArg = pure
+  {-# INLINE encodeServiceArg #-}
   parseServiceArg = pure . Right
   {-# INLINE parseServiceArg #-}
 
 newtype ViaJSPrim a = ViaJSPrim {runViaJSPrim :: a}
 
 instance (JSPrimitive a) => IsServiceArg (ViaJSPrim a) where
-  type AsServiceArg (ViaJSPrim a) = JSPrimClass a
-  toServiceArg = pure . toJSPrim . (.runViaJSPrim)
-  {-# INLINE toServiceArg #-}
+  type ServiceArg (ViaJSPrim a) = JSPrimClass a
+  encodeServiceArg = pure . toJSPrim . (.runViaJSPrim)
+  {-# INLINE encodeServiceArg #-}
   parseServiceArg = pure . Right . ViaJSPrim . fromJSPrim
   {-# INLINE parseServiceArg #-}
 
 instance (IsServiceArg a) => IsServiceArg (Maybe a) where
-  type AsServiceArg (Maybe a) = NullableClass (AsServiceArg a)
-  toServiceArg = maybe (pure none) (fmap nonNull . toServiceArg)
-  {-# INLINE toServiceArg #-}
+  type ServiceArg (Maybe a) = NullableClass (ServiceArg a)
+  encodeServiceArg = maybe (pure none) (fmap nonNull . encodeServiceArg)
+  {-# INLINE encodeServiceArg #-}
   parseServiceArg = nullable (pure $ Right Nothing) (fmap (fmap Just) . parseServiceArg)
   {-# INLINE parseServiceArg #-}
 
 instance (IsServiceArg a) => IsServiceArg (V.Vector a) where
-  type AsServiceArg (V.Vector a) = SequenceClass (AsServiceArg a)
-  toServiceArg = fmap toSequence . mapM toServiceArg
-  {-# INLINE toServiceArg #-}
+  type ServiceArg (V.Vector a) = SequenceClass (ServiceArg a)
+  encodeServiceArg = fmap toSequence . mapM encodeServiceArg
+  {-# INLINE encodeServiceArg #-}
   parseServiceArg = runExceptT . mapM (ExceptT . parseServiceArg) <=< toVector
   {-# INLINE parseServiceArg #-}
 
 instance (IsServiceArg a) => IsServiceArg [a] where
-  type AsServiceArg [a] = SequenceClass (AsServiceArg a)
-  toServiceArg = toServiceArg . V.fromList
-  {-# INLINE toServiceArg #-}
+  type ServiceArg [a] = SequenceClass (ServiceArg a)
+  encodeServiceArg = encodeServiceArg . V.fromList
+  {-# INLINE encodeServiceArg #-}
   parseServiceArg = fmap (fmap V.toList) . parseServiceArg
   {-# INLINE parseServiceArg #-}
 
@@ -289,10 +344,6 @@ deriving via ViaJSPrim Double instance IsServiceArg Double
 
 deriving via ViaJSPrim Float instance IsServiceArg Float
 
-instance GToServiceBinding U1 where
-  type GSignature U1 = '[]
-  gwriteField _ _ = pure ()
-
 newtype ServiceSink fs = ServiceSink {runServiceSink :: Service fs}
 
 foreign import javascript unsafe "$1.$2 = $3"
@@ -302,13 +353,13 @@ foreign import javascript unsafe "{}"
   js_new_service_sink :: IO (ServiceSink fs)
 
 foreign import javascript "wrapper"
-  js_ffi_fun_arrow :: (JSObject f -> IO (JSFun fs)) -> IO (JSFun (f :~> fs))
+  js_ffi_fun_arrow :: (JSObject f -> IO (JSFun fs)) -> IO (JSFun (f :~>> fs))
 
 foreign import javascript unsafe "$1($2)"
-  js_ffi_app_fun :: JSFun (f :~> fs) -> JSObject f -> JSFun fs
+  js_ffi_app_fun :: JSFun (f :~>> fs) -> JSObject f -> JSFun fs
 
 foreign import javascript unsafe "$1"
-  js_return_fun :: JSFun (Return f) -> IO (Promise f)
+  js_return_fun :: JSFun (ReturnJS f) -> IO (Promise f)
 
 foreign import javascript unsafe "$1[$2]"
   js_cal_raw :: Service fs -> JSString -> IO (JSFun f)
