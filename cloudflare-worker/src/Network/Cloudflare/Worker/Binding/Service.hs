@@ -253,11 +253,11 @@ class IsServiceArg a where
   encodeServiceArg :: a -> IO (JSObject (ServiceArg a))
   parseServiceArg :: JSObject (ServiceArg a) -> IO (Either String a)
 
-instance IsServiceArg (JSObject c) where
-  type ServiceArg (JSObject c) = c
-  encodeServiceArg = pure
+instance IsServiceArg JSVal where
+  type ServiceArg JSVal = AnyClass
+  encodeServiceArg = pure . unJSObject
   {-# INLINE encodeServiceArg #-}
-  parseServiceArg = pure . Right
+  parseServiceArg = pure . Right . unsafeAsObject
   {-# INLINE parseServiceArg #-}
 
 instance (FromJSON a, ToJSON a) => IsServiceArg (ViaJSON a) where
