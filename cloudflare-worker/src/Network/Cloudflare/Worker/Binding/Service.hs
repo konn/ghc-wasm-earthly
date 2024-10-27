@@ -253,6 +253,13 @@ class IsServiceArg a where
   encodeServiceArg :: a -> IO (JSObject (ServiceArg a))
   parseServiceArg :: JSObject (ServiceArg a) -> IO (Either String a)
 
+instance IsServiceArg (JSObject c) where
+  type ServiceArg (JSObject c) = c
+  encodeServiceArg = pure
+  {-# INLINE encodeServiceArg #-}
+  parseServiceArg = pure . Right
+  {-# INLINE parseServiceArg #-}
+
 instance (FromJSON a, ToJSON a) => IsServiceArg (ViaJSON a) where
   type ServiceArg (ViaJSON a) = JSONClass
   encodeServiceArg = encodeJSON . runViaJSON
