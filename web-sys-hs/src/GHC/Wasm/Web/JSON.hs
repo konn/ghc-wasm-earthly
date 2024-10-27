@@ -1,6 +1,7 @@
 module GHC.Wasm.Web.JSON (
   encodeJSON,
   decodeJSON,
+  eitherDecodeJSON,
   module GHC.Wasm.Web.Generated.JSON,
 ) where
 
@@ -25,4 +26,10 @@ foreign import javascript unsafe "JSON.stringify($1)"
 decodeJSON :: (FromJSON a) => JSON -> IO (Maybe a)
 decodeJSON =
   fmap (J.decode . LBS.fromStrict) . toHaskellByteString
+    <=< js_stringify_json
+
+-- | NOTE: This converts a value with @JSON.stringify@ so all reference to JSVal is lost and may be expensive when the object is large.
+eitherDecodeJSON :: (FromJSON a) => JSON -> IO (Either String a)
+eitherDecodeJSON =
+  fmap (J.eitherDecode . LBS.fromStrict) . toHaskellByteString
     <=< js_stringify_json

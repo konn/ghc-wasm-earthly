@@ -32,11 +32,19 @@ module Network.Cloudflare.Worker.Binding.Service (
   ToJSFun (..),
   KnownJSFun (..),
   FromFun,
+  IsServiceArg (..),
+  ViaJSPrim (..),
+  ViaJSON (..),
 ) where
 
-import Control.Monad (join)
+import Control.Monad (join, (<=<))
+import Control.Monad.Trans.Except (ExceptT (..), runExceptT)
+import Data.Aeson (FromJSON, ToJSON)
 import Data.Coerce (coerce)
+import Data.Int
 import Data.Kind (Constraint, Type)
+import Data.Vector qualified as V
+import Data.Word
 import GHC.Exts (Proxy#, proxy#)
 import GHC.Generics
 import GHC.Records
@@ -44,6 +52,8 @@ import GHC.TypeError
 import GHC.TypeLits
 import GHC.Wasm.Object.Builtins
 import GHC.Wasm.Prim
+import GHC.Wasm.Web.JSON
+import Language.WASM.JSVal.Convert
 
 type data Fun = Return Prototype | Prototype :~> Fun
 
@@ -203,6 +213,81 @@ instance (KnownJSFun fs) => KnownJSFun (f :~> fs) where
   marshalJSFun f = js_ffi_fun_arrow @f @fs $ marshalJSFun . f
   unmarshalFun jsf x = unmarshalFun $ js_ffi_app_fun jsf x
   joinFun _ f x = joinFun @fs (proxy#) $ ($ x) <$> f
+
+class IsServiceArg a where
+  type AsServiceArg a :: Prototype
+  toServiceArg :: a -> IO (JSObject (AsServiceArg a))
+  parseServiceArg :: JSObject (AsServiceArg a) -> IO (Either String a)
+
+instance (FromJSON a, ToJSON a) => IsServiceArg (ViaJSON a) where
+  type AsServiceArg (ViaJSON a) = JSONClass
+  toServiceArg = encodeJSON . runViaJSON
+  {-# INLINE toServiceArg #-}
+  parseServiceArg = fmap (fmap ViaJSON) . eitherDecodeJSON
+  {-# INLINE parseServiceArg #-}
+
+instance IsServiceArg (JSObject a) where
+  type AsServiceArg (JSObject a) = a
+  toServiceArg = pure
+  {-# INLINE toServiceArg #-}
+  parseServiceArg = pure . Right
+  {-# INLINE parseServiceArg #-}
+
+newtype ViaJSPrim a = ViaJSPrim {runViaJSPrim :: a}
+
+instance (JSPrimitive a) => IsServiceArg (ViaJSPrim a) where
+  type AsServiceArg (ViaJSPrim a) = JSPrimClass a
+  toServiceArg = pure . toJSPrim . (.runViaJSPrim)
+  {-# INLINE toServiceArg #-}
+  parseServiceArg = pure . Right . ViaJSPrim . fromJSPrim
+  {-# INLINE parseServiceArg #-}
+
+instance (IsServiceArg a) => IsServiceArg (Maybe a) where
+  type AsServiceArg (Maybe a) = NullableClass (AsServiceArg a)
+  toServiceArg = maybe (pure none) (fmap nonNull . toServiceArg)
+  {-# INLINE toServiceArg #-}
+  parseServiceArg = nullable (pure $ Right Nothing) (fmap (fmap Just) . parseServiceArg)
+  {-# INLINE parseServiceArg #-}
+
+instance (IsServiceArg a) => IsServiceArg (V.Vector a) where
+  type AsServiceArg (V.Vector a) = SequenceClass (AsServiceArg a)
+  toServiceArg = fmap toSequence . mapM toServiceArg
+  {-# INLINE toServiceArg #-}
+  parseServiceArg = runExceptT . mapM (ExceptT . parseServiceArg) <=< toVector
+  {-# INLINE parseServiceArg #-}
+
+instance (IsServiceArg a) => IsServiceArg [a] where
+  type AsServiceArg [a] = SequenceClass (AsServiceArg a)
+  toServiceArg = toServiceArg . V.fromList
+  {-# INLINE toServiceArg #-}
+  parseServiceArg = fmap (fmap V.toList) . parseServiceArg
+  {-# INLINE parseServiceArg #-}
+
+deriving via ViaJSPrim Int instance IsServiceArg Int
+
+deriving via ViaJSPrim Int8 instance IsServiceArg Int8
+
+deriving via ViaJSPrim Int16 instance IsServiceArg Int16
+
+deriving via ViaJSPrim Int32 instance IsServiceArg Int32
+
+deriving via ViaJSPrim Int64 instance IsServiceArg Int64
+
+deriving via ViaJSPrim Word instance IsServiceArg Word
+
+deriving via ViaJSPrim Word8 instance IsServiceArg Word8
+
+deriving via ViaJSPrim Word16 instance IsServiceArg Word16
+
+deriving via ViaJSPrim Word32 instance IsServiceArg Word32
+
+deriving via ViaJSPrim Word64 instance IsServiceArg Word64
+
+deriving via ViaJSPrim Bool instance IsServiceArg Bool
+
+deriving via ViaJSPrim Double instance IsServiceArg Double
+
+deriving via ViaJSPrim Float instance IsServiceArg Float
 
 instance GToServiceBinding U1 where
   type GSignature U1 = '[]
