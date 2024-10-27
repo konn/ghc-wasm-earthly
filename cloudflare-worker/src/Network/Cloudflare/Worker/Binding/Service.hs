@@ -255,9 +255,16 @@ class IsServiceArg a where
 
 instance IsServiceArg JSVal where
   type ServiceArg JSVal = AnyClass
-  encodeServiceArg = pure . unJSObject
+  encodeServiceArg = pure . unsafeAsObject
   {-# INLINE encodeServiceArg #-}
-  parseServiceArg = pure . Right . unsafeAsObject
+  parseServiceArg = pure . Right . unJSObject
+  {-# INLINE parseServiceArg #-}
+
+instance IsServiceArg JSString where
+  type ServiceArg JSString = USVStringClass
+  encodeServiceArg = pure . coerce
+  {-# INLINE encodeServiceArg #-}
+  parseServiceArg = pure . Right . coerce
   {-# INLINE parseServiceArg #-}
 
 instance (FromJSON a, ToJSON a) => IsServiceArg (ViaJSON a) where
