@@ -33,9 +33,9 @@ module Network.Cloudflare.Worker.Binding.Service (
   ServiceClass,
   Service,
   call,
-  ToServiceBinding (..),
-  genericToServiceBinding,
-  GenericToServiceBinding,
+  ToService (..),
+  genericToService,
+  GenericToService,
   IsServiceArg (..),
   ViaJSPrim (..),
   ViaJSON (..),
@@ -168,37 +168,37 @@ type JSFun fn = JSObject (JSFunClass fn)
 If you have a function with many arguments, this can lead to performance degression.
 In such cases, we recommend to write the instance manually.
 -}
-class ToServiceBinding a where
+class ToService a where
   type Signature a :: [(Symbol, FunSig)]
   type Signature a = GSignature (Rep a)
 
-  toServiceBinding :: a -> IO (JSObject (ServiceClass (Signature a)))
-  default toServiceBinding ::
-    (GenericToServiceBinding a) =>
+  toService :: a -> IO (JSObject (ServiceClass (Signature a)))
+  default toService ::
+    (GenericToService a) =>
     a ->
     IO (JSObject (ServiceClass (Signature a)))
-  toServiceBinding = genericToServiceBinding
+  toService = genericToService
 
-type GenericToServiceBinding a =
+type GenericToService a =
   ( Generic a
-  , GToServiceBinding (Rep a)
+  , GToService (Rep a)
   , Signature a ~ GSignature (Rep a)
   )
 
-genericToServiceBinding ::
-  (GenericToServiceBinding a) =>
+genericToService ::
+  (GenericToService a) =>
   a ->
   IO (JSObject (ServiceClass (GSignature (Rep a))))
-genericToServiceBinding a = do
+genericToService a = do
   sink <- js_new_service_sink
   gwriteField sink $ from a
   pure sink.runServiceSink
 
-class GToServiceBinding f where
+class GToService f where
   type GSignature f :: [(Symbol, FunSig)]
   gwriteField :: ServiceSink (GSignature f) -> f a -> IO ()
 
-instance GToServiceBinding U1 where
+instance GToService U1 where
   type GSignature U1 = '[]
   gwriteField _ _ = pure ()
 
@@ -224,24 +224,24 @@ instance
   ( KnownSymbol l
   , IsWorkerFun c
   ) =>
-  GToServiceBinding (S1 ('MetaSel ('Just l) _pk _st _d) (K1 i c))
+  GToService (S1 ('MetaSel ('Just l) _pk _st _d) (K1 i c))
   where
   type GSignature (S1 ('MetaSel ('Just l) _pk _st _d) (K1 i c)) = '[ '(l, ToFunSig c)]
   gwriteField sink (M1 (K1 x)) = js_set_handler sink (toJSString $ symbolVal' @l proxy#) =<< encodeJSFun# (proxy# @(ToFunSig c)) (toWorkerFun x)
 
-instance (GToServiceBinding f) => GToServiceBinding (D1 i f) where
+instance (GToService f) => GToService (D1 i f) where
   type GSignature (D1 i f) = GSignature f
   gwriteField sink (M1 x) = gwriteField sink x
 
-instance (GToServiceBinding f) => GToServiceBinding (C1 i f) where
+instance (GToService f) => GToService (C1 i f) where
   type GSignature (C1 i f) = GSignature f
   gwriteField sink (M1 x) = gwriteField sink x
 
-instance (GToServiceBinding f, GToServiceBinding g) => GToServiceBinding (f :*: g) where
+instance (GToService f, GToService g) => GToService (f :*: g) where
   type GSignature (f :*: g) = GSignature f ++ GSignature g
   gwriteField sink (f :*: g) = gwriteField (castSink @(GSignature f) sink) f >> gwriteField (castSink @(GSignature g) sink) g
 
-instance (Unsatisfiable ('Text "Sum type cannot be marshaled into a service binding")) => GToServiceBinding (f :+: g) where
+instance (Unsatisfiable ('Text "Sum type cannot be marshaled into a service binding")) => GToService (f :+: g) where
   type GSignature (f :+: g) = TypeError ('Text "Sum type cannot be marshaled into a service binding")
 
 type family ls ++ rs where
