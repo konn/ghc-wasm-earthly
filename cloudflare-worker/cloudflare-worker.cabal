@@ -83,6 +83,7 @@ library
     Network.Cloudflare.Worker.Binding.D1
     Network.Cloudflare.Worker.Binding.KV
     Network.Cloudflare.Worker.Binding.R2
+    Network.Cloudflare.Worker.Binding.Service
     Network.Cloudflare.Worker.Crypto
     Network.Cloudflare.Worker.FetchAPI
     Network.Cloudflare.Worker.Handler
