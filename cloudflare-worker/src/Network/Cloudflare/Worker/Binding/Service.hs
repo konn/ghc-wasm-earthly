@@ -60,10 +60,13 @@ import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Trans.Except (ExceptT (..), runExceptT)
 import Data.Aeson (FromJSON, ToJSON)
 import Data.Aeson qualified as J
+import Data.ByteString qualified as BS
+import Data.ByteString.Lazy qualified as LBS
 import Data.Coerce (coerce)
 import Data.Int
 import Data.Kind (Constraint, Type)
 import Data.Text qualified as T
+import Data.Text.Lazy qualified as LT
 import Data.Type.Bool (If, type (&&))
 import Data.Vector qualified as V
 import Data.Word
@@ -365,6 +368,34 @@ instance IsServiceArg JSString where
   encodeServiceArg = pure . coerce
   {-# INLINE encodeServiceArg #-}
   parseServiceArg = pure . Right . coerce
+  {-# INLINE parseServiceArg #-}
+
+instance IsServiceArg T.Text where
+  type ServiceArg T.Text = USVStringClass
+  encodeServiceArg = pure . fromText
+  {-# INLINE encodeServiceArg #-}
+  parseServiceArg = pure . Right . toText
+  {-# INLINE parseServiceArg #-}
+
+instance IsServiceArg LT.Text where
+  type ServiceArg LT.Text = USVStringClass
+  encodeServiceArg = pure . fromText . LT.toStrict
+  {-# INLINE encodeServiceArg #-}
+  parseServiceArg = pure . Right . LT.fromStrict . toText
+  {-# INLINE parseServiceArg #-}
+
+instance IsServiceArg BS.ByteString where
+  type ServiceArg BS.ByteString = JSByteStringClass
+  encodeServiceArg = fromHaskellByteString
+  {-# INLINE encodeServiceArg #-}
+  parseServiceArg = fmap Right . toHaskellByteString
+  {-# INLINE parseServiceArg #-}
+
+instance IsServiceArg LBS.ByteString where
+  type ServiceArg LBS.ByteString = JSByteStringClass
+  encodeServiceArg = fromHaskellByteString . LBS.toStrict
+  {-# INLINE encodeServiceArg #-}
+  parseServiceArg = fmap (Right . LBS.fromStrict) . toHaskellByteString
   {-# INLINE parseServiceArg #-}
 
 instance (FromJSON a, ToJSON a) => IsServiceArg (ViaJSON a) where
