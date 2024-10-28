@@ -117,7 +117,6 @@ import Data.Time (UTCTime)
 import Data.Time.Format.ISO8601 (iso8601ParseM, iso8601Show)
 import Data.Vector qualified as V
 import Data.Word
-import Effectful.Concurrent.Async (Async)
 import GHC.Exts (noinline, proxy#)
 import GHC.Generics (Generic (..), Generically (..), K1 (..), M1 (..), Meta (..), S, (:*:) (..), (:+:))
 import GHC.IO.Unsafe (unsafeDupablePerformIO, unsafePerformIO)
@@ -362,8 +361,8 @@ instance ToD1Row D1RowView where
   toD1Row = unviewD1Row
   toD1RowView = id
 
-all :: Statement -> IO (Async (D1ResultView D1RowView))
-all = deferWith (fromResults viewD1Row) <=< js_all
+all :: Statement -> IO (Promised (D1ResultClass D1RowClass) (D1ResultView D1RowView))
+all = fmap (Promised (pure . fromResults viewD1Row)) . js_all
 
 fromResults :: (JSObject cls -> a) -> D1Result cls -> D1ResultView a
 fromResults f r = unsafeDupablePerformIO do
@@ -387,20 +386,22 @@ viewMetadata meta = unsafeDupablePerformIO do
 all' :: Statement -> IO (Promise (D1ResultClass D1RowClass))
 all' = js_all
 
-raw :: Statement -> IO (Async (V.Vector (V.Vector D1ValueView)))
-raw = deferWithM (V.mapM (fmap (V.map viewD1Value) . toVector) <=< toVector) <=< raw'
+raw :: Statement -> IO (Promised (SequenceClass (SequenceClass D1ValueClass)) (V.Vector (V.Vector D1ValueView)))
+raw =
+  fmap (Promised (V.mapM (fmap (V.map viewD1Value) . toVector) <=< toVector))
+    <$> raw'
 
 raw' :: Statement -> IO (Promise (SequenceClass (SequenceClass D1ValueClass)))
 raw' = js_raw
 
-run :: Statement -> IO (Async D1MetricsView)
-run = deferWith viewMetrics <=< run'
+run :: Statement -> IO (Promised D1MetricsClass D1MetricsView)
+run = fmap (Promised $ pure . viewMetrics) . run'
 
 run' :: Statement -> IO (Promise D1MetricsClass)
 run' = js_run
 
-rawWithColumns :: Statement -> IO (Async (V.Vector T.Text, V.Vector (V.Vector D1ValueView)))
-rawWithColumns = deferWithM go <=< rawWithColumns'
+rawWithColumns :: Statement -> IO (Promised (SequenceClass (SequenceClass D1ValueClass)) (V.Vector T.Text, V.Vector (V.Vector D1ValueView)))
+rawWithColumns = fmap (Promised go) . rawWithColumns'
   where
     go seqs = do
       vecs0 <- toVector seqs
@@ -733,8 +734,8 @@ type D1Row = JSObject D1RowClass
 newtype D1RowView = D1RowView {getD1RowView :: Map T.Text D1ValueView}
   deriving (Show, Eq, Ord, Generic)
 
-first :: Statement -> IO (Async (Maybe D1RowView))
-first = deferWith (nullable Nothing (Just . viewD1Row)) <=< first'
+first :: Statement -> IO (Promised (NullableClass D1RowClass) (Maybe D1RowView))
+first = fmap (Promised $ pure . nullable Nothing (Just . viewD1Row)) <$> first'
 
 first' :: Statement -> IO (Promise (NullableClass D1RowClass))
 first' = js_first
@@ -742,8 +743,8 @@ first' = js_first
 firstColumns ::
   Statement ->
   V.Vector T.Text ->
-  IO (Async (Maybe (V.Vector D1ValueView)))
-firstColumns stmt = deferWithM go <=< firstColumns' stmt . toSequence . V.map fromText
+  IO (Promised (NullableClass (SequenceClass D1ValueClass)) (Maybe (V.Vector D1ValueView)))
+firstColumns stmt = fmap (Promised go) . firstColumns' stmt . toSequence . V.map fromText
   where
     go = nullable (pure Nothing) (fmap (Just . V.map viewD1Value) . toVector)
 
@@ -753,13 +754,13 @@ firstColumns' ::
   IO (Promise (NullableClass (SequenceClass D1ValueClass)))
 firstColumns' = js_first_with_cols
 
-batch :: D1 -> V.Vector Statement -> IO (Async (V.Vector (D1ResultView D1RowView)))
+batch :: D1 -> V.Vector Statement -> IO (Promised (SequenceClass (D1ResultClass D1RowClass)) (V.Vector (D1ResultView D1RowView)))
 batch d1 stmts =
-  deferWithM (fmap (V.map (fromResults viewD1Row)) . toVector)
-    =<< js_batch d1 (toSequence stmts)
+  Promised (fmap (V.map (fromResults viewD1Row)) . toVector)
+    <$> js_batch d1 (toSequence stmts)
 
-exec :: D1 -> T.Text -> IO (Async D1ExecResultView)
-exec d1 rawQry = deferWith viewD1ExecResult =<< exec' d1 (fromText rawQry)
+exec :: D1 -> T.Text -> IO (Promised D1ExecResultClass D1ExecResultView)
+exec d1 rawQry = Promised (pure . viewD1ExecResult) <$> exec' d1 (fromText rawQry)
 
 exec' :: D1 -> USVString -> IO (Promise D1ExecResultClass)
 exec' = js_exec
