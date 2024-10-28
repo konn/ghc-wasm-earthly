@@ -374,6 +374,8 @@ instance (FromJSON a, ToJSON a) => IsServiceArg (ViaJSON a) where
   parseServiceArg = fmap (fmap ViaJSON) . eitherDecodeJSON
   {-# INLINE parseServiceArg #-}
 
+deriving via ViaJSON () instance IsServiceArg ()
+
 instance IsServiceArg (JSObject a) where
   type ServiceArg (JSObject a) = a
   encodeServiceArg = pure
