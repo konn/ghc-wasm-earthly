@@ -503,7 +503,7 @@ type WithThis e fs = JSObject (WithThisClass e fs)
 foreign import javascript unsafe "wrapper"
   js_wrap_withthis :: (ServiceHandler e -> IO (JSFun fn)) -> IO (WithThis e fn)
 
-foreign import javascript unsafe "$1.prototype[$2] = async function (... args) { return await ($3)(this)(... args) }"
+foreign import javascript unsafe "$1.prototype[$2] = async function (... args) { return await (await $3(this))(... args) }"
   js_set_handler ::
     ServiceSink fs ->
     JSString ->
