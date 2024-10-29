@@ -62,7 +62,7 @@ import GHC.TypeError
 import GHC.TypeLits
 import GHC.Wasm.Object.Core
 import GHC.Wasm.Prim
-import System.IO.Unsafe (unsafeDupablePerformIO)
+import System.IO.Unsafe (unsafeDupablePerformIO, unsafePerformIO)
 import qualified Wasm.Data.Array.Destination as DA
 import qualified Wasm.Prelude.Linear as PL
 import qualified Wasm.Unsafe.Linear as Unsafe
@@ -212,9 +212,11 @@ newDictionary ::
   (KnownFields fs) =>
   (PartialDictionary fs (RequiredKeys fs) %1 -> PartialDictionary fs '[]) ->
   JSDictionary fs
-newDictionary f =
-  let !(PD dic') = f js_new_partial
-   in dic'
+{-# NOINLINE newDictionary #-}
+newDictionary f = unsafePerformIO do
+  dic <- js_new_partial
+  (PD !dic') <- evaluate (f dic)
+  pure dic'
 
 setPartialField ::
   forall fs gs x.
@@ -226,13 +228,13 @@ setPartialField ::
 {-# NOINLINE setPartialField #-}
 setPartialField f val (PD obj) =
   PD
-    (js_set_partial obj (toJSString (symbolVal' (proxy# @f))) (upcast val))
+    (Unsafe.toLinear unsafePerformIO (js_set_partial obj (toJSString (symbolVal' (proxy# @f))) (upcast val)))
 
 foreign import javascript unsafe "$1[$2] = $3; return $1"
-  js_set_partial :: JSDictionary fs %1 -> JSString -> JSAny -> JSDictionary fs
+  js_set_partial :: JSDictionary fs %1 -> JSString -> JSAny -> IO (JSDictionary fs)
 
 foreign import javascript unsafe "new Object()"
-  js_new_partial :: PartialDictionary fs (RequiredKeys fs)
+  js_new_partial :: IO (PartialDictionary fs (RequiredKeys fs))
 
 newReifiedDictionary ::
   forall fs.
