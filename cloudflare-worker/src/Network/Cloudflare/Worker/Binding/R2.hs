@@ -94,7 +94,6 @@ module Network.Cloudflare.Worker.Binding.R2 (
   R2ChecksumsFields,
 ) where
 
-import Control.Concurrent.Async (Async)
 import Control.Monad ((<=<))
 import Data.ByteString qualified as BS
 import Data.Map.Strict (Map)
@@ -241,20 +240,21 @@ toRawStorageClass = \case
 data StorageClass = Standard | InfrequentAccess
   deriving stock (Eq, Show, Generic)
 
-head :: R2 -> BS.ByteString -> IO (Async (Maybe R2Object))
-head r2 key = deferWith fromNullable =<< js_head r2 =<< fromHaskellByteString key
+head :: R2 -> BS.ByteString -> IO (Promised (NullableClass R2ObjectClass) (Maybe R2Object))
+head r2 key = Promised (pure . fromNullable) <$> (js_head r2 =<< fromHaskellByteString key)
 
-get :: R2 -> BS.ByteString -> IO (Async (Maybe R2ObjectBody))
-get r2 key = deferWith fromNullable =<< js_get r2 =<< fromHaskellByteString key
+get :: R2 -> BS.ByteString -> IO (Promised (NullableClass R2ObjectBodyClass) (Maybe R2ObjectBody))
+get r2 key =
+  Promised (pure . fromNullable) <$> (js_get r2 =<< fromHaskellByteString key)
 
 getWith ::
   R2 ->
   BS.ByteString ->
   RawGetOptions ->
-  IO (Async (Maybe (Either R2Object R2ObjectBody)))
+  IO (Promised (NullableClass (UnionClass '[R2ObjectClass, R2ObjectBodyClass])) (Maybe (Either R2Object R2ObjectBody)))
 getWith r2 key opts = do
   key' <- fromHaskellByteString key
-  deferWith (fmap decBody . fromNullable) =<< js_get' r2 key' opts
+  Promised (pure . fmap decBody . fromNullable) <$> js_get' r2 key' opts
 
 decBody :: Union [R2ObjectClass, R2ObjectBodyClass] -> Either R2Object R2ObjectBody
 decBody obj =
@@ -293,15 +293,15 @@ type PutOptionsClass = JSDictionaryClass PutOptionsFields
 
 type RawPutOptions = JSObject PutOptionsClass
 
-put :: R2 -> BS.ByteString -> PutBody -> IO (Async (Maybe R2Object))
+put :: R2 -> BS.ByteString -> PutBody -> IO (Promised (NullableClass R2ObjectClass) (Maybe R2Object))
 put r2 key body = do
   key' <- fromHaskellByteString key
-  deferWith fromNullable =<< js_put r2 key' body none
+  Promised (pure . fromNullable) <$> js_put r2 key' body none
 
-putWith :: R2 -> BS.ByteString -> PutBody -> RawPutOptions -> IO (Async (Maybe R2Object))
+putWith :: R2 -> BS.ByteString -> PutBody -> RawPutOptions -> IO (Promised (NullableClass R2ObjectClass) (Maybe R2Object))
 putWith r2 key body opts = do
   key' <- fromHaskellByteString key
-  deferWith fromNullable =<< js_put r2 key' body (nonNull opts)
+  Promised (pure . fromNullable) <$> js_put r2 key' body (nonNull opts)
 
 type ConditionalClass =
   JSDictionaryClass
@@ -313,11 +313,11 @@ type ConditionalClass =
 
 type RawConditional = JSObject ConditionalClass
 
-delete :: R2 -> BS.ByteString -> IO (Async ())
-delete r2 = deferWith (const ()) <=< js_deleteOne r2 <=< fromHaskellByteString
+delete :: R2 -> BS.ByteString -> IO (Promised UndefinedClass ())
+delete r2 = fmap (Promised (const $ pure ())) . js_deleteOne r2 <=< fromHaskellByteString
 
-deleteMany :: R2 -> V.Vector BS.ByteString -> IO (Async ())
-deleteMany r2 = deferWith (const ()) <=< js_deleteMany r2 . toSequence <=< mapM fromHaskellByteString
+deleteMany :: R2 -> V.Vector BS.ByteString -> IO (Promised UndefinedClass ())
+deleteMany r2 = fmap (Promised $ const $ pure ()) . js_deleteMany r2 . toSequence <=< mapM fromHaskellByteString
 
 type ListOptionsFields =
   '[ '("limit", NullableClass (JSPrimClass Word16))
@@ -350,8 +350,8 @@ data R2ObjectsView = R2ObjectsView
   }
   deriving (Generic)
 
-list :: R2 -> Maybe RawListOptions -> IO (Async R2ObjectsView)
-list r2 mopts = deferWithM go =<< js_list r2 (toNullable mopts)
+list :: R2 -> Maybe RawListOptions -> IO (Promised R2ObjectsClass R2ObjectsView)
+list r2 mopts = Promised go <$> js_list r2 (toNullable mopts)
   where
     go :: R2Objects -> IO R2ObjectsView
     go objs = do
