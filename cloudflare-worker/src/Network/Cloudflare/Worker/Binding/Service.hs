@@ -83,6 +83,7 @@ import GHC.TypeLits
 import GHC.Wasm.Object.Builtins
 import GHC.Wasm.Prim
 import GHC.Wasm.Web.JSON
+import GHC.Wasm.Web.JSON (parseJSONFromJS)
 import Language.WASM.JSVal.Convert
 import Network.Cloudflare.Worker.Binding (BindingsClass, ListMember)
 import Network.Cloudflare.Worker.Binding qualified as B
@@ -230,9 +231,11 @@ instance (IsServiceArg a) => IsServiceFunSig (Return a) where
       ( Promised
           ( \e -> do
               either
-                ( \exc ->
-                    throwIO . FunResultDecodeFailure ("Decoding arg faied(" <> show (typeRep @a) <> "): " <> exc) . toText
-                      =<< stringify (unsafeCast e)
+                ( \exc -> do
+                    str <- stringify $ unsafeCast e
+                    js <- parseJSONFromJS $ unsafeCast e
+                    throwIO $
+                      FunResultDecodeFailure ("Decoding arg faied (" <> show (typeRep @a) <> "): " <> exc) (T.pack $ show (toText str, js))
                 )
                 pure
                 =<< parseServiceArg e
