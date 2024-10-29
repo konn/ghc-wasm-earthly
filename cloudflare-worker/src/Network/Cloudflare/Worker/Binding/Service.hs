@@ -64,7 +64,6 @@ import Data.Aeson (FromJSON, ToJSON)
 import Data.Aeson qualified as J
 import Data.ByteString qualified as BS
 import Data.ByteString.Lazy qualified as LBS
-import Data.ByteString.Lazy.Char8 qualified as LBS8
 import Data.Coerce (coerce)
 import Data.Function ((&))
 import Data.Int
@@ -88,6 +87,7 @@ import Language.WASM.JSVal.Convert
 import Network.Cloudflare.Worker.Binding (BindingsClass, ListMember)
 import Network.Cloudflare.Worker.Binding qualified as B
 import Network.Cloudflare.Worker.Handler.Fetch (FetchContext)
+import Type.Reflection (Typeable, typeRep)
 
 type data FunSig = Return Type | Type :~> FunSig
 
@@ -231,7 +231,7 @@ instance (IsServiceArg a) => IsServiceFunSig (Return a) where
           ( \e -> do
               either
                 ( \exc ->
-                    throwIO . FunResultDecodeFailure exc . toText
+                    throwIO . FunResultDecodeFailure ("Decoding arg faied(" <> show (typeRep @a) <> "): " <> exc) . toText
                       =<< stringify (unsafeCast e)
                 )
                 pure
@@ -385,7 +385,7 @@ type family ls ++ rs where
   '[] ++ rs = rs
   (l ': ls) ++ rs = l ': (ls ++ rs)
 
-class IsServiceArg a where
+class (Typeable a) => IsServiceArg a where
   type ServiceArg a :: Prototype
   encodeServiceArg :: a -> IO (JSObject (ServiceArg a))
   parseServiceArg :: JSObject (ServiceArg a) -> IO (Either String a)
@@ -432,7 +432,7 @@ instance IsServiceArg LBS.ByteString where
   parseServiceArg = fmap (Right . LBS.fromStrict) . toHaskellByteString
   {-# INLINE parseServiceArg #-}
 
-instance (FromJSON a, ToJSON a) => IsServiceArg (ViaJSON a) where
+instance (Typeable a, FromJSON a, ToJSON a) => IsServiceArg (ViaJSON a) where
   type ServiceArg (ViaJSON a) = JSONClass
   encodeServiceArg = encodeJSON . runViaJSON
   {-# INLINE encodeServiceArg #-}
@@ -441,7 +441,7 @@ instance (FromJSON a, ToJSON a) => IsServiceArg (ViaJSON a) where
 
 deriving via ViaJSON () instance IsServiceArg ()
 
-instance IsServiceArg (JSObject a) where
+instance (Typeable a) => IsServiceArg (JSObject a) where
   type ServiceArg (JSObject a) = a
   encodeServiceArg = pure
   {-# INLINE encodeServiceArg #-}
@@ -450,28 +450,34 @@ instance IsServiceArg (JSObject a) where
 
 newtype ViaJSPrim a = ViaJSPrim {runViaJSPrim :: a}
 
-instance (JSPrimitive a) => IsServiceArg (ViaJSPrim a) where
+instance (Typeable a, JSPrimitive a) => IsServiceArg (ViaJSPrim a) where
   type ServiceArg (ViaJSPrim a) = JSPrimClass a
   encodeServiceArg = pure . toJSPrim . (.runViaJSPrim)
   {-# INLINE encodeServiceArg #-}
   parseServiceArg = pure . Right . ViaJSPrim . fromJSPrim
   {-# INLINE parseServiceArg #-}
 
-instance (IsServiceArg a) => IsServiceArg (Maybe a) where
+instance (Typeable a, IsServiceArg a) => IsServiceArg (Maybe a) where
   type ServiceArg (Maybe a) = NullableClass (ServiceArg a)
   encodeServiceArg = maybe (pure none) (fmap nonNull . encodeServiceArg)
   {-# INLINE encodeServiceArg #-}
   parseServiceArg = nullable (pure $ Right Nothing) (fmap (fmap Just) . parseServiceArg)
   {-# INLINE parseServiceArg #-}
 
-instance (IsServiceArg a) => IsServiceArg (V.Vector a) where
+instance (Typeable a, IsServiceArg a) => IsServiceArg (V.Vector a) where
   type ServiceArg (V.Vector a) = SequenceClass (ServiceArg a)
   encodeServiceArg = fmap toSequence . mapM encodeServiceArg
   {-# INLINE encodeServiceArg #-}
   parseServiceArg = runExceptT . mapM (ExceptT . parseServiceArg) <=< toVector
   {-# INLINE parseServiceArg #-}
 
-instance (IsServiceArg a) => IsServiceArg [a] where
+instance
+  (Unsatisfiable ('Text "String cannot directly be encoded; use Text")) =>
+  IsServiceArg String
+  where
+  type ServiceArg String = SequenceClass (ServiceArg Char)
+
+instance (Typeable a, IsServiceArg a) => IsServiceArg [a] where
   type ServiceArg [a] = SequenceClass (ServiceArg a)
   encodeServiceArg = encodeServiceArg . V.fromList
   {-# INLINE encodeServiceArg #-}
