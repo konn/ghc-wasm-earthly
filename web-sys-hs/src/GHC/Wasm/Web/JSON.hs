@@ -147,7 +147,7 @@ foreign import javascript unsafe "if (typeof $1 === 'object') { return $1 } else
 foreign import javascript unsafe "Object.getOwnPropertyNames($1)"
   js_props :: JSONObject -> IO (Sequence USVStringClass)
 
-foreign import javascript unsafe "Object.getOwnPropertyNames($1)"
+foreign import javascript unsafe "$1[$2]"
   js_get_prop :: JSONObject -> USVString -> IO JSON
 
 foreign import javascript unsafe "$1 === null || $1 === undefined"
