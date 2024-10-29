@@ -56,8 +56,9 @@ module Network.Cloudflare.Worker.Binding.Service (
 import Control.Arrow ((>>>))
 import Control.Exception.Safe (Exception, MonadCatch, MonadMask, MonadThrow, throwIO)
 import Control.Monad (join, (<=<))
-import Control.Monad.IO.Class (MonadIO)
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Except (ExceptT (..), runExceptT)
+import Control.Monad.Trans.Reader (ReaderT (..), ask)
 import Data.Aeson (FromJSON, ToJSON)
 import Data.Aeson qualified as J
 import Data.ByteString qualified as BS
@@ -88,8 +89,12 @@ type data FunSig = Return Type | Type :~> FunSig
 
 type data JSFunSig = ReturnJS Prototype | Prototype :~>> JSFunSig
 
+type data ServiceHandlerClass (e :: Prototype) :: Prototype
+
+type ServiceHandler e = JSObject (ServiceHandlerClass e)
+
 type ServiceM :: Prototype -> [(Symbol, FunSig)] -> Type -> Type
-newtype ServiceM e bs a = ServiceM {runServiceM :: IO a}
+newtype ServiceM e bs a = ServiceM {runServiceM :: ReaderT (ServiceHandler e) IO a}
   deriving newtype
     ( Functor
     , Applicative
@@ -101,19 +106,22 @@ newtype ServiceM e bs a = ServiceM {runServiceM :: IO a}
     , MonadMask
     )
 
+getServiceEnv :: ServiceM e bs (JSObject e)
+getServiceEnv = ServiceM $ liftIO . js_get_env =<< ask
+
 getBinding ::
   forall es ss bs fs.
   forall l ->
   (KnownSymbol l, Member l bs) =>
   ServiceM (BindingsClass es ss bs) fs (JSObject (Lookup' l bs))
-getBinding l = B.getBinding l <$> (js_call_env =<< js_get_env)
+getBinding l = B.getBinding l <$> getServiceEnv
 
 getSecret ::
   forall es ss bs fs.
   forall l ->
   (KnownSymbol l, ListMember l ss) =>
   ServiceM (BindingsClass es ss bs) fs T.Text
-getSecret l = B.getSecret l <$> (js_call_env =<< js_get_env)
+getSecret l = B.getSecret l <$> getServiceEnv
 
 getEnv ::
   forall es ss bs fs a.
@@ -132,8 +140,7 @@ getRawEnv ::
   forall l ->
   (KnownSymbol l, ListMember l es) =>
   ServiceM (BindingsClass es ss bs) fs J.Value
-getRawEnv l =
-  B.getEnv l <$> (js_call_env =<< js_get_env)
+getRawEnv l = B.getEnv l <$> getServiceEnv
 
 call ::
   forall bs x.
@@ -144,7 +151,7 @@ call ::
 call l srv =
   joinHsFun x $
     decodeFun# (proxy# @x)
-      <$> js_get_fun @bs @(ToJSFunSig x) srv (toJSString $ symbolVal' @l proxy#)
+      <$> js_get_fun @bs @(ToJSFunSig Caller x) srv (toJSString $ symbolVal' @l proxy#)
 
 instance
   ( KnownSymbol l
@@ -179,9 +186,10 @@ type family FromFunSig mode fn where
   FromFunSig Caller (Return a) = IO (Promised (ServiceArg a) a)
   FromFunSig mode (a :~> b) = a -> FromFunSig mode b
 
-type family ToJSFunSig fn = js where
-  ToJSFunSig (Return a) = ReturnJS (ServiceArg a)
-  ToJSFunSig (a :~> b) = ServiceArg a :~>> ToJSFunSig b
+type family ToJSFunSig mode fn = js where
+  ToJSFunSig (Defn e fs) (Return a) = ServiceHandlerClass e :~>> ReturnJS (ServiceArg a)
+  ToJSFunSig Caller (Return a) = ReturnJS (ServiceArg a)
+  ToJSFunSig mode (a :~> b) = ServiceArg a :~>> ToJSFunSig mode b
 
 type IsServiceFunSig :: FunSig -> Constraint
 class IsServiceFunSig fn where
@@ -190,8 +198,8 @@ class IsServiceFunSig fn where
     Proxy# e ->
     Proxy# fs ->
     FromFunSig (Defn e fs) fn ->
-    IO (JSFun (ToJSFunSig fn))
-  decodeFun# :: Proxy# fn -> JSFun (ToJSFunSig fn) -> ToCallerFun fn
+    IO (JSFun (ToJSFunSig (Defn e fs) fn))
+  decodeFun# :: Proxy# fn -> JSFun (ToJSFunSig Caller fn) -> ToCallerFun fn
   joinHsFun# :: Proxy# fn -> IO (FromFunSig Caller fn) -> FromFunSig Caller fn
 
 joinHsFun :: forall fn -> (IsServiceFunSig fn) => IO (ToCallerFun fn) -> ToCallerFun fn
@@ -199,7 +207,8 @@ joinHsFun :: forall fn -> (IsServiceFunSig fn) => IO (ToCallerFun fn) -> ToCalle
 joinHsFun fn = joinHsFun# (proxy# @fn)
 
 instance (IsServiceArg a) => IsServiceFunSig (Return a) where
-  encodeJSFun# _ _ _ = (coerce . encodeServiceArg @a =<<) . (.runServiceM)
+  encodeJSFun# _ _ _ (ServiceM act) = js_ffi_fun_arrow \backend -> do
+    fmap unsafeCast . encodeServiceArg =<< runReaderT act backend
   {-# INLINE encodeJSFun# #-}
   decodeFun# _ =
     pure
@@ -213,7 +222,7 @@ instance (IsServiceArg a) => IsServiceFunSig (Return a) where
   {-# INLINE joinHsFun# #-}
 
 instance (IsServiceArg a, IsServiceFunSig bs) => IsServiceFunSig (a :~> bs) where
-  encodeJSFun# _ e fs f = js_ffi_fun_arrow @(ServiceArg a) @(ToJSFunSig bs) $ \x -> do
+  encodeJSFun# _ (e :: Proxy# e) (fs :: Proxy# fs) f = js_ffi_fun_arrow @(ServiceArg a) @(ToJSFunSig (Defn e fs) bs) $ \x -> do
     xjs <- either (throwIO . FunArgDecodeFailure) pure =<< parseServiceArg @a x
     encodeJSFun# (proxy# @bs) e fs (f xjs)
 
@@ -307,7 +316,7 @@ instance
   (IsServiceArg a) =>
   IsWorkerFun e fs (IO a)
   where
-  toWorkerFun _ _ = ServiceM
+  toWorkerFun _ _ = liftIO
   {-# INLINE toWorkerFun #-}
 
 instance
@@ -472,9 +481,7 @@ deriving via ViaJSPrim Float instance IsServiceArg Float
 
 newtype ServiceSink fs = ServiceSink {runServiceSink :: Service fs}
 
-type data DynamicClass (e :: Prototype) :: Prototype
-
-foreign import javascript unsafe "$1.prototype[$2] = function (... args) { return ($3)(... args) }"
+foreign import javascript unsafe "$1.prototype[$2] = function (... args) { return ($3)(... args, this) }"
   js_set_handler :: ServiceSink fs -> JSString -> JSFun e -> IO ()
 
 foreign import javascript unsafe "(class extends WorkerEntrypoint {})"
@@ -489,14 +496,11 @@ foreign import javascript unsafe "$1($2)"
 foreign import javascript unsafe "$1[$2]"
   js_get_fun :: Service fs -> JSString -> IO (JSFun f)
 
-foreign import javascript unsafe "function () { return this.env }"
-  js_get_env :: ServiceM e fs (JSObject (DynamicClass e))
+foreign import javascript unsafe "$1.env"
+  js_get_env :: ServiceHandler e -> IO (JSObject e)
 
-foreign import javascript unsafe "this.ctx"
-  getFetchContext :: ServiceM e fs FetchContext
+foreign import javascript unsafe "$1.ctx"
+  getFetchContext :: ServiceHandler e -> IO FetchContext
 
-foreign import javascript unsafe "function () { this.ctx.waitUntil($1) }"
-  waitUntil :: Promise a -> ServiceM e fs ()
-
-foreign import javascript unsafe "$1.call(this).call(this)"
-  js_call_env :: JSObject (DynamicClass e) -> ServiceM e fs (JSObject e)
+foreign import javascript unsafe "$1.ctx.waitUntil($2)"
+  waitUntil :: ServiceHandler e -> Promise a -> IO ()
