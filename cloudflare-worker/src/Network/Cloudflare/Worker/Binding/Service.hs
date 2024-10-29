@@ -219,15 +219,16 @@ joinHsFun fn = joinHsFun# (proxy# @fn)
 
 instance (IsServiceArg a) => IsServiceFunSig (Return a) where
   encodeJSFun# _ _ _ (ServiceM act) =
-    fmap unsafeCast . encodeServiceArg <=< runReaderT act
+    js_wrap_ret <=< encodeServiceArg <=< runReaderT act
   {-# INLINE encodeJSFun# #-}
   decodeFun# _ =
-    pure
-      . Promised
-        ( either (throwIO . FunResultDecodeFailure) pure
-            <=< parseServiceArg
-        )
-      . unsafeCast @_ @(PromiseClass (ServiceArg a))
+    fmap
+      ( Promised
+          ( either (throwIO . FunResultDecodeFailure) pure
+              <=< parseServiceArg
+          )
+      )
+      . js_call_ret
   {-# INLINE decodeFun# #-}
   joinHsFun# _ = join
   {-# INLINE joinHsFun# #-}
@@ -511,6 +512,12 @@ foreign import javascript unsafe "$1.prototype[$2] = async function (... args) {
 
 foreign import javascript unsafe "(class extends WorkerEntrypoint {})"
   js_new_service_sink :: IO (ServiceSink fs)
+
+foreign import javascript unsafe "function () { $1 }"
+  js_wrap_ret :: JSObject a -> IO (JSFun (ReturnJS a))
+
+foreign import javascript unsafe "$1()"
+  js_call_ret :: JSFun (ReturnJS a) -> IO (Promise a)
 
 foreign import javascript "wrapper"
   js_ffi_fun_arrow :: (JSObject f -> IO (JSFun fs)) -> IO (JSFun (f :~>> fs))
