@@ -472,7 +472,7 @@ deriving via ViaJSPrim Float instance IsServiceArg Float
 
 newtype ServiceSink fs = ServiceSink {runServiceSink :: Service fs}
 
-foreign import javascript unsafe "$1.prototype[$2] = $3"
+foreign import javascript unsafe "$1.prototype[$2] = function (... args) { return ($3)(... args) }"
   js_set_handler :: ServiceSink fs -> JSString -> JSFun e -> IO ()
 
 foreign import javascript unsafe "(class extends WorkerEntrypoint {})"
