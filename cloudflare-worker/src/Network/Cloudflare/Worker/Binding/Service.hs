@@ -197,7 +197,7 @@ type family FromFunSig mode fn where
   FromFunSig mode (a :~> b) = a -> FromFunSig mode b
 
 type family ToJSFunSig mode fn = js where
-  ToJSFunSig (Defn e fs) (Return a) = ServiceHandlerClass e :~>> ReturnJS (ServiceArg a)
+  ToJSFunSig (Defn e fs) (Return a) = ReturnJS (ServiceArg a)
   ToJSFunSig Caller (Return a) = ReturnJS (ServiceArg a)
   ToJSFunSig mode (a :~> b) = ServiceArg a :~>> ToJSFunSig mode b
 
@@ -208,6 +208,7 @@ class IsServiceFunSig fn where
     Proxy# e ->
     Proxy# fs ->
     FromFunSig (Defn e fs) fn ->
+    ServiceHandler e ->
     IO (JSFun (ToJSFunSig (Defn e fs) fn))
   decodeFun# :: Proxy# fn -> JSFun (ToJSFunSig Caller fn) -> ToCallerFun fn
   joinHsFun# :: Proxy# fn -> IO (FromFunSig Caller fn) -> FromFunSig Caller fn
@@ -217,8 +218,8 @@ joinHsFun :: forall fn -> (IsServiceFunSig fn) => IO (ToCallerFun fn) -> ToCalle
 joinHsFun fn = joinHsFun# (proxy# @fn)
 
 instance (IsServiceArg a) => IsServiceFunSig (Return a) where
-  encodeJSFun# _ _ _ (ServiceM act) = js_ffi_fun_arrow \backend -> do
-    fmap unsafeCast . encodeServiceArg =<< runReaderT act backend
+  encodeJSFun# _ _ _ (ServiceM act) =
+    fmap unsafeCast . encodeServiceArg <=< runReaderT act
   {-# INLINE encodeJSFun# #-}
   decodeFun# _ =
     pure
@@ -232,9 +233,9 @@ instance (IsServiceArg a) => IsServiceFunSig (Return a) where
   {-# INLINE joinHsFun# #-}
 
 instance (IsServiceArg a, IsServiceFunSig bs) => IsServiceFunSig (a :~> bs) where
-  encodeJSFun# _ (e :: Proxy# e) (fs :: Proxy# fs) f = js_ffi_fun_arrow @(ServiceArg a) @(ToJSFunSig (Defn e fs) bs) $ \x -> do
+  encodeJSFun# _ (e :: Proxy# e) (fs :: Proxy# fs) f this = js_ffi_fun_arrow @(ServiceArg a) @(ToJSFunSig (Defn e fs) bs) $ \x -> do
     xjs <- either (throwIO . FunArgDecodeFailure) pure =<< parseServiceArg @a x
-    encodeJSFun# (proxy# @bs) e fs (f xjs)
+    encodeJSFun# (proxy# @bs) e fs (f xjs) this
 
   decodeFun# _ f x = joinHsFun bs do
     xjs <- encodeServiceArg x
@@ -351,7 +352,10 @@ instance
   ) =>
   GToService e fs (S1 ('MetaSel ('Just l) _pk _st _d) (K1 i c))
   where
-  gwriteField e fs sink (M1 (K1 x)) = js_set_handler sink (toJSString $ symbolVal' @l proxy#) =<< encodeJSFun# (proxy# @(ToFunSig e c)) e fs (toWorkerFun (proxy# @e) (proxy# @fs) x)
+  gwriteField e fs sink (M1 (K1 x)) =
+    js_set_handler sink (toJSString $ symbolVal' @l proxy#)
+      =<< js_wrap_withthis
+        (encodeJSFun# (proxy# @(ToFunSig e c)) e fs (toWorkerFun (proxy# @e) (proxy# @fs) x))
 
 instance (GToService e fs f) => GToService e fs (D1 i f) where
   gwriteField e fs sink (M1 x) = gwriteField e fs sink x
@@ -491,8 +495,19 @@ deriving via ViaJSPrim Float instance IsServiceArg Float
 
 newtype ServiceSink fs = ServiceSink {runServiceSink :: Service fs}
 
-foreign import javascript unsafe "$1.prototype[$2] = function (... args) { return ($3)(... args, this) }"
-  js_set_handler :: ServiceSink fs -> JSString -> JSFun e -> IO ()
+type data WithThisClass :: Prototype -> JSFunSig -> Prototype
+
+type WithThis e fs = JSObject (WithThisClass e fs)
+
+foreign import javascript unsafe "wrapper"
+  js_wrap_withthis :: (ServiceHandler e -> IO (JSFun fn)) -> IO (WithThis e fn)
+
+foreign import javascript unsafe "$1.prototype[$2] = function (... args) { return ($3)(this)(... args) }"
+  js_set_handler ::
+    ServiceSink fs ->
+    JSString ->
+    WithThis e fn ->
+    IO ()
 
 foreign import javascript unsafe "(class extends WorkerEntrypoint {})"
   js_new_service_sink :: IO (ServiceSink fs)
