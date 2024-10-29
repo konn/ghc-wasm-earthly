@@ -19,35 +19,32 @@ module GHC.Wasm.Web.JSON (
   valueToJSON,
 ) where
 
+import Control.Applicative (asum)
 import Control.Exception (evaluate)
 import Control.Monad ((<=<))
+import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Trans.Except (ExceptT (..), runExceptT)
 import Data.Aeson (FromJSON, ToJSON)
 import qualified Data.Aeson as J
 import qualified Data.Aeson.Key as AK
 import qualified Data.Aeson.KeyMap as AKM
-import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Foldable as F
 import Data.Functor (void)
 import Data.Scientific (floatingOrInteger)
-import GHC.Exts (noinline)
 import GHC.Wasm.Object.Builtins hiding (parse)
 import qualified GHC.Wasm.Object.Builtins.Sequence as Seq
 import GHC.Wasm.Prim
 import GHC.Wasm.Web.Generated.JSON
-import System.IO.Unsafe (unsafePerformIO)
 
 -- | NOTE: This converts a value with @JSON.parse@ so all reference to JSVal is lost.
 encodeJSON :: (ToJSON a) => a -> IO JSON
-encodeJSON = pure . valueToJSON . J.toJSON
+encodeJSON = valueToJSON . J.toJSON
 
 stringify :: JSON -> IO USVString
 stringify = js_stringify_json
 
 parse :: USVString -> IO JSON
 parse = js_parse_json
-
-foreign import javascript unsafe "JSON.parse($1)"
-  js_parse_json_bs :: JSByteString -> IO JSON
 
 foreign import javascript unsafe "JSON.parse($1)"
   js_parse_json :: USVString -> IO JSON
@@ -58,18 +55,12 @@ foreign import javascript unsafe "JSON.stringify($1)"
 -- | NOTE: This converts a value with @JSON.stringify@ so all reference to JSVal is lost and may be expensive when the object is large.
 decodeJSON :: (FromJSON a) => JSON -> IO (Maybe a)
 decodeJSON =
-  pure . (maybeResult . J.fromJSON <=< either (const Nothing) Just . parseJSONFromJS)
-
-maybeResult :: J.Result a -> Maybe a
-{-# INLINE maybeResult #-}
-maybeResult = \case
-  J.Success a -> Just a
-  J.Error _ -> Nothing
+  fmap (either (const Nothing) Just) . eitherDecodeJSON
 
 -- | NOTE: This converts a value with @JSON.stringify@ so all reference to JSVal is lost and may be expensive when the object is large.
 eitherDecodeJSON :: (FromJSON a) => JSON -> IO (Either String a)
 eitherDecodeJSON =
-  pure . (eitherResult . J.fromJSON <=< parseJSONFromJS)
+  runExceptT . (ExceptT . pure . eitherResult . J.fromJSON <=< ExceptT . parseJSONFromJS)
 
 eitherResult :: J.Result a -> Either String a
 {-# INLINE eitherResult #-}
@@ -81,60 +72,73 @@ type data JSONObjectClass :: Prototype
 
 type JSONObject = JSObject JSONObjectClass
 
-valueToJSON :: J.Value -> JSON
-valueToJSON (J.String s) = unsafeCast $ fromText @USVStringClass s
+valueToJSON :: J.Value -> IO JSON
+valueToJSON (J.String s) = pure $ unsafeCast $ fromText @USVStringClass s
 valueToJSON (J.Number n) = case floatingOrInteger n of
-  Left d -> unsafeCast $ toJSPrim @Double d
-  Right i -> unsafeCast $ toJSPrim @Int i
-valueToJSON (J.Bool b) = unsafeCast $ toJSPrim b
-valueToJSON J.Null = unsafeCast $ none @JSONClass
-valueToJSON (J.Array arr) = unsafeCast $ Seq.toSequence $ fmap valueToJSON arr
-valueToJSON (J.Object obj) =
-  noinline
-    ( unsafePerformIO do
-        dic <- js_new_obj
-        void $
-          AKM.traverseWithKey
-            ( \k v -> do
-                val <- evaluate $ valueToJSON v
-                js_set_prop dic (fromText $ AK.toText k) val
-            )
-            obj
-        pure dic
-    )
+  Left d -> pure $ unsafeCast $ toJSPrim @Double d
+  Right i -> pure $ unsafeCast $ toJSPrim @Int i
+valueToJSON (J.Bool b) = pure $ unsafeCast $ toJSPrim b
+valueToJSON J.Null = pure $ unsafeCast $ none @JSONClass
+valueToJSON (J.Array arr) = unsafeCast . Seq.toSequence <$> mapM valueToJSON arr
+valueToJSON (J.Object obj) = do
+  dic <- js_new_obj
+  void $
+    AKM.traverseWithKey
+      ( \k v -> do
+          val <- evaluate =<< valueToJSON v
+          js_set_prop dic (fromText $ AK.toText k) val
+      )
+      obj
+  pure dic
 
-parseJSONFromJS :: JSON -> Either String J.Value
-parseJSONFromJS json
-  | js_is_null json = pure J.Null
-  | js_is_number json = do
-      case fromNullable $ js_decode_int json of
-        Just int' -> pure $ J.Number $ fromIntegral $ fromJSPrim int'
-        Nothing -> do
-          nullable
-            (Left $ "JSON: number is neither integral nor double: " <> fromJSString (js_typeof json))
-            (Right . J.Number . realToFrac . fromJSPrim)
-            $ js_decode_double json
-  | Just a <- fromNullable (js_decode_string json) = pure $ J.String $ toText a
-  | Just b <- fromNullable $ js_decode_bool json = pure $ J.Bool $ fromJSPrim b
-  | Just arr <- fromNullable $ js_decode_array json = do
-      fmap J.Array $ mapM parseJSONFromJS $ unsafePerformIO $ Seq.toVector arr
-  | Just obj <- fromNullable $ js_decode_object json = do
-      let props = unsafePerformIO $ Seq.toVector $ js_props obj
-      val <- mapM (\k -> (AK.fromText $ toText k,) <$> parseJSONFromJS (js_get_prop obj k)) props
-      pure $ J.Object $ AKM.fromList $ F.toList val
-  | otherwise = Left $ "Invalid JSON value: the value of type " <> fromJSString (js_typeof json) <> " given."
+parseJSONFromJS :: JSON -> IO (Either String J.Value)
+parseJSONFromJS = runExceptT . go
+  where
+    go json
+      | js_is_null json = pure J.Null
+      | js_is_number json = do
+          case fromNullable $ js_decode_int json of
+            Just int' -> pure $ J.Number $ fromIntegral $ fromJSPrim int'
+            Nothing -> do
+              nullable
+                (fail $ "JSON: number is neither integral nor double: " <> fromJSString (js_typeof json))
+                (pure . J.Number . realToFrac . fromJSPrim)
+                $ js_decode_double json
+      | otherwise =
+          asum
+            [ nullable (fail "Not a string") (pure . J.String . toText)
+                =<< liftIO (js_decode_string json)
+            , nullable (fail "Not a bool") (pure . J.Bool . fromJSPrim)
+                =<< liftIO (js_decode_bool json)
+            , nullable
+                (fail "Not an array")
+                (fmap J.Array . mapM go <=< liftIO . Seq.toVector)
+                =<< liftIO (js_decode_array json)
+            , do
+                obj <-
+                  nullable (fail $ "Invalid JSON value: the value of type " <> fromJSString (js_typeof json) <> " given.") pure
+                    =<< liftIO (js_decode_object json)
+                props <- liftIO $ Seq.toVector =<< js_props obj
+                J.Object . AKM.fromList . F.toList
+                  <$> mapM
+                    ( \prop -> do
+                        val <- liftIO $ js_get_prop obj prop
+                        (AK.fromText $ toText prop,) <$> go val
+                    )
+                    props
+            ]
 
 foreign import javascript unsafe "typeof $1"
   js_typeof :: JSON -> JSString
 
 foreign import javascript unsafe "if (typeof $1 === 'object') { return $1 } else { return null}"
-  js_decode_object :: JSON -> Nullable JSONObjectClass
+  js_decode_object :: JSON -> IO (Nullable JSONObjectClass)
 
 foreign import javascript unsafe "Object.getOwnPropertyNames($1)"
-  js_props :: JSONObject -> Sequence USVStringClass
+  js_props :: JSONObject -> IO (Sequence USVStringClass)
 
 foreign import javascript unsafe "Object.getOwnPropertyNames($1)"
-  js_get_prop :: JSONObject -> USVString -> JSON
+  js_get_prop :: JSONObject -> USVString -> IO JSON
 
 foreign import javascript unsafe "$1 === null || $1 === undefined"
   js_is_null :: JSON -> Bool
@@ -143,7 +147,7 @@ foreign import javascript unsafe "typeof $1 === 'number'"
   js_is_number :: JSON -> Bool
 
 foreign import javascript unsafe "if (typeof $1 === 'boolean') { return $1 } else { return null }"
-  js_decode_bool :: JSON -> Nullable (JSPrimClass Bool)
+  js_decode_bool :: JSON -> IO (Nullable (JSPrimClass Bool))
 
 foreign import javascript unsafe "if (typeof $1 === 'number' && Number.isInteger($1)) { return $1; } else { return null; }"
   js_decode_int :: JSON -> Nullable (JSPrimClass Int)
@@ -152,10 +156,10 @@ foreign import javascript unsafe "if (typeof $1 === 'number') { if (Number.isInt
   js_decode_double :: JSON -> Nullable (JSPrimClass Double)
 
 foreign import javascript unsafe "if (typeof $1 === 'string') { return $1; } else { return null; }"
-  js_decode_string :: JSON -> Nullable USVStringClass
+  js_decode_string :: JSON -> IO (Nullable USVStringClass)
 
 foreign import javascript unsafe "if (Array.isArray($1)) { return $1; } else { return null; }"
-  js_decode_array :: JSON -> Nullable (SequenceClass JSONClass)
+  js_decode_array :: JSON -> IO (Nullable (SequenceClass JSONClass))
 
 foreign import javascript unsafe "{}"
   js_new_obj :: IO JSON
