@@ -67,6 +67,7 @@ module Network.Cloudflare.Worker.Binding.R2 (
 
   -- * Object Body
   R2ObjectBody,
+  R2ObjectBodyClass,
   getBody,
   isBodyUsed,
   getBodyArrayBuffer,
