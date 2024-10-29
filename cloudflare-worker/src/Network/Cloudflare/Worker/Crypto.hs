@@ -86,7 +86,7 @@ fromCloudflarePubKey pk = do
       (upcast jwk)
       rs256
       False
-    =<< toSequence (V.singleton "verify")
+      (toSequence $ V.singleton "verify")
 
 toJWK :: CloudflarePubKey -> JsonWebKey
 toJWK pk =

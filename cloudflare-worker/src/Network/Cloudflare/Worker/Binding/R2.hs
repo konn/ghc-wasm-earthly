@@ -317,7 +317,7 @@ delete :: R2 -> BS.ByteString -> IO (Async ())
 delete r2 = deferWith (const ()) <=< js_deleteOne r2 <=< fromHaskellByteString
 
 deleteMany :: R2 -> V.Vector BS.ByteString -> IO (Async ())
-deleteMany r2 = deferWith (const ()) <=< js_deleteMany r2 <=< toSequence <=< mapM fromHaskellByteString
+deleteMany r2 = deferWith (const ()) <=< js_deleteMany r2 . toSequence <=< mapM fromHaskellByteString
 
 type ListOptionsFields =
   '[ '("limit", NullableClass (JSPrimClass Word16))

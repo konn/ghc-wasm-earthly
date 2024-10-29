@@ -469,7 +469,7 @@ instance (Typeable a, IsServiceArg a) => IsServiceArg (Maybe a) where
 
 instance (Typeable a, IsServiceArg a) => IsServiceArg (V.Vector a) where
   type ServiceArg (V.Vector a) = SequenceClass (ServiceArg a)
-  encodeServiceArg = toSequence <=< mapM encodeServiceArg
+  encodeServiceArg = fmap toSequence . mapM encodeServiceArg
   {-# INLINE encodeServiceArg #-}
   parseServiceArg = runExceptT . mapM (ExceptT . parseServiceArg) <=< toVector
   {-# INLINE parseServiceArg #-}

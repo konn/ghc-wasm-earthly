@@ -85,7 +85,7 @@ valueToJSON (J.Number n) = case floatingOrInteger n of
   Right i -> pure $ unsafeCast $ toJSPrim @Int i
 valueToJSON (J.Bool b) = pure $ unsafeCast $ toJSPrim b
 valueToJSON J.Null = pure $ unsafeCast $ none @JSONClass
-valueToJSON (J.Array arr) = fmap unsafeCast . Seq.toSequence =<< mapM valueToJSON arr
+valueToJSON (J.Array arr) = unsafeCast . Seq.toSequence <$> mapM valueToJSON arr
 valueToJSON (J.Object obj) = do
   dic <- js_new_obj
   void $

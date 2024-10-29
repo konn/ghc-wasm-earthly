@@ -32,8 +32,8 @@ type instance SuperclassOf (FrozenArrayClass a) = 'Nothing
 frozenToVector :: FrozenArray a -> V.Vector (JSObject a)
 frozenToVector arr = V.generate (lengthOfFrozenArray arr) (indexFrozenArray arr)
 
-toFrozenArray :: V.Vector (JSObject a) -> IO (FrozenArray a)
-toFrozenArray = fmap js_freeze_sequence . toSequence
+toFrozenArray :: V.Vector (JSObject a) -> FrozenArray a
+toFrozenArray = js_freeze_sequence . toSequence
 
 foreign import javascript unsafe "$1.freeze(); $1"
   js_freeze_sequence :: Sequence a -> FrozenArray a
