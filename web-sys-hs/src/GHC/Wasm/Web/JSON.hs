@@ -15,13 +15,13 @@ module GHC.Wasm.Web.JSON (
   parseJSONFromJS,
 ) where
 
+import Control.Monad ((<=<))
 import Data.Aeson (FromJSON, ToJSON)
 import qualified Data.Aeson as J
 import qualified Data.Aeson.Key as AK
 import qualified Data.Aeson.KeyMap as AKM
-import qualified Data.Aeson.Text as J
+import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Foldable as F
-import qualified Data.Text.Lazy as LT
 import GHC.Wasm.Object.Builtins hiding (parse)
 import qualified GHC.Wasm.Object.Builtins.Sequence as Seq
 import GHC.Wasm.Prim
@@ -30,13 +30,16 @@ import System.IO.Unsafe (unsafePerformIO)
 
 -- | NOTE: This converts a value with @JSON.parse@ so all reference to JSVal is lost.
 encodeJSON :: (ToJSON a) => a -> IO JSON
-encodeJSON = js_parse_json . fromText . LT.toStrict . J.encodeToLazyText
+encodeJSON = js_parse_json_bs <=< fromHaskellByteString . LBS.toStrict . J.encode
 
 stringify :: JSON -> IO USVString
 stringify = js_stringify_json
 
 parse :: USVString -> IO JSON
 parse = js_parse_json
+
+foreign import javascript unsafe "JSON.parse($1)"
+  js_parse_json_bs :: JSByteString -> IO JSON
 
 foreign import javascript unsafe "JSON.parse($1)"
   js_parse_json :: USVString -> IO JSON
