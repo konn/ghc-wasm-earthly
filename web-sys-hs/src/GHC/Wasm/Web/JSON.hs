@@ -20,16 +20,14 @@ foreign import javascript unsafe "JSON.parse($1)"
   js_parse_json :: JSByteString -> IO JSON
 
 foreign import javascript unsafe "JSON.stringify($1)"
-  js_stringify_json :: JSON -> IO JSByteString
+  js_stringify_json :: JSON -> IO USVString
 
 -- | NOTE: This converts a value with @JSON.stringify@ so all reference to JSVal is lost and may be expensive when the object is large.
 decodeJSON :: (FromJSON a) => JSON -> IO (Maybe a)
 decodeJSON =
-  fmap (J.decode . LBS.fromStrict) . toHaskellByteString
-    <=< js_stringify_json
+  fmap (J.decodeStrictText . toText) . js_stringify_json
 
 -- | NOTE: This converts a value with @JSON.stringify@ so all reference to JSVal is lost and may be expensive when the object is large.
 eitherDecodeJSON :: (FromJSON a) => JSON -> IO (Either String a)
 eitherDecodeJSON =
-  fmap (J.eitherDecode . LBS.fromStrict) . toHaskellByteString
-    <=< js_stringify_json
+  fmap (J.eitherDecodeStrictText . toText) . js_stringify_json
