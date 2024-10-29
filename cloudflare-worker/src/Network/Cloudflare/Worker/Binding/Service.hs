@@ -54,7 +54,6 @@ module Network.Cloudflare.Worker.Binding.Service (
   FunMode (..),
 ) where
 
-import Control.Arrow ((>>>))
 import Control.Exception.Safe (Exception, MonadCatch, MonadMask, MonadThrow, throwIO)
 import Control.Monad (join, (<=<))
 import Control.Monad.IO.Class (MonadIO, liftIO)
@@ -69,7 +68,6 @@ import Data.Function ((&))
 import Data.Int
 import Data.Kind (Constraint, Type)
 import Data.Text qualified as T
-import Data.Text.Encoding qualified as TE
 import Data.Text.Lazy qualified as LT
 import Data.Type.Bool (If, type (&&))
 import Data.Vector qualified as V
@@ -83,12 +81,10 @@ import GHC.TypeLits
 import GHC.Wasm.Object.Builtins
 import GHC.Wasm.Prim
 import GHC.Wasm.Web.JSON
-import GHC.Wasm.Web.JSON (parseJSONFromJS)
 import Language.WASM.JSVal.Convert
 import Network.Cloudflare.Worker.Binding (BindingsClass, ListMember)
 import Network.Cloudflare.Worker.Binding qualified as B
 import Network.Cloudflare.Worker.Handler.Fetch (FetchContext)
-import Type.Reflection (Typeable, typeRep)
 
 type data FunSig = Return Type | Type :~> FunSig
 
@@ -137,7 +133,7 @@ getEnv l =
   getRawEnv l
     >>= ( \a ->
             J.fromJSON a & \case
-              J.Error e -> throwIO $ FunResultDecodeFailure e $ TE.decodeUtf8 $ LBS.toStrict $ J.encode a
+              J.Error e -> throwIO $ FunResultDecodeFailure e
               J.Success x -> pure x
         )
 
@@ -187,8 +183,8 @@ infixr 5 :~>, :~>>, ~>
 data FunMode = Caller | Defn Prototype [(Symbol, FunSig)]
 
 data ServiceBindingException
-  = FunResultDecodeFailure !String !T.Text
-  | FunArgDecodeFailure !String !T.Text
+  = FunResultDecodeFailure !String
+  | FunArgDecodeFailure !String
   deriving (Show, Eq, Ord, Generic)
   deriving anyclass (Exception)
 
@@ -231,12 +227,7 @@ instance (IsServiceArg a) => IsServiceFunSig (Return a) where
       ( Promised
           ( \e -> do
               either
-                ( \exc -> do
-                    str <- stringify $ unsafeCast e
-                    js <- parseJSONFromJS $ unsafeCast e
-                    throwIO $
-                      FunResultDecodeFailure ("Decoding arg faied (" <> show (typeRep @a) <> "): " <> exc) (T.pack $ show (toText str, js))
-                )
+                (throwIO . FunResultDecodeFailure . ("Decoding arg faied: " <>))
                 pure
                 =<< parseServiceArg e
           )
@@ -248,7 +239,7 @@ instance (IsServiceArg a) => IsServiceFunSig (Return a) where
 
 instance (IsServiceArg a, IsServiceFunSig bs) => IsServiceFunSig (a :~> bs) where
   encodeJSFun# _ (e :: Proxy# e) (fs :: Proxy# fs) f this = js_ffi_fun_arrow @(ServiceArg a) @(ToJSFunSig (Defn e fs) bs) $ \x -> do
-    xjs <- either (\exc -> throwIO . FunArgDecodeFailure exc . toText =<< stringify (unsafeCast x)) pure =<< parseServiceArg @a x
+    xjs <- either (throwIO . FunArgDecodeFailure) pure =<< parseServiceArg @a x
     encodeJSFun# (proxy# @bs) e fs (f xjs) this
 
   decodeFun# _ f x = joinHsFun bs do
@@ -388,7 +379,7 @@ type family ls ++ rs where
   '[] ++ rs = rs
   (l ': ls) ++ rs = l ': (ls ++ rs)
 
-class (Typeable a) => IsServiceArg a where
+class IsServiceArg a where
   type ServiceArg a :: Prototype
   encodeServiceArg :: a -> IO (JSObject (ServiceArg a))
   parseServiceArg :: JSObject (ServiceArg a) -> IO (Either String a)
@@ -435,7 +426,7 @@ instance IsServiceArg LBS.ByteString where
   parseServiceArg = fmap (Right . LBS.fromStrict) . toHaskellByteString
   {-# INLINE parseServiceArg #-}
 
-instance (Typeable a, FromJSON a, ToJSON a) => IsServiceArg (ViaJSON a) where
+instance (FromJSON a, ToJSON a) => IsServiceArg (ViaJSON a) where
   type ServiceArg (ViaJSON a) = JSONClass
   encodeServiceArg = encodeJSON . runViaJSON
   {-# INLINE encodeServiceArg #-}
@@ -444,7 +435,7 @@ instance (Typeable a, FromJSON a, ToJSON a) => IsServiceArg (ViaJSON a) where
 
 deriving via ViaJSON () instance IsServiceArg ()
 
-instance (Typeable a) => IsServiceArg (JSObject a) where
+instance IsServiceArg (JSObject a) where
   type ServiceArg (JSObject a) = a
   encodeServiceArg = pure
   {-# INLINE encodeServiceArg #-}
@@ -453,21 +444,21 @@ instance (Typeable a) => IsServiceArg (JSObject a) where
 
 newtype ViaJSPrim a = ViaJSPrim {runViaJSPrim :: a}
 
-instance (Typeable a, JSPrimitive a) => IsServiceArg (ViaJSPrim a) where
+instance (JSPrimitive a) => IsServiceArg (ViaJSPrim a) where
   type ServiceArg (ViaJSPrim a) = JSPrimClass a
   encodeServiceArg = pure . toJSPrim . (.runViaJSPrim)
   {-# INLINE encodeServiceArg #-}
   parseServiceArg = pure . Right . ViaJSPrim . fromJSPrim
   {-# INLINE parseServiceArg #-}
 
-instance (Typeable a, IsServiceArg a) => IsServiceArg (Maybe a) where
+instance (IsServiceArg a) => IsServiceArg (Maybe a) where
   type ServiceArg (Maybe a) = NullableClass (ServiceArg a)
   encodeServiceArg = maybe (pure none) (fmap nonNull . encodeServiceArg)
   {-# INLINE encodeServiceArg #-}
   parseServiceArg = nullable (pure $ Right Nothing) (fmap (fmap Just) . parseServiceArg)
   {-# INLINE parseServiceArg #-}
 
-instance (Typeable a, IsServiceArg a) => IsServiceArg (V.Vector a) where
+instance (IsServiceArg a) => IsServiceArg (V.Vector a) where
   type ServiceArg (V.Vector a) = SequenceClass (ServiceArg a)
   encodeServiceArg = fmap toSequence . mapM encodeServiceArg
   {-# INLINE encodeServiceArg #-}
@@ -480,7 +471,7 @@ instance
   where
   type ServiceArg String = SequenceClass (ServiceArg Char)
 
-instance (Typeable a, IsServiceArg a) => IsServiceArg [a] where
+instance (IsServiceArg a) => IsServiceArg [a] where
   type ServiceArg [a] = SequenceClass (ServiceArg a)
   encodeServiceArg = encodeServiceArg . V.fromList
   {-# INLINE encodeServiceArg #-}
