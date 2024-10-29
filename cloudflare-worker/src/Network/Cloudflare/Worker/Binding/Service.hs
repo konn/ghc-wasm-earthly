@@ -522,7 +522,7 @@ foreign import javascript unsafe "$1()"
 foreign import javascript "wrapper"
   js_ffi_fun_arrow :: (JSObject f -> IO (JSFun fs)) -> IO (JSFun (f :~>> fs))
 
-foreign import javascript unsafe "$1($2)"
+foreign import javascript unsafe "dynamic"
   js_ffi_app_fun :: JSFun (f :~>> fs) -> JSObject f -> JSFun fs
 
 foreign import javascript unsafe "$1[$2]"
