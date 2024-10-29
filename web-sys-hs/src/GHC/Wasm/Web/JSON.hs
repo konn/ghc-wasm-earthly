@@ -7,13 +7,14 @@ module GHC.Wasm.Web.JSON (
   encodeJSON,
   decodeJSON,
   eitherDecodeJSON,
-  parseJSONFromJS,
   stringify,
   parse,
   module GHC.Wasm.Web.Generated.JSON,
+
+  -- ** Experimental
+  parseJSONFromJS,
 ) where
 
-import Control.Monad ((<=<))
 import Data.Aeson (FromJSON, ToJSON)
 import qualified Data.Aeson as J
 import qualified Data.Aeson.Key as AK
@@ -46,16 +47,12 @@ foreign import javascript unsafe "JSON.stringify($1)"
 -- | NOTE: This converts a value with @JSON.stringify@ so all reference to JSVal is lost and may be expensive when the object is large.
 decodeJSON :: (FromJSON a) => JSON -> IO (Maybe a)
 decodeJSON =
-  pure . either (const Nothing) Just . (eitherResult . J.fromJSON <=< parseJSONFromJS)
+  fmap (J.decodeStrictText . toText) . js_stringify_json
 
 -- | NOTE: This converts a value with @JSON.stringify@ so all reference to JSVal is lost and may be expensive when the object is large.
 eitherDecodeJSON :: (FromJSON a) => JSON -> IO (Either String a)
 eitherDecodeJSON =
-  pure . (eitherResult . J.fromJSON <=< parseJSONFromJS)
-
-eitherResult :: J.Result a -> Either String a
-eitherResult (J.Success a) = pure a
-eitherResult (J.Error e) = Left e
+  fmap (J.eitherDecodeStrictText . toText) . js_stringify_json
 
 type data JSONObjectClass :: Prototype
 
