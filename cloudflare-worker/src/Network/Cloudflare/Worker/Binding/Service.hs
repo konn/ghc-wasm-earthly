@@ -472,10 +472,10 @@ deriving via ViaJSPrim Float instance IsServiceArg Float
 
 newtype ServiceSink fs = ServiceSink {runServiceSink :: Service fs}
 
-foreign import javascript unsafe "$1.$2 = $3"
+foreign import javascript unsafe "$1.prototype[$2] = $3"
   js_set_handler :: ServiceSink fs -> JSString -> JSFun e -> IO ()
 
-foreign import javascript unsafe "{}"
+foreign import javascript unsafe "(class extends WorkerEntrypoint {})"
   js_new_service_sink :: IO (ServiceSink fs)
 
 foreign import javascript "wrapper"
@@ -495,9 +495,3 @@ foreign import javascript unsafe "this.ctx"
 
 foreign import javascript unsafe "this.ctx.waitUntil($1)"
   waitUntil :: Promise a -> ServiceM e fs ()
-
-data Add = Add
-  { add :: Int -> Int -> IO Int
-  , sub :: Int -> Int -> ServiceM AnyClass ('[ '("add", Int ~> Int ~> Return Int)]) Int
-  }
-  deriving (Generic, ToService AnyClass)
