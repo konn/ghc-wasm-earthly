@@ -240,7 +240,7 @@ instance (IsServiceArg a, IsServiceFunSig bs) => IsServiceFunSig (a :~> bs) wher
 
   decodeFun# _ f x = joinHsFun bs do
     xjs <- encodeServiceArg x
-    pure $ decodeFun# (proxy# @bs) $ js_ffi_app_fun f xjs
+    decodeFun# (proxy# @bs) <$> js_ffi_app_fun f xjs
 
   joinHsFun# _ f x = joinHsFun bs $ ($ x) <$> f
   {-# INLINE joinHsFun# #-}
@@ -523,7 +523,7 @@ foreign import javascript "wrapper"
   js_ffi_fun_arrow :: (JSObject f -> IO (JSFun fs)) -> IO (JSFun (f :~>> fs))
 
 foreign import javascript unsafe "dynamic"
-  js_ffi_app_fun :: JSFun (f :~>> fs) -> JSObject f -> JSFun fs
+  js_ffi_app_fun :: JSFun (f :~>> fs) -> JSObject f -> IO (JSFun fs)
 
 foreign import javascript unsafe "$1[$2]"
   js_get_fun :: Service fs -> JSString -> IO (JSFun f)
