@@ -64,10 +64,13 @@ import Data.Aeson (FromJSON, ToJSON)
 import Data.Aeson qualified as J
 import Data.ByteString qualified as BS
 import Data.ByteString.Lazy qualified as LBS
+import Data.ByteString.Lazy.Char8 qualified as LBS8
 import Data.Coerce (coerce)
+import Data.Function ((&))
 import Data.Int
 import Data.Kind (Constraint, Type)
 import Data.Text qualified as T
+import Data.Text.Encoding qualified as TE
 import Data.Text.Lazy qualified as LT
 import Data.Type.Bool (If, type (&&))
 import Data.Vector qualified as V
@@ -131,9 +134,10 @@ getEnv ::
   ServiceM (BindingsClass es ss bs) fs a
 getEnv l =
   getRawEnv l
-    >>= ( J.fromJSON >>> \case
-            J.Error e -> throwIO $ FunResultDecodeFailure e
-            J.Success x -> pure x
+    >>= ( \a ->
+            J.fromJSON a & \case
+              J.Error e -> throwIO $ FunResultDecodeFailure e $ TE.decodeUtf8 $ LBS.toStrict $ J.encode a
+              J.Success x -> pure x
         )
 
 getRawEnv ::
@@ -182,8 +186,8 @@ infixr 5 :~>, :~>>, ~>
 data FunMode = Caller | Defn Prototype [(Symbol, FunSig)]
 
 data ServiceBindingException
-  = FunResultDecodeFailure !String
-  | FunArgDecodeFailure !String
+  = FunResultDecodeFailure !String !T.Text
+  | FunArgDecodeFailure !String !T.Text
   deriving (Show, Eq, Ord, Generic)
   deriving anyclass (Exception)
 
@@ -226,7 +230,10 @@ instance (IsServiceArg a) => IsServiceFunSig (Return a) where
       ( Promised
           ( \e -> do
               either
-                (throwIO . FunResultDecodeFailure)
+                ( \exc ->
+                    throwIO . FunResultDecodeFailure exc . toText
+                      =<< stringify (unsafeCast e)
+                )
                 pure
                 =<< parseServiceArg e
           )
@@ -238,7 +245,7 @@ instance (IsServiceArg a) => IsServiceFunSig (Return a) where
 
 instance (IsServiceArg a, IsServiceFunSig bs) => IsServiceFunSig (a :~> bs) where
   encodeJSFun# _ (e :: Proxy# e) (fs :: Proxy# fs) f this = js_ffi_fun_arrow @(ServiceArg a) @(ToJSFunSig (Defn e fs) bs) $ \x -> do
-    xjs <- either (throwIO . FunArgDecodeFailure) pure =<< parseServiceArg @a x
+    xjs <- either (\exc -> throwIO . FunArgDecodeFailure exc . toText =<< stringify (unsafeCast x)) pure =<< parseServiceArg @a x
     encodeJSFun# (proxy# @bs) e fs (f xjs) this
 
   decodeFun# _ f x = joinHsFun bs do
