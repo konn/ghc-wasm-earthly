@@ -43,6 +43,14 @@ fromSequence =
 toVector :: Sequence a -> IO (V.Vector (JSObject a))
 toVector = fromSequence >>> S.toList_ >>> fmap V.fromList
 
-toSequence :: V.Vector (JSObject a) -> Sequence a
-toSequence vec =
-  coerce $ JSD.alloc (V.length vec) (JSD.mirror $ coerce vec)
+toSequence :: V.Vector (JSObject a) -> IO (Sequence a)
+toSequence vec = do
+  sq <- js_new_sequence (V.length vec)
+  V.imapM_ (js_set sq) vec
+  pure sq
+
+foreign import javascript unsafe "new Array($1)"
+  js_new_sequence :: Int -> IO (Sequence a)
+
+foreign import javascript unsafe "$1[$2] = $3"
+  js_set :: Sequence a -> Int -> JSObject a -> IO (Sequence a)

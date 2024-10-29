@@ -192,10 +192,10 @@ data D1ValueView
   deriving (Show, Eq, Ord, Generic)
 
 bind :: PreparedStatement -> V.Vector D1ValueView -> IO Statement
-bind stmt = js_d1_bind stmt . toSequence . V.map unviewD1Value
+bind stmt = js_d1_bind stmt <=< toSequence . V.map unviewD1Value
 
 bind' :: PreparedStatement -> V.Vector D1Value -> IO Statement
-bind' stmt = js_d1_bind stmt . toSequence
+bind' stmt = js_d1_bind stmt <=< toSequence
 
 unviewD1Value :: D1ValueView -> D1Value
 unviewD1Value D1Null = upcast jsNull
@@ -744,7 +744,7 @@ firstColumns ::
   Statement ->
   V.Vector T.Text ->
   IO (Promised (NullableClass (SequenceClass D1ValueClass)) (Maybe (V.Vector D1ValueView)))
-firstColumns stmt = fmap (Promised go) . firstColumns' stmt . toSequence . V.map fromText
+firstColumns stmt = fmap (Promised go) . firstColumns' stmt <=< toSequence . V.map fromText
   where
     go = nullable (pure Nothing) (fmap (Just . V.map viewD1Value) . toVector)
 
@@ -757,7 +757,7 @@ firstColumns' = js_first_with_cols
 batch :: D1 -> V.Vector Statement -> IO (Promised (SequenceClass (D1ResultClass D1RowClass)) (V.Vector (D1ResultView D1RowView)))
 batch d1 stmts =
   Promised (fmap (V.map (fromResults viewD1Row)) . toVector)
-    <$> js_batch d1 (toSequence stmts)
+    <$> (js_batch d1 =<< toSequence stmts)
 
 exec :: D1 -> T.Text -> IO (Promised D1ExecResultClass D1ExecResultView)
 exec d1 rawQry = Promised (pure . viewD1ExecResult) <$> exec' d1 (fromText rawQry)
