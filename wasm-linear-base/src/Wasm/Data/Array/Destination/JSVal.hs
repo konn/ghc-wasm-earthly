@@ -58,6 +58,7 @@ replicate !v (DJSArray off len arr) = go 0
       | otherwise = ()
 
 alloc :: Int -> (DJSArray %1 -> ()) %1 -> JSArray
+{-# NOINLINE alloc #-}
 alloc len f = (\(Ur dest) -> f (DJSArray 0 len dest) `lseq` dest)
   PL.$ unsafeDupablePerformIO do
     destArr <- js_new_array len
