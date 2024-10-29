@@ -51,6 +51,7 @@ library
     bytestring,
     ghc-wasm-compat,
     ghc-wasm-jsobjects,
+    scientific,
     streaming-bytestring,
     text,
     transformers,

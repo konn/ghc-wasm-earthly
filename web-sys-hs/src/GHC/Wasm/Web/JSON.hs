@@ -1,5 +1,8 @@
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeData #-}
 {-# LANGUAGE UnliftedDatatypes #-}
 
@@ -13,8 +16,10 @@ module GHC.Wasm.Web.JSON (
 
   -- ** Experimental
   parseJSONFromJS,
+  valueToJSON,
 ) where
 
+import Control.Exception (evaluate)
 import Control.Monad ((<=<))
 import Data.Aeson (FromJSON, ToJSON)
 import qualified Data.Aeson as J
@@ -22,6 +27,9 @@ import qualified Data.Aeson.Key as AK
 import qualified Data.Aeson.KeyMap as AKM
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Foldable as F
+import Data.Functor (void)
+import Data.Scientific (floatingOrInteger)
+import GHC.Exts (noinline)
 import GHC.Wasm.Object.Builtins hiding (parse)
 import qualified GHC.Wasm.Object.Builtins.Sequence as Seq
 import GHC.Wasm.Prim
@@ -30,7 +38,7 @@ import System.IO.Unsafe (unsafePerformIO)
 
 -- | NOTE: This converts a value with @JSON.parse@ so all reference to JSVal is lost.
 encodeJSON :: (ToJSON a) => a -> IO JSON
-encodeJSON = js_parse_json_bs <=< fromHaskellByteString . LBS.toStrict . J.encode
+encodeJSON = pure . valueToJSON . J.toJSON
 
 stringify :: JSON -> IO USVString
 stringify = js_stringify_json
@@ -50,19 +58,52 @@ foreign import javascript unsafe "JSON.stringify($1)"
 -- | NOTE: This converts a value with @JSON.stringify@ so all reference to JSVal is lost and may be expensive when the object is large.
 decodeJSON :: (FromJSON a) => JSON -> IO (Maybe a)
 decodeJSON =
-  fmap (J.decodeStrictText . toText) . js_stringify_json
+  pure . (maybeResult . J.fromJSON <=< either (const Nothing) Just . parseJSONFromJS)
+
+maybeResult :: J.Result a -> Maybe a
+{-# INLINE maybeResult #-}
+maybeResult = \case
+  J.Success a -> Just a
+  J.Error _ -> Nothing
 
 -- | NOTE: This converts a value with @JSON.stringify@ so all reference to JSVal is lost and may be expensive when the object is large.
 eitherDecodeJSON :: (FromJSON a) => JSON -> IO (Either String a)
 eitherDecodeJSON =
-  fmap (J.eitherDecodeStrictText . toText) . js_stringify_json
+  pure . (eitherResult . J.fromJSON <=< parseJSONFromJS)
+
+eitherResult :: J.Result a -> Either String a
+{-# INLINE eitherResult #-}
+eitherResult = \case
+  J.Success a -> Right a
+  J.Error e -> Left e
 
 type data JSONObjectClass :: Prototype
 
 type JSONObject = JSObject JSONObjectClass
 
+valueToJSON :: J.Value -> JSON
+valueToJSON (J.String s) = unsafeCast $ fromText @USVStringClass s
+valueToJSON (J.Number n) = case floatingOrInteger n of
+  Left d -> unsafeCast $ toJSPrim @Double d
+  Right i -> unsafeCast $ toJSPrim @Int i
+valueToJSON (J.Bool b) = unsafeCast $ toJSPrim b
+valueToJSON J.Null = unsafeCast $ none @JSONClass
+valueToJSON (J.Array arr) = unsafeCast $ Seq.toSequence $ fmap valueToJSON arr
+valueToJSON (J.Object obj) =
+  noinline
+    ( unsafePerformIO do
+        dic <- js_new_obj
+        void $
+          AKM.traverseWithKey
+            ( \k v -> do
+                val <- evaluate $ valueToJSON v
+                js_set_prop dic (fromText $ AK.toText k) val
+            )
+            obj
+        pure dic
+    )
+
 parseJSONFromJS :: JSON -> Either String J.Value
-{-# NOINLINE parseJSONFromJS #-}
 parseJSONFromJS json
   | js_is_null json = pure J.Null
   | js_is_number json = do
@@ -115,3 +156,9 @@ foreign import javascript unsafe "if (typeof $1 === 'string') { return $1; } els
 
 foreign import javascript unsafe "if (Array.isArray($1)) { return $1; } else { return null; }"
   js_decode_array :: JSON -> Nullable (SequenceClass JSONClass)
+
+foreign import javascript unsafe "{}"
+  js_new_obj :: IO JSON
+
+foreign import javascript unsafe "$1[$2] = $3"
+  js_set_prop :: JSON -> USVString -> JSON -> IO ()
