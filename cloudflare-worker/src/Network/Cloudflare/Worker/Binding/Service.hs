@@ -32,6 +32,7 @@ module Network.Cloudflare.Worker.Binding.Service (
   getSecret,
   getFetchContext,
   waitUntil,
+  waitUntil',
   type (~>),
   ToWorkerFun,
   ToCallerFun,
@@ -94,7 +95,7 @@ type data ServiceHandlerClass (e :: Prototype) :: Prototype
 type ServiceHandler e = JSObject (ServiceHandlerClass e)
 
 type ServiceM :: Prototype -> [(Symbol, FunSig)] -> Type -> Type
-newtype ServiceM e bs a = ServiceM {runServiceM :: ReaderT (ServiceHandler e) IO a}
+newtype ServiceM e bs a = ServiceM {_runServiceM :: ReaderT (ServiceHandler e) IO a}
   deriving newtype
     ( Functor
     , Applicative
@@ -141,6 +142,15 @@ getRawEnv ::
   (KnownSymbol l, ListMember l es) =>
   ServiceM (BindingsClass es ss bs) fs J.Value
 getRawEnv l = B.getEnv l <$> getServiceEnv
+
+getFetchContext :: ServiceM e fs FetchContext
+getFetchContext = ServiceM $ liftIO . js_raw_getFetchContext =<< ask
+
+waitUntil :: Promise a -> ServiceM e fs ()
+waitUntil p = ServiceM $ liftIO . flip js_raw_waitUntil p =<< ask
+
+waitUntil' :: Promised e a -> ServiceM e fs ()
+waitUntil' = waitUntil . jsPromise
 
 call ::
   forall bs x.
@@ -500,7 +510,7 @@ foreign import javascript unsafe "$1.env"
   js_get_env :: ServiceHandler e -> IO (JSObject e)
 
 foreign import javascript unsafe "$1.ctx"
-  getFetchContext :: ServiceHandler e -> IO FetchContext
+  js_raw_getFetchContext :: ServiceHandler e -> IO FetchContext
 
 foreign import javascript unsafe "$1.ctx.waitUntil($2)"
-  waitUntil :: ServiceHandler e -> Promise a -> IO ()
+  js_raw_waitUntil :: ServiceHandler e -> Promise a -> IO ()
