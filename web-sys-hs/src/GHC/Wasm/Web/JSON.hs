@@ -23,7 +23,7 @@ import Control.Applicative (asum)
 import Control.Exception (evaluate)
 import Control.Monad ((<=<))
 import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Trans.Except (ExceptT (..), runExceptT)
+import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
 import Data.Aeson (FromJSON, ToJSON)
 import qualified Data.Aeson as J
 import qualified Data.Aeson.Key as AK
@@ -101,22 +101,22 @@ parseJSONFromJS = runExceptT . go
             Just int' -> pure $ J.Number $ fromIntegral $ fromJSPrim int'
             Nothing -> do
               nullable
-                (fail $ "JSON: number is neither integral nor double: " <> fromJSString (js_typeof json))
+                (throwE $ "JSON: number is neither integral nor double: " <> fromJSString (js_typeof json))
                 (pure . J.Number . realToFrac . fromJSPrim)
                 $ js_decode_double json
       | otherwise =
           asum
-            [ nullable (fail "Not a string") (pure . J.String . toText)
+            [ nullable (throwE "Not a string") (pure . J.String . toText)
                 =<< liftIO (js_decode_string json)
-            , nullable (fail "Not a bool") (pure . J.Bool . fromJSPrim)
+            , nullable (throwE "Not a bool") (pure . J.Bool . fromJSPrim)
                 =<< liftIO (js_decode_bool json)
             , nullable
-                (fail "Not an array")
+                (throwE "Not an array")
                 (fmap J.Array . mapM go <=< liftIO . Seq.toVector)
                 =<< liftIO (js_decode_array json)
             , do
                 obj <-
-                  nullable (fail $ "Invalid JSON value: the value of type " <> fromJSString (js_typeof json) <> " given.") pure
+                  nullable (throwE $ "Invalid JSON value: the value of type " <> fromJSString (js_typeof json) <> " given.") pure
                     =<< liftIO (js_decode_object json)
                 props <- liftIO $ Seq.toVector =<< js_props obj
                 J.Object . AKM.fromList . F.toList
