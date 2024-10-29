@@ -516,7 +516,7 @@ foreign import javascript unsafe "(class extends WorkerEntrypoint {})"
 foreign import javascript unsafe "function () { return $1 }"
   js_wrap_ret :: JSObject a -> IO (JSFun (ReturnJS a))
 
-foreign import javascript unsafe "$1()"
+foreign import javascript safe "await $1()"
   js_call_ret :: JSFun (ReturnJS a) -> IO (Promise a)
 
 foreign import javascript "wrapper"
