@@ -54,7 +54,6 @@ import GHC.Wasm.Web.Generated.ReadableStream
 import GHC.Wasm.Web.Generated.Response
 import GHC.Wasm.Web.Generated.URLSearchParams (URLSearchParamsClass)
 import GHC.Wasm.Web.Generated.WebSocket (WebSocketClass)
-import GHC.Wasm.Web.ReadableStream (fromLazyByteString)
 import System.IO.Unsafe (unsafePerformIO)
 import Wasm.Prelude.Linear qualified as PL
 

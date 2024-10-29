@@ -398,6 +398,67 @@ instance IsServiceArg JSString where
   parseServiceArg = pure . Right . coerce
   {-# INLINE parseServiceArg #-}
 
+instance
+  (IsServiceArg a, IsServiceArg b) =>
+  IsServiceArg (a, b)
+  where
+  type ServiceArg (a, b) = SequenceClass AnyClass
+  encodeServiceArg (a, b) =
+    toSequence
+      <$> sequence (V.fromList [upcast <$> encodeServiceArg a, upcast <$> encodeServiceArg b])
+  {-# INLINE encodeServiceArg #-}
+  parseServiceArg xs = runExceptT do
+    a' <- ExceptT $ parseServiceArg . unsafeCast =<< js_idx xs 0
+    b' <- ExceptT $ parseServiceArg . unsafeCast =<< js_idx xs 1
+    pure (a', b')
+  {-# INLINE parseServiceArg #-}
+
+instance
+  (IsServiceArg a, IsServiceArg b, IsServiceArg c) =>
+  IsServiceArg (a, b, c)
+  where
+  type ServiceArg (a, b, c) = SequenceClass AnyClass
+  encodeServiceArg (a, b, c) =
+    toSequence
+      <$> sequence
+        ( V.fromList
+            [ upcast <$> encodeServiceArg a
+            , upcast <$> encodeServiceArg b
+            , upcast <$> encodeServiceArg c
+            ]
+        )
+  {-# INLINE encodeServiceArg #-}
+  parseServiceArg xs = runExceptT do
+    a' <- ExceptT $ parseServiceArg . unsafeCast =<< js_idx xs 0
+    b' <- ExceptT $ parseServiceArg . unsafeCast =<< js_idx xs 1
+    c' <- ExceptT $ parseServiceArg . unsafeCast =<< js_idx xs 2
+    pure (a', b', c')
+  {-# INLINE parseServiceArg #-}
+
+instance
+  (IsServiceArg a, IsServiceArg b, IsServiceArg c, IsServiceArg d) =>
+  IsServiceArg (a, b, c, d)
+  where
+  type ServiceArg (a, b, c, d) = SequenceClass AnyClass
+  encodeServiceArg (a, b, c, d) =
+    toSequence
+      <$> sequence
+        ( V.fromList
+            [ upcast <$> encodeServiceArg a
+            , upcast <$> encodeServiceArg b
+            , upcast <$> encodeServiceArg c
+            , upcast <$> encodeServiceArg d
+            ]
+        )
+  {-# INLINE encodeServiceArg #-}
+  parseServiceArg xs = runExceptT do
+    a' <- ExceptT $ parseServiceArg . unsafeCast =<< js_idx xs 0
+    b' <- ExceptT $ parseServiceArg . unsafeCast =<< js_idx xs 1
+    c' <- ExceptT $ parseServiceArg . unsafeCast =<< js_idx xs 2
+    d' <- ExceptT $ parseServiceArg . unsafeCast =<< js_idx xs 3
+    pure (a', b', c', d')
+  {-# INLINE parseServiceArg #-}
+
 instance IsServiceArg T.Text where
   type ServiceArg T.Text = USVStringClass
   encodeServiceArg = pure . fromText
@@ -546,3 +607,6 @@ foreign import javascript unsafe "$1.ctx"
 
 foreign import javascript unsafe "$1.ctx.waitUntil($2)"
   js_raw_waitUntil :: ServiceHandler e -> Promise a -> IO ()
+
+foreign import javascript unsafe "$1[$2]"
+  js_idx :: Sequence a -> Int -> IO (JSObject a)
