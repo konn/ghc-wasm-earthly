@@ -55,6 +55,7 @@ library
     streaming-bytestring,
     text,
     transformers,
+    vector,
 
   if !os(wasi)
     ghc-options:

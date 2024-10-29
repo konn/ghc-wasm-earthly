@@ -1,10 +1,13 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeData #-}
 {-# LANGUAGE UnliftedDatatypes #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module GHC.Wasm.Web.JSON (
   encodeJSON,
@@ -28,9 +31,12 @@ import Data.Aeson (FromJSON, ToJSON)
 import qualified Data.Aeson as J
 import qualified Data.Aeson.Key as AK
 import qualified Data.Aeson.KeyMap as AKM
+import qualified Data.Bifunctor as Bi
 import qualified Data.Foldable as F
 import Data.Functor (void)
 import Data.Scientific (floatingOrInteger)
+import qualified Data.Text as T
+import qualified Data.Vector as V
 import GHC.Wasm.Object.Builtins hiding (parse)
 import qualified GHC.Wasm.Object.Builtins.Sequence as Seq
 import GHC.Wasm.Prim
@@ -92,38 +98,42 @@ valueToJSON (J.Object obj) = do
   pure dic
 
 parseJSONFromJS :: JSON -> IO (Either String J.Value)
-parseJSONFromJS = runExceptT . go
+parseJSONFromJS =
+  fmap (Bi.first (\(stk, msg) -> "Error during parsing JS JSON (" <> foldl1 (\l r -> l <> "." <> r) stk <> "): " <> msg))
+    . runExceptT
+    . go ["$"]
   where
-    go json
+    go stack json
       | js_is_null json = pure J.Null
       | js_is_number json = do
           case fromNullable $ js_decode_int json of
             Just int' -> pure $ J.Number $ fromIntegral $ fromJSPrim int'
             Nothing -> do
               nullable
-                (throwE $ "JSON: number is neither integral nor double: " <> fromJSString (js_typeof json))
+                (throwE (stack, "JSON: number is neither integral nor double: " <> fromJSString (js_typeof json)))
                 (pure . J.Number . realToFrac . fromJSPrim)
                 $ js_decode_double json
       | otherwise =
           asum
-            [ nullable (throwE "Not a string") (pure . J.String . toText)
+            [ nullable (throwE (stack, "Not a string")) (pure . J.String . toText)
                 =<< liftIO (js_decode_string json)
-            , nullable (throwE "Not a bool") (pure . J.Bool . fromJSPrim)
+            , nullable (throwE (stack, "Not a bool")) (pure . J.Bool . fromJSPrim)
                 =<< liftIO (js_decode_bool json)
             , nullable
-                (throwE "Not an array")
-                (fmap J.Array . mapM go <=< liftIO . Seq.toVector)
+                (throwE (stack, "Not an array"))
+                (fmap J.Array . V.imapM (go . (: stack) . show) <=< liftIO . Seq.toVector)
                 =<< liftIO (js_decode_array json)
             , do
                 obj <-
-                  nullable (throwE $ "Invalid JSON value: the value of type " <> fromJSString (js_typeof json) <> " given.") pure
+                  nullable (throwE (stack, "Invalid JSON value: the value of type " <> fromJSString (js_typeof json) <> " given.")) pure
                     =<< liftIO (js_decode_object json)
                 props <- liftIO $ Seq.toVector =<< js_props obj
                 J.Object . AKM.fromList . F.toList
                   <$> mapM
                     ( \prop -> do
+                        let !txt = toText prop
                         val <- liftIO $ js_get_prop obj prop
-                        (AK.fromText $ toText prop,) <$> go val
+                        (AK.fromText txt,) <$> go (T.unpack txt : stack) val
                     )
                     props
             ]
