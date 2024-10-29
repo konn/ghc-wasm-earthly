@@ -52,6 +52,7 @@ library
     ghc-wasm-compat,
     ghc-wasm-jsobjects,
     streaming-bytestring,
+    text,
     transformers,
 
   if !os(wasi)
