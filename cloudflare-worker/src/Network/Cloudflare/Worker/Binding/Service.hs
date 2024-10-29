@@ -513,16 +513,16 @@ foreign import javascript unsafe "$1.prototype[$2] = async function (... args) {
 foreign import javascript unsafe "(class extends WorkerEntrypoint {})"
   js_new_service_sink :: IO (ServiceSink fs)
 
-foreign import javascript unsafe "function () { $1 }"
+foreign import javascript unsafe "function () { return $1 }"
   js_wrap_ret :: JSObject a -> IO (JSFun (ReturnJS a))
 
-foreign import javascript safe "await $1()"
+foreign import javascript unsafe "$1()"
   js_call_ret :: JSFun (ReturnJS a) -> IO (Promise a)
 
 foreign import javascript "wrapper"
   js_ffi_fun_arrow :: (JSObject f -> IO (JSFun fs)) -> IO (JSFun (f :~>> fs))
 
-foreign import javascript safe "await $1($2)"
+foreign import javascript unsafe "dynamic"
   js_ffi_app_fun :: JSFun (f :~>> fs) -> JSObject f -> IO (JSFun fs)
 
 foreign import javascript unsafe "$1[$2]"
