@@ -106,14 +106,14 @@ getBinding ::
   forall l ->
   (KnownSymbol l, Member l bs) =>
   ServiceM (BindingsClass es ss bs) fs (JSObject (Lookup' l bs))
-getBinding l = B.getBinding l <$> js_get_env
+getBinding l = B.getBinding l <$> (js_call_env =<< js_get_env)
 
 getSecret ::
   forall es ss bs fs.
   forall l ->
   (KnownSymbol l, ListMember l ss) =>
   ServiceM (BindingsClass es ss bs) fs T.Text
-getSecret l = B.getSecret l <$> js_get_env
+getSecret l = B.getSecret l <$> (js_call_env =<< js_get_env)
 
 getEnv ::
   forall es ss bs fs a.
@@ -133,7 +133,7 @@ getRawEnv ::
   (KnownSymbol l, ListMember l es) =>
   ServiceM (BindingsClass es ss bs) fs J.Value
 getRawEnv l =
-  B.getEnv l <$> js_get_env
+  B.getEnv l <$> (js_call_env =<< js_get_env)
 
 call ::
   forall bs x.
@@ -472,6 +472,8 @@ deriving via ViaJSPrim Float instance IsServiceArg Float
 
 newtype ServiceSink fs = ServiceSink {runServiceSink :: Service fs}
 
+type data DynamicClass (e :: Prototype) :: Prototype
+
 foreign import javascript unsafe "$1.prototype[$2] = function (... args) { return ($3)(... args) }"
   js_set_handler :: ServiceSink fs -> JSString -> JSFun e -> IO ()
 
@@ -487,11 +489,14 @@ foreign import javascript unsafe "$1($2)"
 foreign import javascript unsafe "$1[$2]"
   js_get_fun :: Service fs -> JSString -> IO (JSFun f)
 
-foreign import javascript unsafe "this.env"
-  js_get_env :: ServiceM e fs (JSObject e)
+foreign import javascript unsafe "function () { return this.env }"
+  js_get_env :: ServiceM e fs (JSObject (DynamicClass e))
 
 foreign import javascript unsafe "this.ctx"
   getFetchContext :: ServiceM e fs FetchContext
 
-foreign import javascript unsafe "this.ctx.waitUntil($1)"
+foreign import javascript unsafe "function () { this.ctx.waitUntil($1) }"
   waitUntil :: Promise a -> ServiceM e fs ()
+
+foreign import javascript unsafe "$1.call(this).call(this)"
+  js_call_env :: JSObject (DynamicClass e) -> ServiceM e fs (JSObject e)
