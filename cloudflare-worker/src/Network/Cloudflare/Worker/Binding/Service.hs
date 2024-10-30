@@ -581,7 +581,7 @@ foreign import javascript unsafe "$1.prototype[$2] = async function (... args) {
     WithThis e fn ->
     IO ()
 
-foreign import javascript unsafe "(class extends WorkerEntrypoint {})"
+foreign import javascript unsafe "(class extends WorkerEntrypoint { async fetch() { return new Response(null, {status: 404})} })"
   js_new_service_sink :: IO (ServiceSink fs)
 
 foreign import javascript unsafe "function () { return $1 }"
