@@ -83,7 +83,7 @@ valueToJSON (J.String s) = pure $ unsafeCast $ fromText @USVStringClass s
 valueToJSON (J.Number n) = case floatingOrInteger n of
   Left d -> pure $ unsafeCast $ toJSPrim @Double d
   Right i -> pure $ unsafeCast $ toJSPrim @Int i
-valueToJSON (J.Bool b) = pure $ unsafeCast $ toJSPrim b
+valueToJSON (J.Bool b) = js_encode_boole b
 valueToJSON J.Null = pure $ unsafeCast $ none @JSONClass
 valueToJSON (J.Array arr) = unsafeCast . Seq.toSequence <$> mapM valueToJSON arr
 valueToJSON (J.Object obj) = do
@@ -170,6 +170,9 @@ foreign import javascript unsafe "if (typeof $1 === 'string') { return $1; } els
 
 foreign import javascript unsafe "if (Array.isArray($1)) { return $1; } else { return null; }"
   js_decode_array :: JSON -> IO (Nullable (SequenceClass JSONClass))
+
+foreign import javascript unsafe "if ($1) { true } else { false }"
+  js_encode_boole :: Bool -> IO JSON
 
 foreign import javascript unsafe "{}"
   js_new_obj :: IO JSON
