@@ -171,7 +171,7 @@ foreign import javascript unsafe "if (typeof $1 === 'string') { return $1; } els
 foreign import javascript unsafe "if (Array.isArray($1)) { return $1; } else { return null; }"
   js_decode_array :: JSON -> IO (Nullable (SequenceClass JSONClass))
 
-foreign import javascript unsafe "if ($1) { true } else { false }"
+foreign import javascript unsafe "if ($1) { return true } else { return false }"
   js_encode_boole :: Bool -> IO JSON
 
 foreign import javascript unsafe "{}"
