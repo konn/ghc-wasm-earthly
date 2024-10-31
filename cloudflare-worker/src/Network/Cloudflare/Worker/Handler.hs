@@ -17,6 +17,9 @@ module Network.Cloudflare.Worker.Handler (
   JSHandlersClass,
   JSHandlers,
 
+  -- * Used as a Service Bindings
+  fetchFrom,
+
   -- * Re-exports (for ffi exports)
   JSObject (..),
 ) where
@@ -24,6 +27,8 @@ module Network.Cloudflare.Worker.Handler (
 import GHC.Generics (Generic)
 import GHC.Wasm.Object.Builtins
 import Network.Cloudflare.Worker.Handler.Fetch
+import Network.Cloudflare.Worker.Request (WorkerRequest)
+import Network.Cloudflare.Worker.Response (WorkerResponseClass)
 
 newtype Handlers env = Handlers {fetch :: FetchHandler env}
   deriving (Generic)
@@ -38,3 +43,9 @@ toJSHandlers :: Handlers envs -> IO JSHandlers
 toJSHandlers Handlers {..} = do
   fetch' <- toJSFetchHandler fetch
   pure $ newDictionary @JSHandlersFields (setPartialField "fetch" fetch')
+
+fetchFrom :: (handlers <: JSHandlersClass) => JSObject handlers -> WorkerRequest -> IO (Promise WorkerResponseClass)
+fetchFrom = js_fetch_from . upcast
+
+foreign import javascript unsafe "$1.fetch($2)"
+  js_fetch_from :: JSHandlers -> WorkerRequest -> IO (Promise WorkerResponseClass)

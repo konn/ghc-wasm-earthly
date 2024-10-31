@@ -84,6 +84,7 @@ import GHC.Wasm.Web.JSON
 import Language.WASM.JSVal.Convert
 import Network.Cloudflare.Worker.Binding (BindingsClass, ListMember)
 import Network.Cloudflare.Worker.Binding qualified as B
+import Network.Cloudflare.Worker.Handler (JSHandlersClass)
 import Network.Cloudflare.Worker.Handler.Fetch (FetchContext)
 
 type data FunSig = Return Type | Type :~> FunSig
@@ -250,6 +251,8 @@ instance (IsServiceArg a, IsServiceFunSig bs) => IsServiceFunSig (a :~> bs) wher
   {-# INLINE joinHsFun# #-}
 
 type data ServiceClass :: [(Symbol, FunSig)] -> Prototype
+
+type instance SuperclassOf (ServiceClass fs) = 'Just JSHandlersClass
 
 type Service fs = JSObject (ServiceClass fs)
 
