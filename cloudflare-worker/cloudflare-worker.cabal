@@ -35,9 +35,7 @@ common defaults
     containers,
     ghc-wasm-compat,
     ghc-wasm-jsobjects,
-    lucid2,
     text,
-    tomland,
 
   default-language: GHC2021
   autogen-modules: Paths_cloudflare_worker
@@ -57,7 +55,6 @@ library
     bytestring,
     case-insensitive,
     containers,
-    effectful,
     ghc-wasm-jsobjects,
     safe-exceptions,
     streaming,
@@ -68,6 +65,7 @@ library
     time-effectful,
     total,
     transformers,
+    unliftio-core,
     vector,
     wasm-linear-base,
     web-sys-hs,
@@ -100,8 +98,10 @@ executable hello-worker
   other-modules:
   ghc-options: -O2
   build-depends:
+    lucid2,
     streaming,
     streaming-bytestring,
+    tomland,
     wasm-linear-base,
     web-sys-hs,
 

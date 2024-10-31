@@ -57,6 +57,7 @@ module Network.Cloudflare.Worker.Binding.Service (
 import Control.Exception.Safe (Exception, MonadCatch, MonadMask, MonadThrow, throwIO)
 import Control.Monad (join, (<=<))
 import Control.Monad.IO.Class (MonadIO, liftIO)
+import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Trans.Except (ExceptT (..), runExceptT)
 import Control.Monad.Trans.Reader (ReaderT (..), ask)
 import Data.Aeson (FromJSON, ToJSON)
@@ -72,7 +73,6 @@ import Data.Text.Lazy qualified as LT
 import Data.Type.Bool (If, type (&&))
 import Data.Vector qualified as V
 import Data.Word
-import Effectful (MonadUnliftIO)
 import GHC.Exts (Proxy#, proxy#)
 import GHC.Generics
 import GHC.Records
