@@ -38,7 +38,7 @@ fetch req _ _ = do
   body <-
     LBS.toStrict
       <$> renderBST (buildResponseBody req)
-  hdrs <- toHeaders $ Map.fromList [("Content-Type", "text/html")]
+  hdrs <- toHeaders [("Content-Type", "text/html")]
   empty <- emptyObject
   auto <- fromHaskellByteString "automatic"
   ok <- fromHaskellByteString "Ok"

@@ -196,7 +196,7 @@ fromStewardResponse resp = liftIO do
     SimpleResponseInit
       { statusText = resp.status.statusMessage
       , status = fromIntegral resp.status.statusCode
-      , headers = Map.fromList $ map (Bi.first CI.original) $ resp.headers
+      , headers = resp.headers
       , body = Just $ Resp.WorkerResponseLBS resp.body
       }
 

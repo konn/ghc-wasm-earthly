@@ -47,5 +47,5 @@ toJSHandlers Handlers {..} = do
 fetchFrom :: (handlers <: JSHandlersClass) => JSObject handlers -> WorkerRequest -> IO (Promise WorkerResponseClass)
 fetchFrom = js_fetch_from . upcast
 
-foreign import javascript unsafe "$1.fetch($2)"
+foreign import javascript unsafe "$1.fetch($2, $3)"
   js_fetch_from :: JSHandlers -> WorkerRequest -> IO (Promise WorkerResponseClass)
