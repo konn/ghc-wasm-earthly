@@ -1,3 +1,4 @@
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -60,6 +61,8 @@ module GHC.Wasm.Object.Core (
   enumTag,
   injectEnum,
   onEnum,
+  ReifiedCase (..),
+  onEnum',
   MemberC,
   KnownEnum (),
   FromJSVal (..),
@@ -235,21 +238,36 @@ type family Delete x xs where
   Delete x (x ': xs) = Delete x xs
   Delete x (y ': xs) = y ': Delete x xs
 
+newtype ReifiedCase s r = ReifiedCase {runCase :: ((() -> Either () Void) -> s -> Either () r)}
+
 -- | To be used with 'total'
 instance
   {-# INCOHERENT #-}
   (KnownSymbol s, MemberC s xs, targ ~ JSEnum (Delete s xs)) =>
   IsLabel s ((() -> Either () Void) -> JSEnum xs -> Either () targ)
   where
-  fromLabel f e =
+  fromLabel = runCase $ fromLabel @s
+
+instance
+  (KnownSymbol s, MemberC s xs, targ ~ JSEnum (Delete s xs)) =>
+  IsLabel s (ReifiedCase (JSEnum xs) targ)
+  where
+  fromLabel = ReifiedCase \f e ->
     let sym = symbolVal (Proxy @s)
      in if sym == fromJSString (enumTag e)
           then absurd =<< f ()
           else Right $ coerce e
 
--- | Type-safe case analysis for 'JSEnum', to be used with '_case' or '_default' from @total@ package.
+{- | Type-safe case analysis for 'JSEnum', to be used with '_case' or '_default' from @total@ package.
+
+/cf./ 'onEnum''
+-}
 onEnum :: ((() -> Either () Void) -> s -> Either () r) -> o -> (r -> o) -> s -> o
 onEnum p = on p . const
+
+-- | Type-safe case analysis for 'JSEnum', to be used with '_case' or '_default' from @total@ package.
+onEnum' :: ReifiedCase s r -> o -> (r -> o) -> s -> o
+onEnum' (ReifiedCase p) = on p . const
 
 type NullableClass :: Prototype -> Prototype
 type data NullableClass a
