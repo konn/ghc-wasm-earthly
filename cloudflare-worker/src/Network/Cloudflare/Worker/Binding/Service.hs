@@ -43,6 +43,7 @@ module Network.Cloudflare.Worker.Binding.Service (
   ServiceClass,
   Service,
   call,
+  toService,
   ToService (..),
   genericToService,
   GenericToService,
@@ -86,7 +87,7 @@ import Language.WASM.JSVal.Convert
 import Network.Cloudflare.Worker.Binding (BindingsClass, ListMember)
 import Network.Cloudflare.Worker.Binding qualified as B
 import Network.Cloudflare.Worker.Handler (JSHandlersClass)
-import Network.Cloudflare.Worker.Handler.Fetch (FetchContext)
+import Network.Cloudflare.Worker.Handler.Fetch (FetchContext, FetchHandler, JSFetchHandler, toJSFetchHandler)
 
 type data FunSig = Return Type | Type :~> FunSig
 
@@ -166,12 +167,18 @@ call l srv =
     decodeFun# (proxy# @x)
       <$> js_get_fun @bs @(ToJSFunSig Caller x) srv (toJSString $ symbolVal' @l proxy#)
 
+type NotAFetch :: Symbol -> Constraint
+type family NotAFetch a where
+  NotAFetch "fetch" = Unsatisfiable ('Text "A handler `fetch' is reserved for fetch handler; use toService' to give a fetch handler.")
+  NotAFetch _ = ()
+
 instance
   ( KnownSymbol l
   , Member l bs
   , Lookup l bs ~ 'Just x
   , IsServiceFunSig x
   , a ~ ToCallerFun x
+  , NotAFetch l
   ) =>
   HasField l (Service bs) a
   where
@@ -261,6 +268,9 @@ type data JSFunClass :: JSFunSig -> Prototype
 
 type JSFun fn = JSObject (JSFunClass fn)
 
+toService :: forall e a. (ToService e a) => a -> IO (Service (Signature e a))
+toService = toService' @e Nothing
+
 {- | N.B. Generic class involves curry/uncurrying on each function argument.
 If you have a function with many arguments, this can lead to performance degression.
 In such cases, we recommend to write the instance manually.
@@ -269,12 +279,13 @@ class ToService e a where
   type Signature e a :: [(Symbol, FunSig)]
   type Signature e a = GSignature e (Rep a)
 
-  toService :: a -> IO (Service (Signature e a))
-  default toService ::
+  toService' :: Maybe (FetchHandler e) -> a -> IO (Service (Signature e a))
+  default toService' ::
     (GenericToService e a) =>
+    Maybe (FetchHandler e) ->
     a ->
     IO (JSObject (ServiceClass (Signature e a)))
-  toService = genericToService @e
+  toService' = genericToService @e
 
 type GenericToService e a =
   ( Generic a
@@ -285,10 +296,11 @@ type GenericToService e a =
 genericToService ::
   forall e a.
   (GenericToService e a) =>
+  Maybe (FetchHandler e) ->
   a ->
   IO (Service (GSignature e (Rep a)))
-genericToService a = do
-  sink <- js_new_service_sink
+genericToService mfetch a = do
+  sink <- maybe js_new_service_sink (js_new_service_sink_with_fetcher <=< toJSFetchHandler) mfetch
   gwriteField (proxy# @e) (proxy# @(GSignature e (Rep a))) sink $ from a
   pure sink.runServiceSink
 
@@ -357,6 +369,7 @@ instance
 
 instance
   ( KnownSymbol l
+  , NotAFetch l
   , IsWorkerFun e fs c
   ) =>
   GToService e fs (S1 ('MetaSel ('Just l) _pk _st _d) (K1 i c))
@@ -587,6 +600,9 @@ foreign import javascript unsafe "$1.prototype[$2] = async function (... args) {
 
 foreign import javascript unsafe "(class extends WorkerEntrypoint { async fetch() { return new Response(null, {status: 404})} })"
   js_new_service_sink :: IO (ServiceSink fs)
+
+foreign import javascript unsafe "(class extends WorkerEntrypoint { async fetch(req, env, ctx) { return $1(req, env, ctx) })"
+  js_new_service_sink_with_fetcher :: JSFetchHandler -> IO (ServiceSink fs)
 
 foreign import javascript unsafe "function () { return $1 }"
   js_wrap_ret :: JSObject a -> IO (JSFun (ReturnJS a))
