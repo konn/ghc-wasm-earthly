@@ -31,6 +31,7 @@ module Network.Cloudflare.Worker.Binding.Service (
   getRawEnv,
   getSecret,
   getFetchContext,
+  getServiceEnv,
   waitUntil,
   waitUntil',
   type (~>),
