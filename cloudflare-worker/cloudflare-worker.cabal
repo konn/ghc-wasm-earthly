@@ -101,7 +101,6 @@ executable hello-worker
     lucid2,
     streaming,
     streaming-bytestring,
-    tomland,
     wasm-linear-base,
     web-sys-hs,
 
